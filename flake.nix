@@ -20,7 +20,7 @@
         pkgs = import nixpkgs {inherit system overlays;};
         inherit (pkgs) lib;
 
-        rust-bin = pkgs.rust-bin.nightly.latest;
+        rust-bin = pkgs.rust-bin.stable.latest;
         rustPlatform = pkgs.makeRustPlatform {
           cargo = rust-bin.minimal;
           rustc = rust-bin.minimal;
@@ -35,21 +35,13 @@
             src = ./.;
 
             nativeBuildInputs = [pkgs.makeWrapper];
-            buildInputs = [
-              pkgs.nix
-              pkgs.nixfmt-rfc-style
-            ];
-
-            postInstall = ''
-              wrapProgram "$out/bin/nixpins" --set PATH "${lib.makeBinPath buildInputs}"
-            '';
 
             cargoLock = {
               lockFile = ./Cargo.lock;
               allowBuiltinFetchGit = true;
             };
 
-            meta.mainProgram = "nixpins";
+            meta.mainProgram = "newlang";
           };
         };
 

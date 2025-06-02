@@ -1,26 +1,11 @@
-type Value = String;
+mod lexer;
+mod vm;
 
-#[derive(Debug)]
-struct Stack<const N: usize> {
-    data: [Value; N],
-    len: usize,
-}
-
-impl<const N: usize> Default for Stack<N> {
-    fn default() -> Self {
-        Self {
-            data: [Value::default(); N],
-            len: 0,
-        }
-    }
-}
-
-// impl<T: Copy + Default, const N: usize> Stack<T, N> {
-
+const CONTENT: &str = r#"10 + 20"#;
 
 fn main() {
-    let mut stack: Stack<10> = Stack::default();
-    dbg!(stack);
-
-    println!("Hello, world!");
+    let mut lex = lexer::Lexer::new(CONTENT);
+    while let Some(token) = lex.read_token() {
+        dbg!(token);
+    }
 }
