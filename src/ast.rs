@@ -1,12 +1,26 @@
+pub type Identifier = String;
+
 #[derive(Debug)]
 pub enum Node {
     Expr(Expr),
+    Stmnt(Stmnt),
+}
+
+#[derive(Debug)]
+pub struct Block {
+    pub nodes: Vec<Node>,
 }
 
 #[derive(Debug)]
 pub enum Expr {
     IntLit(i64),
-    BinOp(BinOp),
+    BinOp(InfixExpr),
+}
+
+#[derive(Debug)]
+pub enum Stmnt {
+    Fn(Fn),
+    Ret(Ret),
 }
 
 #[derive(Debug)]
@@ -16,8 +30,22 @@ pub enum Op {
 }
 
 #[derive(Debug)]
-pub struct BinOp {
+pub struct InfixExpr {
     pub lhs: Box<Expr>,
     pub op: Op,
     pub rhs: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Fn {
+    pub name: Identifier,
+    pub return_ty: Identifier,
+    // pub args: Vec<Expr>,
+    pub body: Block,
+}
+
+/// Return statement
+#[derive(Debug)]
+pub struct Ret {
+    pub expr: Expr,
 }

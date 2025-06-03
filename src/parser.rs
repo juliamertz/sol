@@ -1,4 +1,4 @@
-use crate::ast::{BinOp, Expr, Op};
+use crate::ast::{InfixExpr, Expr, Op};
 use crate::lexer::{Lexer, Token};
 
 use miette::{Diagnostic, NamedSource, Result, SourceOffset, SourceSpan};
@@ -110,7 +110,7 @@ impl Parser {
                 self.advance();
                 let rhs = self.expr(Precedence::default())?; // TODO: prec
 
-                Expr::BinOp(BinOp {
+                Expr::BinOp(InfixExpr {
                     lhs: Box::new(lhs),
                     op,
                     rhs: Box::new(rhs),
