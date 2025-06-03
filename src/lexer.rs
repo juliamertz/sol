@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Token {
     // Literals
     Int(i64),
@@ -11,33 +11,39 @@ pub enum Token {
 }
 
 #[derive(Debug)]
-pub struct Lexer<'a> {
-    content: &'a str,
-    pos: usize,
-    curr: char,
-    next: char,
+pub struct Lexer {
+    pub content: String,
+    pub pos: usize,
+    pub curr: Option<Token>,
+    pub next: Option<Token>,
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = char;
+// impl<'a> Iterator for Lexer<'a> {
+//     type Item = Token;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.pos += 1;
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.pos += 1;
 
-        self.curr = self.next;
-        self.next = self.content.chars().nth(self.pos + 1)?;
-        Some(self.next)
-    }
-}
+//         // TODO: clones
+//         self.curr = self.next.clone();
+//         self.next = self.read_token();
+//         self.curr.clone()
+//     }
+// }
 
-impl<'a> Lexer<'a> {
-    pub fn new(content: &'a str) -> Self {
+impl Lexer {
+    pub fn new(content: impl ToString) -> Self {
         Self {
-            content,
+            content: content.to_string(),
             pos: 0,
-            curr: content.chars().nth(0).unwrap(),
-            next: content.chars().nth(1).unwrap(), // TODO:
+            curr: None,
+            next: None, // TODO:
         }
+    }
+
+    pub fn advance(&mut self) -> Option<char> {
+        self.pos += 1;
+        self.content.chars().nth(self.pos)
     }
 
     pub fn curr(&self) -> Option<char> {
@@ -51,16 +57,11 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.curr() {
             if ch.is_ascii_whitespace() {
-                self.next();
+                self.advance();
             } else {
                 break;
             }
         }
-    }
-
-    // TODO: here for debugging purposes
-    pub fn remaining(&self) -> &str {
-        &self.content[self.pos..self.content.len()]
     }
 
     fn read_while<F>(&mut self, condition: F) -> &str
@@ -71,25 +72,7 @@ impl<'a> Lexer<'a> {
 
         while let Some(ch) = self.curr() {
             if condition(ch) {
-                self.next();
-            } else {
-                break;
-            }
-        }
-
-        &self.content[start..self.pos]
-    }
-
-    // TODO: code duplication
-    fn read_while_peeked<F>(&mut self, condition: F) -> &str
-    where
-        F: Fn(char) -> bool,
-    {
-        let start = self.pos;
-
-        while let Some(ch) = self.peek() {
-            if condition(ch) {
-                self.next();
+                self.advance();
             } else {
                 break;
             }
@@ -102,10 +85,10 @@ impl<'a> Lexer<'a> {
         self.read_while(|ch| ch != until)
     }
 
-    pub fn read_string(&mut self) -> &str {
+    fn read_string(&mut self) -> &str {
         assert_eq!(self.curr(), Some('"'),);
 
-        self.next();
+        self.advance();
         self.read_until('"')
     }
 
@@ -117,14 +100,14 @@ impl<'a> Lexer<'a> {
             '+' => Token::Add,
             '-' => Token::Sub,
             ch if ch.is_ascii_digit() => {
-                let text = self.read_while_peeked(|ch| ch.is_ascii_digit());
-                Token::Int(text.parse().unwrap())
+                let text = self.read_while(|ch| ch.is_ascii_digit());
+                return Some(Token::Int(text.parse().unwrap()))
             }
             // ch if ch.is_ascii_alphabetic() || ch == '_' => { },
             _ => return None,
         };
 
-        self.next();
+        self.advance();
         Some(token)
     }
 }
