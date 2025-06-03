@@ -1,7 +1,9 @@
-use crate::ast::{Expr, Fn, Identifier, InfixExpr, Node, Op, Stmnt};
+use crate::ast::{Block, Expr, Fn, Identifier, InfixExpr, Node, Op, Stmnt};
 use crate::lexer::{Lexer, Token, TokenKind};
 
-use miette::{Diagnostic, IntoDiagnostic, NamedSource, Result, SourceOffset, SourceSpan};
+use miette::{
+    Context, Diagnostic, IntoDiagnostic, NamedSource, Result, SourceOffset, SourceSpan, miette,
+};
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
@@ -39,7 +41,7 @@ impl ErrorKind {
     fn into_error(self, parser: &Parser) -> miette::Report {
         ParseError {
             kind: self,
-            // TODO: get location from lexer position
+            // bad_bit: parser.lex.curr.clone().unwrap().span,
             bad_bit: (1, 1).into(),
             src: NamedSource::new("mysource", parser.lex.content.clone()),
         }
@@ -117,8 +119,8 @@ impl Parser {
             match self.node() {
                 Ok(node) => nodes.push(node),
                 Err(err) => {
-                    err.downcast()?;
-                    // eprintln!("parse node error: {err:#}");
+                    // err.downcast()?;
+                    eprintln!("parse node error: {err:#}");
                     break;
                 }
             }
@@ -134,9 +136,12 @@ impl Parser {
         curr
     }
 
-    fn consume(&mut self, expected: TokenKind) -> Result<&Token> {
-        match self.curr {
-            Some(ref token) if token.kind == expected => Ok(token),
+    fn consume(&mut self, expected: TokenKind) -> Result<Token> {
+        match self.curr.clone() {
+            Some(token) if token.kind == expected => {
+                self.advance();
+                Ok(token)
+            }
             _ => Err(ErrorKind::Expected(expected).into_error(self)),
         }
     }
@@ -146,6 +151,7 @@ impl Parser {
             return Err(ErrorKind::UnexpectedEOF.into_error(self));
         };
 
+        dbg!(curr.kind, curr.kind.is_keyword());
         let node = if curr.kind.is_keyword() {
             Node::Stmnt(self.stmnt()?)
         } else {
@@ -162,10 +168,30 @@ impl Parser {
 
     fn func(&mut self) -> Result<Fn> {
         self.consume(TokenKind::Fn)?;
-        let ident = self.ident()?;
 
-        dbg!("hello func", self.curr.clone());
-        todo!()
+        let ident = self
+            .ident()
+            .map_err(|_| miette!("expected ident, got: {:?}", self.curr))?;
+
+        self.consume(TokenKind::LParen)?;
+        self.consume(TokenKind::RParen)?;
+        self.consume(TokenKind::Arrow)?;
+
+        let return_ty = self.consume(TokenKind::Ident)?;
+
+        let mut nodes = vec![];
+
+        while self.curr.clone().unwrap().kind != TokenKind::End {
+            nodes.push(self.node()?);
+        }
+
+        self.consume(TokenKind::End)?;
+
+        Ok(Fn {
+            ident,
+            return_ty: return_ty.text,
+            body: Block { nodes },
+        })
     }
 
     fn stmnt(&mut self) -> Result<Stmnt> {
@@ -173,7 +199,11 @@ impl Parser {
 
         let stmnt = match curr.kind {
             TokenKind::Fn => Stmnt::Fn(self.func()?),
-            _ => unimplemented!(),
+            TokenKind::Ret => {
+                self.advance();
+                Stmnt::Ret(self.expr(Precedence::default())?)
+            }
+            _ => panic!("TODO: {}", curr.kind),
             // _ => unreachable!(),
         };
         Ok(stmnt)
@@ -204,7 +234,7 @@ impl Parser {
 
         let mut lhs = match curr.kind {
             TokenKind::Int => Expr::IntLit(curr.text.clone().parse().unwrap()),
-            _ => todo!(),
+            _ => panic!("TODO: {}", curr.kind),
         };
 
         self.advance();

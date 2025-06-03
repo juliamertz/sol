@@ -70,10 +70,10 @@ impl Emitter for C {
     fn emit_stmnt(&mut self, buf: &mut String, stmnt: &Stmnt) {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, func),
-            Stmnt::Ret(ret) => {
+            Stmnt::Ret(expr) => {
                 buf.push_str("return");
                 buf.push(' ');
-                self.emit_expr(buf, &ret.expr);
+                self.emit_expr(buf, &expr);
                 buf.push(';');
             }
         }
@@ -82,7 +82,7 @@ impl Emitter for C {
     fn emit_fn(&mut self, buf: &mut String, func: &Fn) {
         buf.push_str(&func.return_ty);
         buf.push(' ');
-        buf.push_str(&func.name);
+        buf.push_str(&func.ident);
         buf.push_str("()");
         buf.push('{');
         for node in func.body.nodes.iter() {

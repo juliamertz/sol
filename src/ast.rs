@@ -20,7 +20,7 @@ pub enum Expr {
 #[derive(Debug)]
 pub enum Stmnt {
     Fn(Fn),
-    Ret(Ret),
+    Ret(Expr),
 }
 
 #[derive(Debug)]
@@ -38,14 +38,8 @@ pub struct InfixExpr {
 
 #[derive(Debug)]
 pub struct Fn {
-    pub name: Identifier,
+    pub ident: Identifier,
     pub return_ty: Identifier,
     // pub args: Vec<Expr>,
     pub body: Block,
-}
-
-/// Return statement
-#[derive(Debug)]
-pub struct Ret {
-    pub expr: Expr,
 }
