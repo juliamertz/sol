@@ -3,16 +3,7 @@ mod codegen;
 mod lexer;
 mod parser;
 
-const CONTENT: &str = r#"
-    func main() -> int
-        return 0
-    end
-"#;
-
-use std::process::exit;
-
 use codegen::{Compiler, Emitter};
-use lexer::Lexer;
 use miette::Result;
 use parser::{Parser, Precedence};
 
@@ -23,7 +14,8 @@ fn main() -> Result<()> {
     // }
     // exit(0);
 
-    let mut parser = Parser::new(CONTENT);
+    let content = std::fs::read_to_string("./tests/fibonacci").unwrap();
+    let mut parser = Parser::new(content);
     let nodes = parser.parse()?;
     dbg!(&nodes);
 

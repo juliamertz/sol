@@ -1,0 +1,7 @@
+func fibonacci() -> int
+    return 10
+end
+
+func main() -> int
+    return 0
+end
