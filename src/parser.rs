@@ -1,5 +1,5 @@
-use crate::ast::{InfixExpr, Expr, Op};
-use crate::lexer::{Lexer, Token};
+use crate::ast::{Expr, InfixExpr, Op};
+use crate::lexer::{Lexer, Token, TokenKind};
 
 use miette::{Diagnostic, NamedSource, Result, SourceOffset, SourceSpan};
 use thiserror::Error;
@@ -60,8 +60,8 @@ pub enum Precedence {
 
 impl From<&Token> for Precedence {
     fn from(token: &Token) -> Self {
-        match token {
-            Token::Add => Self::Sum,
+        match token.kind {
+            TokenKind::Add => Self::Sum,
             _ => Self::Lowest,
         }
     }
@@ -71,8 +71,8 @@ impl TryFrom<Token> for Op {
     type Error = ParseError;
 
     fn try_from(value: Token) -> std::result::Result<Self, Self::Error> {
-        match value {
-            Token::Add => Ok(Self::Add),
+        match value.kind {
+            TokenKind::Add => Ok(Self::Add),
             _ => todo!(),
         }
     }
@@ -105,7 +105,10 @@ impl Parser {
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
         Ok(match self.curr {
-            Some(Token::Add) => {
+            Some(Token {
+                kind: TokenKind::Add,
+                ..
+            }) => {
                 let op = self.curr.clone().unwrap().try_into()?;
                 self.advance();
                 let rhs = self.expr(Precedence::default())?; // TODO: prec
@@ -121,8 +124,10 @@ impl Parser {
     }
 
     pub fn expr(&mut self, prec: Precedence) -> Result<Expr> {
-        let mut lhs = match self.curr.clone().unwrap() {
-            Token::Int(val) => Expr::IntLit(val),
+        let Some(ref curr) = self.curr else { panic!() };
+
+        let mut lhs = match curr.kind {
+            TokenKind::Int => Expr::IntLit(curr.text.clone().parse().unwrap()),
             _ => todo!(),
         };
 
@@ -138,8 +143,8 @@ impl Parser {
                 return Ok(lhs);
             };
 
-            match curr {
-                Token::Add => lhs = self.infix_expr(lhs)?,
+            match curr.kind {
+                TokenKind::Add => lhs = self.infix_expr(lhs)?,
                 _ => todo!(),
             };
         }

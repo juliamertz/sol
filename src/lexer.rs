@@ -1,13 +1,28 @@
-#[derive(Debug, Clone)]
-pub enum Token {
+#[derive(Debug, Clone, Copy)]
+pub enum TokenKind {
     // Literals
-    Int(i64),
-    String(String),
-    Ident(String),
+    Int,
+    String,
+    Ident,
 
     // Operators
     Add,
     Sub,
+}
+
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub text: String,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, text: impl ToString) -> Self {
+        Self {
+            kind,
+            text: text.to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -96,12 +111,12 @@ impl Lexer {
         self.skip_whitespace();
 
         let token = match self.curr()? {
-            '"' => Token::String(self.read_string().to_string()),
-            '+' => Token::Add,
-            '-' => Token::Sub,
+            '"' => Token::new(TokenKind::String, self.read_string().to_string()),
+            '+' => Token::new(TokenKind::Add, "+"),
+            '-' => Token::new(TokenKind::Sub, "-"),
             ch if ch.is_ascii_digit() => {
                 let text = self.read_while(|ch| ch.is_ascii_digit());
-                return Some(Token::Int(text.parse().unwrap()))
+                return Some(Token::new(TokenKind::Int, text));
             }
             // ch if ch.is_ascii_alphabetic() || ch == '_' => { },
             _ => return None,
