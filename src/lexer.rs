@@ -1,19 +1,73 @@
-#[derive(Debug, Clone, Copy)]
+use std::{collections::HashMap, fmt::Display};
+
+use lazy_static::lazy_static;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // Literals
     Int,
     String,
     Ident,
 
+    LParen,
+    RParen,
+
+    // Keywords
+    Fn,
+    Ret,
+    If,
+    Then,
+    Else,
+    End,
+
     // Operators
     Add,
     Sub,
+    Arrow,
+}
+
+impl TokenKind {
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::Fn
+                | TokenKind::If
+                | TokenKind::Then
+                | TokenKind::Else
+                | TokenKind::End
+                | TokenKind::Ret
+        )
+    }
+
+    pub fn is_operator(&self) -> bool {
+        matches!(self, TokenKind::Add | TokenKind::Sub | TokenKind::Arrow)
+    }
+}
+
+lazy_static! {
+    static ref TOKEN_LOOKUP: HashMap<&'static str, TokenKind> = [
+        ("func", TokenKind::Fn),
+        ("return", TokenKind::Ret),
+        ("if", TokenKind::If),
+        ("else", TokenKind::Else),
+        ("then", TokenKind::Then),
+        ("end", TokenKind::End),
+    ]
+    .iter()
+    .cloned()
+    .collect();
 }
 
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub text: String,
+}
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
 impl Token {
@@ -113,16 +167,39 @@ impl Lexer {
         let token = match self.curr()? {
             '"' => Token::new(TokenKind::String, self.read_string().to_string()),
             '+' => Token::new(TokenKind::Add, "+"),
-            '-' => Token::new(TokenKind::Sub, "-"),
+            '-' => {
+                if self.peek() == Some('>') {
+                    self.advance();
+                    Token::new(TokenKind::Arrow, "->")
+                } else {
+                    Token::new(TokenKind::Sub, "-")
+                }
+            }
+            '(' => Token::new(TokenKind::LParen, "("),
+            ')' => Token::new(TokenKind::RParen, ")"),
             ch if ch.is_ascii_digit() => {
                 let text = self.read_while(|ch| ch.is_ascii_digit());
                 return Some(Token::new(TokenKind::Int, text));
             }
-            // ch if ch.is_ascii_alphabetic() || ch == '_' => { },
+            ch if ch.is_ascii_alphabetic() || ch == '_' => {
+                let text = self.read_while(|ch| ch.is_ascii_alphabetic() || ch == '_');
+
+                let token = if let Some(kind) = TOKEN_LOOKUP.get(text) {
+                    Token::new(*kind, text)
+                } else {
+                    Token::new(TokenKind::Ident, text)
+                };
+
+                return Some(token)
+            }
             _ => return None,
         };
 
         self.advance();
         Some(token)
     }
+}
+
+fn is_whitespace(ch: char) -> bool {
+    ch.is_ascii_alphabetic() || ch == '_'
 }

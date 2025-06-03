@@ -1,11 +1,11 @@
-use crate::ast::{Expr, InfixExpr, Op};
+use crate::ast::{Expr, Fn, Identifier, InfixExpr, Node, Op, Stmnt};
 use crate::lexer::{Lexer, Token, TokenKind};
 
-use miette::{Diagnostic, NamedSource, Result, SourceOffset, SourceSpan};
+use miette::{Diagnostic, IntoDiagnostic, NamedSource, Result, SourceOffset, SourceSpan};
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
-pub enum ParseErrorKind {
+pub enum ErrorKind {
     #[error("Illegal token")]
     #[diagnostic(code(my_lib::bad_code))]
     Illegal,
@@ -17,6 +17,10 @@ pub enum ParseErrorKind {
     #[error("Invalid operator")]
     #[diagnostic(code(my_lib::bad_code))]
     InvalidOperator,
+
+    #[error("expected token {0}")]
+    #[diagnostic(code(my_lib::bad_code))]
+    Expected(TokenKind),
     // #[error(transparent)]
     // #[diagnostic(code(my_lib::io_error))]
     // IoError(#[from] std::io::Error),
@@ -31,9 +35,21 @@ pub enum ParseErrorKind {
     // AnotherError(#[from] AnotherError),
 }
 
+impl ErrorKind {
+    fn into_error(self, parser: &Parser) -> miette::Report {
+        ParseError {
+            kind: self,
+            // TODO: get location from lexer position
+            bad_bit: (1, 1).into(),
+            src: NamedSource::new("mysource", parser.lex.content.clone()),
+        }
+        .into()
+    }
+}
+
 #[derive(Error, Debug, Diagnostic)]
-#[error("oops!")]
-#[diagnostic(code(oops::my::bad), help("try doing it better next time?"))]
+#[error("{kind:#}")]
+#[diagnostic(code(parser))]
 pub struct ParseError {
     #[source_code]
     src: NamedSource<String>,
@@ -41,7 +57,8 @@ pub struct ParseError {
     #[label("This bit here")]
     bad_bit: SourceSpan,
 
-    kind: ParseErrorKind,
+    #[diagnostic(transparent)]
+    kind: ErrorKind,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Default)]
@@ -92,8 +109,22 @@ impl Parser {
         Self { lex, curr, next }
     }
 
-    pub fn parse(self) -> Result<Vec<Token>> {
-        Ok(vec![])
+    pub fn parse(&mut self) -> Result<Vec<Node>> {
+        let mut nodes = vec![];
+
+        // TODO: this is a dirty solution
+        loop {
+            match self.node() {
+                Ok(node) => nodes.push(node),
+                Err(err) => {
+                    err.downcast()?;
+                    // eprintln!("parse node error: {err:#}");
+                    break;
+                }
+            }
+        }
+
+        Ok(nodes)
     }
 
     fn advance(&mut self) -> Option<Token> {
@@ -101,6 +132,51 @@ impl Parser {
         self.curr = self.next.clone();
         self.next = self.lex.read_token();
         curr
+    }
+
+    fn consume(&mut self, expected: TokenKind) -> Result<&Token> {
+        match self.curr {
+            Some(ref token) if token.kind == expected => Ok(token),
+            _ => Err(ErrorKind::Expected(expected).into_error(self)),
+        }
+    }
+
+    pub fn node(&mut self) -> Result<Node> {
+        let Some(ref curr) = self.curr else {
+            return Err(ErrorKind::UnexpectedEOF.into_error(self));
+        };
+
+        let node = if curr.kind.is_keyword() {
+            Node::Stmnt(self.stmnt()?)
+        } else {
+            Node::Expr(self.expr(Precedence::default())?)
+        };
+
+        Ok(node)
+    }
+
+    fn ident(&mut self) -> Result<Identifier> {
+        let token = self.consume(TokenKind::Ident)?;
+        Ok(token.text.clone())
+    }
+
+    fn func(&mut self) -> Result<Fn> {
+        self.consume(TokenKind::Fn)?;
+        let ident = self.ident()?;
+
+        dbg!("hello func", self.curr.clone());
+        todo!()
+    }
+
+    fn stmnt(&mut self) -> Result<Stmnt> {
+        let Some(ref curr) = self.curr else { panic!() };
+
+        let stmnt = match curr.kind {
+            TokenKind::Fn => Stmnt::Fn(self.func()?),
+            _ => unimplemented!(),
+            // _ => unreachable!(),
+        };
+        Ok(stmnt)
     }
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
