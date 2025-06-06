@@ -1,7 +1,10 @@
-func fibonacci() -> int
-    return 10
+use stdio
+
+func fibonacci(n: int) -> int
+    return 10 + n
 end
 
 func main() -> int
-    return 0
+    printf("hello world")
+    fibonacci(10)
 end

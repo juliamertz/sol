@@ -4,20 +4,29 @@ mod lexer;
 mod parser;
 
 use codegen::{Compiler, Emitter};
+use lexer::Lexer;
 use miette::Result;
-use parser::{Parser, Precedence};
+use parser::{Parser, Prec};
 
 fn main() -> Result<()> {
-    // let mut lex = Lexer::new(CONTENT);
+    let content = std::fs::read_to_string("./tests/fibonacci").unwrap();
+
+    // let mut lex = Lexer::new(&content);
     // while let Some(token) = lex.read_token() {
     //     dbg!(token);
     // }
-    // exit(0);
+    // std::process::exit(0);
 
-    let content = std::fs::read_to_string("./tests/fibonacci").unwrap();
     let mut parser = Parser::new(content);
-    let nodes = parser.parse()?;
-    dbg!(&nodes);
+    let nodes = match parser.parse() {
+        Ok(nodes) => nodes,
+        Err(err) => {
+            dbg!(&parser.tokens);
+            return Err(err);
+        }
+    };
+
+    // dbg!(&nodes);
 
     let mut emitter = codegen::C::default();
     // let out = emitter.emit(vec![ast::Node::Stmnt(ast::Stmnt::Fn(ast::Fn {
@@ -28,7 +37,7 @@ fn main() -> Result<()> {
     //     },
     // }))]);
 
-    let out = emitter.emit(nodes);
+    let out = emitter.emit(&nodes);
 
     println!("{out}");
 

@@ -1,35 +1,15 @@
+use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
 use std::path::PathBuf;
 
-use crate::ast::{Expr, Fn, InfixExpr, Node, Op, Stmnt};
-
-pub trait Emitter {
-    fn emit(&mut self, ast: Vec<Node>) -> String;
-    fn emit_op(&mut self, buf: &mut String, op: &Op);
-    fn emit_binop(&mut self, buf: &mut String, binop: &InfixExpr);
-    fn emit_node(&mut self, buf: &mut String, node: &Node);
-    fn emit_expr(&mut self, buf: &mut String, expr: &Expr);
-    fn emit_stmnt(&mut self, buf: &mut String, stmnt: &Stmnt);
-    fn emit_fn(&mut self, buf: &mut String, func: &Fn);
-}
-
-pub trait Compiler {
-    type Opts;
-
-    fn build_exe(&self, src: &str, program: &str, opts: Self::Opts) -> PathBuf;
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub enum ReleaseType {
-    Fast,
-    #[default]
-    Debug,
-}
+use super::{Compiler, Emitter, ReleaseType};
 
 #[derive(Default)]
 pub struct C {}
 
 impl Emitter for C {
-    fn emit(&mut self, ast: Vec<Node>) -> String {
+    type Input = Vec<Node>;
+
+    fn emit(&mut self, ast: &Self::Input) -> String {
         let mut buf = String::new();
 
         for node in ast {
@@ -38,7 +18,9 @@ impl Emitter for C {
 
         buf
     }
+}
 
+impl C {
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
         let text = match op {
             Op::Add => "+",
@@ -47,10 +29,26 @@ impl Emitter for C {
         buf.push_str(text);
     }
 
-    fn emit_binop(&mut self, buf: &mut String, binop: &InfixExpr) {
-        self.emit_expr(buf, binop.lhs.as_ref());
-        self.emit_op(buf, &binop.op);
-        self.emit_expr(buf, binop.rhs.as_ref());
+    fn emit_infix_expr(&mut self, buf: &mut String, infix_expr: &InfixExpr) {
+        self.emit_expr(buf, infix_expr.lhs.as_ref());
+        self.emit_op(buf, &infix_expr.op);
+        self.emit_expr(buf, infix_expr.rhs.as_ref());
+    }
+
+    fn emit_call_expr(&mut self, buf: &mut String, call_expr: &CallExpr) {
+        self.emit_expr(buf, &call_expr.func);
+        buf.push('(');
+
+        let mut args = String::new();
+        for arg in call_expr.args.iter() {
+            self.emit_expr(&mut args, arg);
+            args.push(',');
+        }
+
+        // TODO: this is hacky, maybe we're better of returning a string from each emit fn
+        buf.push_str(args.strip_suffix(",").unwrap_or(&args));
+        buf.push(')');
+        buf.push(';');
     }
 
     fn emit_node(&mut self, buf: &mut String, node: &Node) {
@@ -62,14 +60,20 @@ impl Emitter for C {
 
     fn emit_expr(&mut self, buf: &mut String, expr: &Expr) {
         match expr {
+            Expr::Ident(ident) => buf.push_str(ident),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
-            Expr::BinOp(binop) => self.emit_binop(buf, binop),
+            Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
+            Expr::InfixExpr(infix_expr) => self.emit_infix_expr(buf, infix_expr),
+            Expr::CallExpr(call_expr) => self.emit_call_expr(buf, call_expr),
         };
     }
 
     fn emit_stmnt(&mut self, buf: &mut String, stmnt: &Stmnt) {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, func),
+            Stmnt::Use(r#use) => {
+                buf.push_str(format!("#include <{}.h>\n", r#use.ident).as_str());
+            }
             Stmnt::Ret(expr) => {
                 buf.push_str("return");
                 buf.push(' ');
@@ -83,10 +87,22 @@ impl Emitter for C {
         buf.push_str(&func.return_ty);
         buf.push(' ');
         buf.push_str(&func.ident);
-        buf.push_str("()");
+        buf.push('(');
+        buf.push_str(
+            func.args
+                .iter()
+                .map(|arg| format!("{} {}", arg.ty, arg.ident))
+                .collect::<Vec<_>>()
+                .join(",")
+                .as_str(),
+        );
+        buf.push(')');
         buf.push('{');
         for node in func.body.nodes.iter() {
             self.emit_node(buf, node);
+        }
+        if &func.ident == "main" {
+            buf.push_str("return 0;");
         }
         buf.push('}');
     }
@@ -116,9 +132,8 @@ impl Compiler for C {
 
         if opts.release == ReleaseType::Fast {
             args.extend_from_slice(&[
-                "-O3",           // release optim
-                "-march=native", // enable cpu specific instructions
-                "-flto",         // link time opt
+                "-O3",   // turn on all optimizations
+                "-flto", // link time optimization
             ]);
         }
 

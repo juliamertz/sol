@@ -5,6 +5,9 @@ use miette::SourceSpan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
+    Illegal,
+    Eof,
+
     // Literals
     Int,
     String,
@@ -12,6 +15,8 @@ pub enum TokenKind {
 
     LParen,
     RParen,
+    Comma,
+    Colon,
 
     // Keywords
     Fn,
@@ -20,10 +25,13 @@ pub enum TokenKind {
     Then,
     Else,
     End,
+    Use,
 
     // Operators
     Add,
     Sub,
+    Asterisk,
+    Slash,
     Arrow,
 }
 
@@ -37,11 +45,19 @@ impl TokenKind {
                 | TokenKind::Else
                 | TokenKind::End
                 | TokenKind::Ret
+                | TokenKind::Use,
         )
     }
 
     pub fn is_operator(&self) -> bool {
-        matches!(self, TokenKind::Add | TokenKind::Sub | TokenKind::Arrow)
+        matches!(
+            self,
+            TokenKind::Add
+                | TokenKind::Sub
+                | TokenKind::Asterisk
+                | TokenKind::Slash
+                | TokenKind::Arrow
+        )
     }
 }
 
@@ -53,13 +69,14 @@ lazy_static! {
         ("else", TokenKind::Else),
         ("then", TokenKind::Then),
         ("end", TokenKind::End),
+        ("use", TokenKind::Use),
     ]
     .iter()
     .cloned()
     .collect();
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
     pub text: String,
@@ -87,30 +104,15 @@ impl Token {
 pub struct Lexer {
     pub content: String,
     pub pos: usize,
-    pub curr: Option<Token>,
-    pub next: Option<Token>,
+    pub eof: bool, // TODO: i don't like this hack
 }
-
-// impl<'a> Iterator for Lexer<'a> {
-//     type Item = Token;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.pos += 1;
-
-//         // TODO: clones
-//         self.curr = self.next.clone();
-//         self.next = self.read_token();
-//         self.curr.clone()
-//     }
-// }
 
 impl Lexer {
     pub fn new(content: impl ToString) -> Self {
         Self {
             content: content.to_string(),
             pos: 0,
-            curr: None,
-            next: None, // TODO:
+            eof: false,
         }
     }
 
@@ -154,19 +156,38 @@ impl Lexer {
         &self.content[start..self.pos]
     }
 
-    fn read_until(&mut self, until: char) -> &str {
-        self.read_while(|ch| ch != until)
+    fn read_until<F>(&mut self, condition: F) -> &str
+    where
+        F: Fn(char) -> bool,
+    {
+        let start = self.pos;
+
+        while let Some(ch) = self.peek() {
+            if !condition(ch) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        &self.content[start..self.pos]
     }
 
     fn read_string(&mut self) -> &str {
         assert_eq!(self.curr(), Some('"'),);
 
         self.advance();
-        self.read_until('"')
+        self.read_until(|ch| ch == '"')
     }
 
     pub fn read_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
+
+        // Dirty little hack to return EOF as last token
+        if self.curr() == None && !self.eof {
+            self.eof = true;
+            return Some(Token::new(TokenKind::Eof, "", self.pos));
+        }
 
         let token = match self.curr()? {
             '"' => Token::new(TokenKind::String, self.read_string().to_string(), self.pos),
@@ -175,12 +196,17 @@ impl Lexer {
                 if self.peek() == Some('>') {
                     self.advance();
                     Token::new(TokenKind::Arrow, "->", self.pos)
+                } else if self.peek() == Some('-') {
+                    self.read_until(|ch| ch == '\n');
+                    self.read_token()?
                 } else {
                     Token::new(TokenKind::Sub, "-", self.pos)
                 }
             }
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
+            ':' => Token::new(TokenKind::Colon, ":", self.pos),
+            ',' => Token::new(TokenKind::Comma, ",", self.pos),
             ch if ch.is_ascii_digit() => {
                 let start = self.pos;
                 let text = self.read_while(|ch| ch.is_ascii_digit());

@@ -1,4 +1,4 @@
-use crate::ast::{Block, Expr, Fn, Identifier, InfixExpr, Node, Op, Stmnt};
+use crate::ast::{Block, CallExpr, Expr, Fn, FnArg, Ident, InfixExpr, Node, Op, Stmnt, Type, Use};
 use crate::lexer::{Lexer, Token, TokenKind};
 
 use miette::{
@@ -23,18 +23,6 @@ pub enum ErrorKind {
     #[error("expected token {0}")]
     #[diagnostic(code(my_lib::bad_code))]
     Expected(TokenKind),
-    // #[error(transparent)]
-    // #[diagnostic(code(my_lib::io_error))]
-    // IoError(#[from] std::io::Error),
-
-    // #[error("Oops it blew up")]
-    // #[diagnostic(code(my_lib::bad_code))]
-    // BadThingHappened,
-
-    // #[error(transparent)]
-    // // Use `#[diagnostic(transparent)]` to wrap another [`Diagnostic`]. You won't see labels otherwise
-    // #[diagnostic(transparent)]
-    // AnotherError(#[from] AnotherError),
 }
 
 impl ErrorKind {
@@ -64,7 +52,7 @@ pub struct ParseError {
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Default)]
-pub enum Precedence {
+pub enum Prec {
     #[default]
     Lowest,
     Sum,     // +
@@ -72,15 +60,16 @@ pub enum Precedence {
     Cmp,     // > or <
     Product, // *
     Prefix,  // -a or !a
-             // Call,    // func()
+    Call,    // func()
              // Index,   // list[0]
              // Chain,   // mod.field
 }
 
-impl From<&Token> for Precedence {
+impl From<&Token> for Prec {
     fn from(token: &Token) -> Self {
         match token.kind {
             TokenKind::Add => Self::Sum,
+            TokenKind::LParen => Self::Call,
             _ => Self::Lowest,
         }
     }
@@ -99,6 +88,7 @@ impl TryFrom<Token> for Op {
 
 pub struct Parser {
     lex: Lexer,
+    pub tokens: Vec<Token>,
     curr: Option<Token>,
     next: Option<Token>,
 }
@@ -108,20 +98,21 @@ impl Parser {
         let mut lex = Lexer::new(content);
         let curr = lex.read_token();
         let next = lex.read_token();
-        Self { lex, curr, next }
+        Self { lex, curr, next, tokens: vec![], }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Node>> {
         let mut nodes = vec![];
 
-        // TODO: this is a dirty solution
         loop {
+            if self.curr.as_ref().map(|c| c.kind) == Some(TokenKind::Eof) {
+                break;
+            }
+
             match self.node() {
                 Ok(node) => nodes.push(node),
                 Err(err) => {
-                    // err.downcast()?;
-                    eprintln!("parse node error: {err:#}");
-                    break;
+                    err.downcast()?;
                 }
             }
         }
@@ -130,9 +121,11 @@ impl Parser {
     }
 
     fn advance(&mut self) -> Option<Token> {
+        // TODO: whole lot of cloning going on
         let curr = self.next.clone();
         self.curr = self.next.clone();
         self.next = self.lex.read_token();
+        self.tokens.push(self.next.clone()?);
         curr
     }
 
@@ -151,22 +144,25 @@ impl Parser {
             return Err(ErrorKind::UnexpectedEOF.into_error(self));
         };
 
-        dbg!(curr.kind, curr.kind.is_keyword());
         let node = if curr.kind.is_keyword() {
             Node::Stmnt(self.stmnt()?)
         } else {
-            Node::Expr(self.expr(Precedence::default())?)
+            Node::Expr(self.expr(Prec::default())?)
         };
 
         Ok(node)
     }
 
-    fn ident(&mut self) -> Result<Identifier> {
+    fn ident(&mut self) -> Result<Ident> {
         let token = self.consume(TokenKind::Ident)?;
         Ok(token.text.clone())
     }
 
-    fn func(&mut self) -> Result<Fn> {
+    fn ty(&mut self) -> Result<Type> {
+        Ok(self.ident()?)
+    }
+
+    fn r#fn(&mut self) -> Result<Fn> {
         self.consume(TokenKind::Fn)?;
 
         let ident = self
@@ -174,13 +170,16 @@ impl Parser {
             .map_err(|_| miette!("expected ident, got: {:?}", self.curr))?;
 
         self.consume(TokenKind::LParen)?;
+        let mut args = vec![];
+        while self.curr.clone().unwrap().kind != TokenKind::RParen {
+            args.push(self.fn_arg()?);
+        }
         self.consume(TokenKind::RParen)?;
-        self.consume(TokenKind::Arrow)?;
 
+        self.consume(TokenKind::Arrow)?;
         let return_ty = self.consume(TokenKind::Ident)?;
 
         let mut nodes = vec![];
-
         while self.curr.clone().unwrap().kind != TokenKind::End {
             nodes.push(self.node()?);
         }
@@ -189,19 +188,35 @@ impl Parser {
 
         Ok(Fn {
             ident,
+            args,
             return_ty: return_ty.text,
             body: Block { nodes },
         })
+    }
+
+    fn r#use(&mut self) -> Result<Use> {
+        self.consume(TokenKind::Use)?;
+        Ok(Use {
+            ident: self.ident()?,
+        })
+    }
+
+    fn fn_arg(&mut self) -> Result<FnArg> {
+        let ident = self.ident()?;
+        self.consume(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        Ok(FnArg { ident, ty })
     }
 
     fn stmnt(&mut self) -> Result<Stmnt> {
         let Some(ref curr) = self.curr else { panic!() };
 
         let stmnt = match curr.kind {
-            TokenKind::Fn => Stmnt::Fn(self.func()?),
+            TokenKind::Fn => Stmnt::Fn(self.r#fn()?),
+            TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Ret => {
                 self.advance();
-                Stmnt::Ret(self.expr(Precedence::default())?)
+                Stmnt::Ret(self.expr(Prec::default())?)
             }
             _ => panic!("TODO: {}", curr.kind),
             // _ => unreachable!(),
@@ -217,9 +232,9 @@ impl Parser {
             }) => {
                 let op = self.curr.clone().unwrap().try_into()?;
                 self.advance();
-                let rhs = self.expr(Precedence::default())?; // TODO: prec
+                let rhs = self.expr(Prec::default())?; // TODO: prec
 
-                Expr::BinOp(InfixExpr {
+                Expr::InfixExpr(InfixExpr {
                     lhs: Box::new(lhs),
                     op,
                     rhs: Box::new(rhs),
@@ -229,12 +244,37 @@ impl Parser {
         })
     }
 
-    pub fn expr(&mut self, prec: Precedence) -> Result<Expr> {
+    fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
+        self.consume(TokenKind::LParen)?;
+
+        let mut args = vec![];
+        while self.curr.as_ref().unwrap().kind != TokenKind::RParen {
+            args.push(self.expr(Prec::Lowest)?);
+        }
+
+        self.consume(TokenKind::RParen)?;
+
+        Ok(Expr::CallExpr(CallExpr {
+            func: Box::new(expr),
+            args,
+        }))
+    }
+
+    pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let Some(ref curr) = self.curr else { panic!() };
 
+        let text = curr.text.clone();
+
         let mut lhs = match curr.kind {
-            TokenKind::Int => Expr::IntLit(curr.text.clone().parse().unwrap()),
-            _ => panic!("TODO: {}", curr.kind),
+            TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
+            TokenKind::Ident => Expr::Ident(text),
+            TokenKind::String => Expr::StringLit(
+                text
+            ),
+            _ => {
+                dbg!(&self.tokens);
+                panic!("TODO: {}", curr.kind)
+            },
         };
 
         self.advance();
@@ -244,14 +284,19 @@ impl Parser {
             return Ok(lhs);
         };
 
-        while prec < Precedence::from(&curr) {
+        while prec < Prec::from(&curr) {
             let Some(curr) = self.curr.clone() else {
                 return Ok(lhs);
             };
 
+            if curr.kind.is_keyword() {
+                break;
+            }
+
             match curr.kind {
-                TokenKind::Add => lhs = self.infix_expr(lhs)?,
-                _ => todo!(),
+                TokenKind::Add | TokenKind::Sub => lhs = self.infix_expr(lhs)?,
+                TokenKind::LParen => lhs = self.call_expr(lhs)?,
+                _ => panic!("TODO: {:?}", curr.kind),
             };
         }
 
