@@ -61,8 +61,8 @@ pub enum Prec {
     Product, // *
     Prefix,  // -a or !a
     Call,    // func()
-             // Index,   // list[0]
-             // Chain,   // mod.field
+    Index,   // list[0]
+    Chain,   // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -98,7 +98,12 @@ impl Parser {
         let mut lex = Lexer::new(content);
         let curr = lex.read_token();
         let next = lex.read_token();
-        Self { lex, curr, next, tokens: vec![], }
+        Self {
+            lex,
+            curr,
+            next,
+            tokens: vec![],
+        }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Node>> {
@@ -268,13 +273,11 @@ impl Parser {
         let mut lhs = match curr.kind {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
-            TokenKind::String => Expr::StringLit(
-                text
-            ),
+            TokenKind::String => Expr::StringLit(text),
             _ => {
                 dbg!(&self.tokens);
                 panic!("TODO: {}", curr.kind)
-            },
+            }
         };
 
         self.advance();
@@ -289,6 +292,11 @@ impl Parser {
                 return Ok(lhs);
             };
 
+            if curr.kind == TokenKind::Semicolon {
+                self.advance();
+                break;
+            }
+
             if curr.kind.is_keyword() {
                 break;
             }
@@ -296,7 +304,7 @@ impl Parser {
             match curr.kind {
                 TokenKind::Add | TokenKind::Sub => lhs = self.infix_expr(lhs)?,
                 TokenKind::LParen => lhs = self.call_expr(lhs)?,
-                _ => panic!("TODO: {:?}", curr.kind),
+                _ => panic!("TODO: {:?} text: {}", curr.kind, curr.text),
             };
         }
 

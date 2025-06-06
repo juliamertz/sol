@@ -17,6 +17,7 @@ pub enum TokenKind {
     RParen,
     Comma,
     Colon,
+    Semicolon,
 
     // Keywords
     Fn,
@@ -156,28 +157,12 @@ impl Lexer {
         &self.content[start..self.pos]
     }
 
-    fn read_until<F>(&mut self, condition: F) -> &str
-    where
-        F: Fn(char) -> bool,
-    {
-        let start = self.pos;
-
-        while let Some(ch) = self.peek() {
-            if !condition(ch) {
-                self.advance();
-            } else {
-                break;
-            }
-        }
-
-        &self.content[start..self.pos]
-    }
-
     fn read_string(&mut self) -> &str {
         assert_eq!(self.curr(), Some('"'),);
 
         self.advance();
-        self.read_until(|ch| ch == '"')
+        let content = self.read_while(|ch| ch != '"');
+        content
     }
 
     pub fn read_token(&mut self) -> Option<Token> {
@@ -197,7 +182,7 @@ impl Lexer {
                     self.advance();
                     Token::new(TokenKind::Arrow, "->", self.pos)
                 } else if self.peek() == Some('-') {
-                    self.read_until(|ch| ch == '\n');
+                    self.read_while(|ch| ch != '\n');
                     self.read_token()?
                 } else {
                     Token::new(TokenKind::Sub, "-", self.pos)
@@ -206,6 +191,7 @@ impl Lexer {
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),
+            ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
             ',' => Token::new(TokenKind::Comma, ",", self.pos),
             ch if ch.is_ascii_digit() => {
                 let start = self.pos;

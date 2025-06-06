@@ -3,53 +3,60 @@ mod codegen;
 mod lexer;
 mod parser;
 
+use std::{path::PathBuf, process};
+
+use clap::Parser;
 use codegen::{Compiler, Emitter};
-use lexer::Lexer;
 use miette::Result;
-use parser::{Parser, Prec};
+
+#[derive(clap::Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    Run {
+        filepath: PathBuf,
+    },
+}
 
 fn main() -> Result<()> {
-    let content = std::fs::read_to_string("./tests/fibonacci").unwrap();
+    let opts = Cli::parse();
 
-    // let mut lex = Lexer::new(&content);
-    // while let Some(token) = lex.read_token() {
-    //     dbg!(token);
-    // }
-    // std::process::exit(0);
+    match opts.command {
+        Command::Run { filepath } => {
+            let content = std::fs::read_to_string(&filepath).unwrap();
 
-    let mut parser = Parser::new(content);
-    let nodes = match parser.parse() {
-        Ok(nodes) => nodes,
-        Err(err) => {
-            dbg!(&parser.tokens);
-            return Err(err);
+            let mut parser = parser::Parser::new(content);
+            let nodes = match parser.parse() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    dbg!(&parser.tokens);
+                    return Err(err);
+                }
+            };
+
+            let mut emitter = codegen::C::default();
+            let out = emitter.emit(&nodes);
+            let bin_path = emitter.build_exe(
+                &out,
+                "test",
+                codegen::CCOpts {
+                    cleanup: false,
+                    release: codegen::ReleaseType::Fast,
+                },
+            );
+
+            let out = process::Command::new(bin_path)
+                .spawn()
+                .unwrap()
+                .wait_with_output()
+                .unwrap();
         }
-    };
-
-    // dbg!(&nodes);
-
-    let mut emitter = codegen::C::default();
-    // let out = emitter.emit(vec![ast::Node::Stmnt(ast::Stmnt::Fn(ast::Fn {
-    //     name: "main".into(),
-    //     return_ty: "int".into(),
-    //     body: ast::Block {
-    //         nodes: vec![ast::Node::Stmnt(ast::Stmnt::Ret(ast::Ret { expr }))],
-    //     },
-    // }))]);
-
-    let out = emitter.emit(&nodes);
-
-    println!("{out}");
-
-    let bin_path = emitter.build_exe(
-        &out,
-        "test",
-        codegen::CCOpts {
-            cleanup: false,
-            release: codegen::ReleaseType::Fast,
-        },
-    );
-    dbg!(bin_path);
+    }
 
     Ok(())
 }

@@ -5,6 +5,6 @@ func fibonacci(n: int) -> int
 end
 
 func main() -> int
-    printf("hello world")
-    fibonacci(10)
+    printf("hello world");
+    fibonacci(10);
 end

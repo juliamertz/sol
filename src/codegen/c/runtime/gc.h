@@ -2,8 +2,8 @@
 #include <stdlib.h>
 
 typedef struct gc_header {
-    int ref_count;
-    int size;
+    size_t ref_count;
+    size_t size;
     void (*drop)(void*);
 } gc_header;
 
