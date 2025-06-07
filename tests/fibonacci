@@ -13,6 +13,6 @@ end
 
 func main() -> int
     fibonacci(10);
-    printf("fibbobibbo");
+    printf("fibbobibbo: %d", 10);
     return 0;
 end

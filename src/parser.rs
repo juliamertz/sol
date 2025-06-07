@@ -163,10 +163,10 @@ impl Parser {
         let node = if matches!(curr.kind, TokenKind::Ret | TokenKind::Use | TokenKind::Fn) {
             Node::Stmnt(self.stmnt()?)
         } else {
-            let expr = Node::Expr(self.expr(Prec::default())?);
-            let _ = self.consume(TokenKind::Semicolon);
-            expr
+            Node::Expr(self.expr(Prec::default())?)
         };
+
+        let _ = self.consume(TokenKind::Semicolon);
 
         Ok(node)
     }
@@ -293,12 +293,7 @@ impl Parser {
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LParen)?;
-
-        let mut args = vec![];
-        while self.curr.as_ref().unwrap().kind != TokenKind::RParen {
-            args.push(self.expr(Prec::Lowest)?);
-        }
-
+        let args = self.expr_list()?;
         self.consume(TokenKind::RParen)?;
 
         Ok(Expr::CallExpr(CallExpr {
@@ -316,6 +311,7 @@ impl Parser {
             TokenKind::Ident => Expr::Ident(text),
             TokenKind::String => Expr::StringLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
+
             _ => Err(ErrorKind::Todo(curr.clone()).into_error(self))?,
         };
 
@@ -351,6 +347,23 @@ impl Parser {
         }
 
         Ok(lhs)
+    }
+
+    fn expr_list(&mut self) -> Result<Vec<Expr>> {
+        let head = self.expr(Prec::Lowest)?;
+
+        let mut tail = vec![];
+        tail.push(head);
+
+        while let Some(ref token) = self.curr {
+            if token.kind != TokenKind::Comma {
+                break;
+            }
+            self.consume(TokenKind::Comma)?;
+            tail.push(self.expr(Prec::Lowest)?);
+        }
+
+        Ok(tail)
     }
 }
 
@@ -453,8 +466,34 @@ mod tests {
                 ident: "main".to_string(),
                 args: vec![],
                 return_ty: "int".to_string(),
-                body: Block { nodes: vec![] },
+                body: Block {
+                    nodes: vec![Node::Expr(Expr::CallExpr(CallExpr {
+                        func: Box::new(Expr::Ident("printf".into())),
+                        args: vec![Expr::StringLit("hello world!".into())],
+                    }))]
+                },
             }),
+        );
+    }
+
+    #[test]
+    fn expr_list() {
+        let mut parser = Parser::new(r#"100 - 20, n + i"#);
+        let expr_list = parser.expr_list().unwrap();
+        assert_eq!(
+            expr_list,
+            vec![
+                Expr::InfixExpr(InfixExpr {
+                    lhs: Box::new(Expr::IntLit(100)),
+                    op: Op::Sub,
+                    rhs: Box::new(Expr::IntLit(20)),
+                }),
+                Expr::InfixExpr(InfixExpr {
+                    lhs: Box::new(Expr::Ident("n".into())),
+                    op: Op::Add,
+                    rhs: Box::new(Expr::Ident("i".into())),
+                })
+            ]
         );
     }
 }
