@@ -49,12 +49,14 @@ impl C {
         // TODO: this is hacky, maybe we're better of returning a string from each emit fn
         buf.push_str(args.strip_suffix(",").unwrap_or(&args));
         buf.push(')');
-        buf.push(';');
     }
 
     fn emit_node(&mut self, buf: &mut String, node: &Node) {
         match node {
-            Node::Expr(expr) => self.emit_expr(buf, expr),
+            Node::Expr(expr) => {
+                self.emit_expr(buf, expr);
+                buf.push(';');
+            }
             Node::Stmnt(stmnt) => self.emit_stmnt(buf, stmnt),
         }
     }
@@ -88,6 +90,14 @@ impl C {
                 buf.push_str("return");
                 buf.push(' ');
                 self.emit_expr(buf, &ret.val);
+                buf.push(';');
+            }
+            Stmnt::Let(r#let) => {
+                buf.push_str(&r#let.ty);
+                buf.push(' ');
+                buf.push_str(&r#let.ident);
+                buf.push('=');
+                self.emit_expr(buf, r#let.val.as_ref().unwrap()); // TODO: optional emit
                 buf.push(';');
             }
         }

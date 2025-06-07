@@ -12,7 +12,7 @@ func fibonacci(n: int) -> int
 end
 
 func main() -> int
-    fibonacci(10);
-    printf("fibbobibbo: %d", 10);
+    let res: int = fibonacci(30);
+    printf("fibbobibbo: %d", res);
     return 0;
 end

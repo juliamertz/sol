@@ -1,5 +1,5 @@
 use crate::ast::{
-    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Node, Op, Ret, Stmnt, Type, Use,
+    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Let, Node, Op, Ret, Stmnt, Ty, Use,
 };
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::loc::Loc;
@@ -160,7 +160,10 @@ impl Parser {
             return Err(ErrorKind::UnexpectedEOF.into_error(self));
         };
 
-        let node = if matches!(curr.kind, TokenKind::Ret | TokenKind::Use | TokenKind::Fn) {
+        let node = if matches!(
+            curr.kind,
+            TokenKind::Ret | TokenKind::Use | TokenKind::Fn | TokenKind::Let
+        ) {
             Node::Stmnt(self.stmnt()?)
         } else {
             Node::Expr(self.expr(Prec::default())?)
@@ -189,7 +192,7 @@ impl Parser {
         Ok(token.text.clone())
     }
 
-    fn ty(&mut self) -> Result<Type> {
+    fn ty(&mut self) -> Result<Ty> {
         Ok(self.ident()?)
     }
 
@@ -247,6 +250,7 @@ impl Parser {
         let stmnt = match curr.kind {
             TokenKind::Fn => Stmnt::Fn(self.r#fn()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
+            TokenKind::Let => Stmnt::Let(self.r#let()?),
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
@@ -258,6 +262,16 @@ impl Parser {
         };
 
         Ok(stmnt)
+    }
+
+    fn r#let(&mut self) -> Result<Let> {
+        self.consume(TokenKind::Let)?;
+        let ident = self.ident()?;
+        self.consume(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        self.consume(TokenKind::Assign)?;
+        let val = Some(self.expr(Prec::Lowest)?);
+        Ok(Let { ident, ty, val })
     }
 
     fn r#if(&mut self) -> Result<If> {

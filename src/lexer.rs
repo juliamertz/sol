@@ -20,6 +20,7 @@ pub enum TokenKind {
     Semicolon,
 
     // Keywords
+    Let,
     Fn,
     Ret,
     If,
@@ -42,7 +43,8 @@ impl TokenKind {
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
-            TokenKind::Fn
+            TokenKind::Let
+                | TokenKind::Fn
                 | TokenKind::If
                 | TokenKind::Then
                 | TokenKind::Else
@@ -68,6 +70,7 @@ impl TokenKind {
 
 lazy_static! {
     static ref TOKEN_LOOKUP: HashMap<&'static str, TokenKind> = [
+        ("let", TokenKind::Let),
         ("func", TokenKind::Fn),
         ("return", TokenKind::Ret),
         ("if", TokenKind::If),

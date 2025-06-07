@@ -1,6 +1,6 @@
 pub type Ident = String;
 
-pub type Type = String;
+pub type Ty = String;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
@@ -34,6 +34,14 @@ pub enum Stmnt {
     Fn(Fn),
     Ret(Ret),
     Use(Use),
+    Let(Let),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Let{
+    pub ident: Ident,
+    pub ty: Ty,
+    pub val: Option<Expr>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -64,7 +72,7 @@ pub struct CallExpr {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FnArg {
     pub ident: Ident,
-    pub ty: Type,
+    pub ty: Ty,
 }
 
 #[derive(Debug, PartialEq, Eq)]
