@@ -436,4 +436,25 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn fn_stmnt() {
+        let mut parser = Parser::new(
+            r#"
+                func main() -> int
+                    printf("hello world!")
+                end
+            "#,
+        );
+        let stmnt = parser.stmnt().unwrap();
+        assert_eq!(
+            stmnt,
+            Stmnt::Fn(Fn {
+                ident: "main".to_string(),
+                args: vec![],
+                return_ty: "int".to_string(),
+                body: Block { nodes: vec![] },
+            }),
+        );
+    }
 }

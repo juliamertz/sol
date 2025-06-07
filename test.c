@@ -1,2 +1,2 @@
 #include <stdio.h>
-int fibonacci(int n){return 10+n;}int main(){fibonacci(10);return 0;}
+int fibonacci(int n){if(n==0){return 0;}if(n==0){return 0;}return fibonacci(10);;}int main(){return 0;}

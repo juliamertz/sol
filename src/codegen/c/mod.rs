@@ -74,7 +74,7 @@ impl C {
                     self.emit_node(buf, &node);
                 }
                 buf.push('}');
-            },
+            }
         };
     }
 
@@ -111,7 +111,9 @@ impl C {
         for node in func.body.nodes.iter() {
             self.emit_node(buf, node);
         }
-        if &func.ident == "main" {
+        if &func.ident == "main"
+            && !matches!(func.body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
+        {
             buf.push_str("return 0;");
         }
         buf.push('}');

@@ -4,6 +4,9 @@ mod codegen;
 mod lexer;
 mod parser;
 
+#[cfg(test)]
+mod tests;
+
 use std::{path::PathBuf, process};
 
 use clap::Parser;
