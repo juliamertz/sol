@@ -32,8 +32,13 @@ pub enum Expr {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Stmnt {
     Fn(Fn),
-    Ret(Expr),
+    Ret(Ret),
     Use(Use),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ret{
+    pub val: Expr,
 }
 
 #[derive(Debug, PartialEq, Eq)]

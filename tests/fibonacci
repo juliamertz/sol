@@ -4,13 +4,15 @@ func fibonacci(n: int) -> int
     if n == 0 then
         return 0;
     end;
-    if n == 0 then
-        return 0;
+    if n == 1 then
+        return 1;
     end;
 
-    return fibonacci(10);
+    return fibonacci(n - 1) + fibonacci(n - 2);
 end
 
 func main() -> int
+    fibonacci(10);
+    printf("fibbobibbo");
     return 0;
 end

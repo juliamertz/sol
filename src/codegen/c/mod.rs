@@ -84,10 +84,10 @@ impl C {
             Stmnt::Use(r#use) => {
                 buf.push_str(format!("#include <{}.h>\n", r#use.ident).as_str());
             }
-            Stmnt::Ret(expr) => {
+            Stmnt::Ret(ret) => {
                 buf.push_str("return");
                 buf.push(' ');
-                self.emit_expr(buf, &expr);
+                self.emit_expr(buf, &ret.val);
                 buf.push(';');
             }
         }

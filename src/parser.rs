@@ -1,5 +1,5 @@
 use crate::ast::{
-    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Node, Op, Stmnt, Type, Use,
+    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Node, Op, Ret, Stmnt, Type, Use,
 };
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::loc::Loc;
@@ -163,7 +163,9 @@ impl Parser {
         let node = if matches!(curr.kind, TokenKind::Ret | TokenKind::Use | TokenKind::Fn) {
             Node::Stmnt(self.stmnt()?)
         } else {
-            Node::Expr(self.expr(Prec::default())?)
+            let expr = Node::Expr(self.expr(Prec::default())?);
+            let _ = self.consume(TokenKind::Semicolon);
+            expr
         };
 
         Ok(node)
@@ -237,6 +239,8 @@ impl Parser {
         Ok(FnArg { ident, ty })
     }
 
+    // fn ret(&mut self) -> Result<
+
     fn stmnt(&mut self) -> Result<Stmnt> {
         let Some(ref curr) = self.curr else { panic!() };
 
@@ -246,11 +250,8 @@ impl Parser {
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
-                dbg!(&expr);
-                dbg!(&self.curr);
-
                 self.consume(TokenKind::Semicolon)?;
-                Stmnt::Ret(expr)
+                Stmnt::Ret(Ret { val: expr })
             }
             _ => panic!("TODO: {}", curr.kind),
             // _ => unreachable!(),
@@ -291,14 +292,12 @@ impl Parser {
     }
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
-        dbg!(&expr);
         self.consume(TokenKind::LParen)?;
 
         let mut args = vec![];
         while self.curr.as_ref().unwrap().kind != TokenKind::RParen {
             args.push(self.expr(Prec::Lowest)?);
         }
-        dbg!(&args);
 
         self.consume(TokenKind::RParen)?;
 
@@ -312,7 +311,6 @@ impl Parser {
         let Some(ref curr) = self.curr else { panic!() };
 
         let text = curr.text.clone();
-
         let mut lhs = match curr.kind {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
@@ -335,13 +333,13 @@ impl Parser {
 
             if matches!(
                 curr.kind,
-                TokenKind::RParen | TokenKind::Eof | TokenKind::Then | TokenKind::Semicolon
+                TokenKind::RParen
+                    | TokenKind::Eof
+                    | TokenKind::Then
+                    | TokenKind::Semicolon
+                    | TokenKind::Comma
+                    | TokenKind::End
             ) {
-                break;
-            }
-
-            if matches!(curr.kind, TokenKind::Comma | TokenKind::End) {
-                self.advance();
                 break;
             }
 
@@ -408,14 +406,16 @@ mod tests {
         let expr = parser.stmnt().unwrap();
         assert_eq!(
             expr,
-            Stmnt::Ret(Expr::CallExpr(CallExpr {
-                func: Box::new(Expr::Ident("fibonacci".into())),
-                args: vec![Expr::InfixExpr(InfixExpr {
-                    lhs: Box::new(Expr::Ident("n".into())),
-                    op: Op::Sub,
-                    rhs: Box::new(Expr::IntLit(1)),
-                })]
-            }))
+            Stmnt::Ret(Ret {
+                val: Expr::CallExpr(CallExpr {
+                    func: Box::new(Expr::Ident("fibonacci".into())),
+                    args: vec![Expr::InfixExpr(InfixExpr {
+                        lhs: Box::new(Expr::Ident("n".into())),
+                        op: Op::Sub,
+                        rhs: Box::new(Expr::IntLit(1)),
+                    })]
+                })
+            })
         );
     }
 
