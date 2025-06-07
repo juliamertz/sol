@@ -55,16 +55,3 @@ impl <'a> Into<SourceSpan> for Loc<'a> {
         (self.line(), self.column()).into()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let src = vec!["hey young world", "the world is yours"].join("\n");
-
-        let loc = Loc::new(&src, 16);
-        panic!("{loc:?}")
-    }
-}

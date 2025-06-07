@@ -38,9 +38,6 @@ impl ErrorKind {
 
         ParseError {
             kind: self,
-            // bad_bit: parser.lex.curr.clone().unwrap().span,
-            // bad_bit: loc.into(),
-            // offset, length
             bad_bit: span,
             src: NamedSource::new("mysource", parser.lex.content.clone()),
         }
@@ -249,6 +246,9 @@ impl Parser {
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
+                dbg!(&expr);
+                dbg!(&self.curr);
+
                 self.consume(TokenKind::Semicolon)?;
                 Stmnt::Ret(expr)
             }
@@ -333,14 +333,14 @@ impl Parser {
                 return Ok(lhs);
             };
 
-            if matches!(curr.kind, TokenKind::RParen | TokenKind::Eof) {
+            if matches!(
+                curr.kind,
+                TokenKind::RParen | TokenKind::Eof | TokenKind::Then | TokenKind::Semicolon
+            ) {
                 break;
             }
 
-            if matches!(
-                curr.kind,
-                TokenKind::Semicolon | TokenKind::Comma | TokenKind::End
-            ) {
+            if matches!(curr.kind, TokenKind::Comma | TokenKind::End) {
                 self.advance();
                 break;
             }
@@ -381,6 +381,58 @@ mod tests {
                 lhs: Box::new(Expr::IntLit(10)),
                 op: Op::Eq,
                 rhs: Box::new(Expr::Ident("x".into())),
+            })
+        );
+    }
+
+    #[test]
+    fn call_expr() {
+        let mut parser = Parser::new("fibonacci(n - 1)");
+        let stmnt = parser.expr(Prec::Lowest).unwrap();
+        assert_eq!(
+            stmnt,
+            Expr::CallExpr(CallExpr {
+                func: Box::new(Expr::Ident("fibonacci".into())),
+                args: vec![Expr::InfixExpr(InfixExpr {
+                    lhs: Box::new(Expr::Ident("n".into())),
+                    op: Op::Sub,
+                    rhs: Box::new(Expr::IntLit(1)),
+                })]
+            })
+        );
+    }
+
+    #[test]
+    fn ret_stmnt() {
+        let mut parser = Parser::new("return fibonacci(n - 1);");
+        let expr = parser.stmnt().unwrap();
+        assert_eq!(
+            expr,
+            Stmnt::Ret(Expr::CallExpr(CallExpr {
+                func: Box::new(Expr::Ident("fibonacci".into())),
+                args: vec![Expr::InfixExpr(InfixExpr {
+                    lhs: Box::new(Expr::Ident("n".into())),
+                    op: Op::Sub,
+                    rhs: Box::new(Expr::IntLit(1)),
+                })]
+            }))
+        );
+    }
+
+    #[test]
+    fn if_expr() {
+        let mut parser = Parser::new(r#"if 1 then printf("hello world") end"#);
+        let expr = parser.expr(Prec::Lowest).unwrap();
+        assert_eq!(
+            expr,
+            Expr::If(If {
+                condition: Box::new(Expr::IntLit(1)),
+                consequence: Block {
+                    nodes: vec![Node::Expr(Expr::CallExpr(CallExpr {
+                        func: Box::new(Expr::Ident("printf".into())),
+                        args: vec![Expr::StringLit("hello world".into())],
+                    }))]
+                }
             })
         );
     }

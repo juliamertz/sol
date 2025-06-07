@@ -171,10 +171,7 @@ impl Lexer {
 
     pub fn read_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
-
-
-        dbg!(self.curr(), self.peek());
-
+        
         // Dirty little hack to return EOF as last token
         if self.curr() == None && !self.eof {
             self.eof = true;
