@@ -14,7 +14,7 @@ pub trait Compiler {
     fn build_exe(&self, src: &str, program: &str, opts: Self::Opts) -> std::path::PathBuf;
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, clap::ValueEnum)]
 pub enum ReleaseType {
     Fast,
     #[default]
