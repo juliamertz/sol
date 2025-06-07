@@ -50,12 +50,12 @@ int main() {
   printf("color: rgb(%d, %d, %d)\n", color->r, color->g, color->b);
 
   Rgb *color2 = gc_retain(color);
-  gc_drop(color);
+  gc_release(color);
 
   printf("color: rgb(%d, %d, %d)\n", color2->r, color2->g, color2->b);
   Rgb *color3 = gc_retain(color);
-  gc_drop(color2);
-  gc_drop(color3);
+  gc_release(color2);
+  gc_release(color3);
 
   gc_header* header = GC_HEADER(color3);
   printf("refs: %zu\n", header->ref_count);

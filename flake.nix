@@ -58,7 +58,10 @@
 
               rustfmt
               rust-analyzer
+            ]) ++ (with pkgs; [
+              gcc
             ]);
+
         };
       }
     );

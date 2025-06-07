@@ -2,59 +2,67 @@ pub type Ident = String;
 
 pub type Type = String;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Node {
     Expr(Expr),
     Stmnt(Stmnt),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     pub nodes: Vec<Node>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct If {
+    pub condition: Box<Expr>,
+    pub consequence: Block,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Ident(Ident),
     IntLit(i64),
     StringLit(String),
     InfixExpr(InfixExpr),
     CallExpr(CallExpr),
+    If(If),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Stmnt {
     Fn(Fn),
     Ret(Expr),
     Use(Use),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Op {
+    Eq,
     Add,
     Sub,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InfixExpr {
     pub lhs: Box<Expr>,
     pub op: Op,
     pub rhs: Box<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct CallExpr {
     pub func: Box<Expr>,
     pub args: Vec<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FnArg {
     pub ident: Ident,
     pub ty: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Fn {
     pub ident: Ident,
     pub args: Vec<FnArg>,
@@ -62,7 +70,7 @@ pub struct Fn {
     pub body: Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Use {
     pub ident: Ident,
 }

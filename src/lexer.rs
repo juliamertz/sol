@@ -29,6 +29,8 @@ pub enum TokenKind {
     Use,
 
     // Operators
+    Eq,
+    Assign,
     Add,
     Sub,
     Asterisk,
@@ -53,7 +55,9 @@ impl TokenKind {
     pub fn is_operator(&self) -> bool {
         matches!(
             self,
-            TokenKind::Add
+            TokenKind::Eq
+                | TokenKind::Assign
+                | TokenKind::Add
                 | TokenKind::Sub
                 | TokenKind::Asterisk
                 | TokenKind::Slash
@@ -96,7 +100,7 @@ impl Token {
         Self {
             kind,
             text: text.to_string(),
-            span: (pos - text.len(), pos).into(),
+            span: (pos, text.len()).into(),
         }
     }
 }
@@ -168,6 +172,9 @@ impl Lexer {
     pub fn read_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
+
+        dbg!(self.curr(), self.peek());
+
         // Dirty little hack to return EOF as last token
         if self.curr() == None && !self.eof {
             self.eof = true;
@@ -177,6 +184,14 @@ impl Lexer {
         let token = match self.curr()? {
             '"' => Token::new(TokenKind::String, self.read_string().to_string(), self.pos),
             '+' => Token::new(TokenKind::Add, "+", self.pos),
+            '=' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::new(TokenKind::Eq, "==", self.pos)
+                } else {
+                    Token::new(TokenKind::Assign, "=", self.pos)
+                }
+            }
             '-' => {
                 if self.peek() == Some('>') {
                     self.advance();

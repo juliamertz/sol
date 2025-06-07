@@ -23,6 +23,7 @@ impl Emitter for C {
 impl C {
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
         let text = match op {
+            Op::Eq => "==",
             Op::Add => "+",
             Op::Sub => "-",
         };
@@ -65,6 +66,15 @@ impl C {
             Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
             Expr::InfixExpr(infix_expr) => self.emit_infix_expr(buf, infix_expr),
             Expr::CallExpr(call_expr) => self.emit_call_expr(buf, call_expr),
+            Expr::If(r#if) => {
+                buf.push_str("if(");
+                self.emit_expr(buf, &r#if.condition);
+                buf.push_str("){");
+                for node in &r#if.consequence.nodes {
+                    self.emit_node(buf, &node);
+                }
+                buf.push('}');
+            },
         };
     }
 
@@ -143,7 +153,6 @@ impl Compiler for C {
             .expect("to start cc");
 
         let output = handle.wait_with_output().expect("cc failed to build");
-        // dbg!(output.stderr, output.stdout);
 
         if opts.cleanup {
             std::fs::remove_file(tmp_src_path);

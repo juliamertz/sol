@@ -1,10 +1,17 @@
 use stdio
 
 func fibonacci(n: int) -> int
-    return 10 + n
+    if n == 0 then
+        return 0;
+    end;
+    if n == 0 then
+        return 0;
+    end;
+
+    return fibonacci(10);
 end
 
 func main() -> int
-    printf("hello world");
     fibonacci(10);
+    printf("hello world")
 end

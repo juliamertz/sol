@@ -33,7 +33,7 @@ void* gc_retain(void* ptr) {
     return ptr;
 }
 
-void gc_drop(void* ptr) {
+void gc_release(void* ptr) {
     if (!ptr) return;
 
     gc_header* header = GC_HEADER(ptr);

@@ -1,3 +1,4 @@
+mod loc;
 mod ast;
 mod codegen;
 mod lexer;
@@ -34,10 +35,12 @@ fn main() -> Result<()> {
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
                 Err(err) => {
-                    dbg!(&parser.tokens);
+                    // dbg!(&parser.tokens);
                     return Err(err);
                 }
             };
+
+            dbg!(&nodes);
 
             let mut emitter = codegen::C::default();
             let out = emitter.emit(&nodes);

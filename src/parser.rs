@@ -1,9 +1,9 @@
-use crate::ast::{Block, CallExpr, Expr, Fn, FnArg, Ident, InfixExpr, Node, Op, Stmnt, Type, Use};
-use crate::lexer::{Lexer, Token, TokenKind};
-
-use miette::{
-    Context, Diagnostic, IntoDiagnostic, NamedSource, Result, SourceOffset, SourceSpan, miette,
+use crate::ast::{
+    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Node, Op, Stmnt, Type, Use,
 };
+use crate::lexer::{Lexer, Token, TokenKind};
+use crate::loc::Loc;
+use miette::{Diagnostic, NamedSource, Result, SourceSpan, miette};
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
@@ -23,14 +23,25 @@ pub enum ErrorKind {
     #[error("expected token {0}")]
     #[diagnostic(code(my_lib::bad_code))]
     Expected(TokenKind),
+
+    #[error("unhandled token: {0:?}")]
+    #[diagnostic(code(my_lib::bad_code))]
+    Todo(Token),
 }
 
 impl ErrorKind {
     fn into_error(self, parser: &Parser) -> miette::Report {
+        let span = match self {
+            ErrorKind::Todo(ref token) => token.span,
+            _ => (parser.lex.pos, 1).into(),
+        };
+
         ParseError {
             kind: self,
             // bad_bit: parser.lex.curr.clone().unwrap().span,
-            bad_bit: (1, 1).into(),
+            // bad_bit: loc.into(),
+            // offset, length
+            bad_bit: span,
             src: NamedSource::new("mysource", parser.lex.content.clone()),
         }
         .into()
@@ -68,7 +79,8 @@ pub enum Prec {
 impl From<&Token> for Prec {
     fn from(token: &Token) -> Self {
         match token.kind {
-            TokenKind::Add => Self::Sum,
+            TokenKind::Add | TokenKind::Sub => Self::Sum,
+            TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
             _ => Self::Lowest,
         }
@@ -81,6 +93,8 @@ impl TryFrom<Token> for Op {
     fn try_from(value: Token) -> std::result::Result<Self, Self::Error> {
         match value.kind {
             TokenKind::Add => Ok(Self::Add),
+            TokenKind::Sub => Ok(Self::Sub),
+            TokenKind::Eq => Ok(Self::Eq),
             _ => todo!(),
         }
     }
@@ -149,13 +163,26 @@ impl Parser {
             return Err(ErrorKind::UnexpectedEOF.into_error(self));
         };
 
-        let node = if curr.kind.is_keyword() {
+        let node = if matches!(curr.kind, TokenKind::Ret | TokenKind::Use | TokenKind::Fn) {
             Node::Stmnt(self.stmnt()?)
         } else {
             Node::Expr(self.expr(Prec::default())?)
         };
 
         Ok(node)
+    }
+
+    fn block(&mut self) -> Result<Block> {
+        let mut nodes = vec![];
+        while let Some(ref curr) = self.curr {
+            if matches!(curr.kind, TokenKind::End | TokenKind::Eof) {
+                self.advance();
+                break;
+            }
+            nodes.push(self.node()?);
+        }
+
+        Ok(Block { nodes })
     }
 
     fn ident(&mut self) -> Result<Ident> {
@@ -221,18 +248,32 @@ impl Parser {
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Ret => {
                 self.advance();
-                Stmnt::Ret(self.expr(Prec::default())?)
+                let expr = self.expr(Prec::default())?;
+                self.consume(TokenKind::Semicolon)?;
+                Stmnt::Ret(expr)
             }
             _ => panic!("TODO: {}", curr.kind),
             // _ => unreachable!(),
         };
+
         Ok(stmnt)
+    }
+
+    fn r#if(&mut self) -> Result<If> {
+        self.consume(TokenKind::If)?;
+        let condition = self.expr(Prec::Lowest)?;
+        self.consume(TokenKind::Then)?;
+        let consequence = self.block()?;
+        Ok(If {
+            condition: Box::new(condition),
+            consequence,
+        })
     }
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
         Ok(match self.curr {
             Some(Token {
-                kind: TokenKind::Add,
+                kind: TokenKind::Add | TokenKind::Sub | TokenKind::Eq,
                 ..
             }) => {
                 let op = self.curr.clone().unwrap().try_into()?;
@@ -250,12 +291,14 @@ impl Parser {
     }
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
+        dbg!(&expr);
         self.consume(TokenKind::LParen)?;
 
         let mut args = vec![];
         while self.curr.as_ref().unwrap().kind != TokenKind::RParen {
             args.push(self.expr(Prec::Lowest)?);
         }
+        dbg!(&args);
 
         self.consume(TokenKind::RParen)?;
 
@@ -274,10 +317,8 @@ impl Parser {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
             TokenKind::String => Expr::StringLit(text),
-            _ => {
-                dbg!(&self.tokens);
-                panic!("TODO: {}", curr.kind)
-            }
+            TokenKind::If => Expr::If(self.r#if()?),
+            _ => Err(ErrorKind::Todo(curr.clone()).into_error(self))?,
         };
 
         self.advance();
@@ -292,22 +333,55 @@ impl Parser {
                 return Ok(lhs);
             };
 
-            if curr.kind == TokenKind::Semicolon {
+            if matches!(curr.kind, TokenKind::RParen | TokenKind::Eof) {
+                break;
+            }
+
+            if matches!(
+                curr.kind,
+                TokenKind::Semicolon | TokenKind::Comma | TokenKind::End
+            ) {
                 self.advance();
                 break;
             }
 
-            if curr.kind.is_keyword() {
-                break;
-            }
-
             match curr.kind {
-                TokenKind::Add | TokenKind::Sub => lhs = self.infix_expr(lhs)?,
+                TokenKind::Add | TokenKind::Sub | TokenKind::Eq => lhs = self.infix_expr(lhs)?,
                 TokenKind::LParen => lhs = self.call_expr(lhs)?,
                 _ => panic!("TODO: {:?} text: {}", curr.kind, curr.text),
             };
         }
 
         Ok(lhs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infix_expr() {
+        let mut parser = Parser::new("n - 1");
+        let expr = parser.expr(Prec::Lowest).unwrap();
+        assert_eq!(
+            expr,
+            Expr::InfixExpr(InfixExpr {
+                lhs: Box::new(Expr::Ident("n".into())),
+                op: Op::Sub,
+                rhs: Box::new(Expr::IntLit(1)),
+            })
+        );
+
+        let mut parser = Parser::new("10 == x");
+        let expr = parser.expr(Prec::Lowest).unwrap();
+        assert_eq!(
+            expr,
+            Expr::InfixExpr(InfixExpr {
+                lhs: Box::new(Expr::IntLit(10)),
+                op: Op::Eq,
+                rhs: Box::new(Expr::Ident("x".into())),
+            })
+        );
     }
 }
