@@ -44,11 +44,7 @@
             meta.mainProgram = "newlang";
           };
 
-          tree-sitter-parser = pkgs.tree-sitter.buildGrammar {
-            src = ./tree-sitter-newlang;
-            version = "0.1.0";
-            language = "newlang";
-          };
+          tree-sitter-grammar = pkgs.callPackage ./tree-sitter {};
         };
 
         devShells.default = pkgs.mkShell {

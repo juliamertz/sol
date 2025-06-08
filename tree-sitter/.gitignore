@@ -1,0 +1,6 @@
+*
+!.gitignore
+!default.nix
+!tree-sitter.json
+!grammar.js
+!queries/
