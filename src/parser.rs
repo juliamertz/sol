@@ -16,10 +16,6 @@ pub enum ErrorKind {
     #[diagnostic(code(my_lib::bad_code))]
     UnexpectedEOF,
 
-    #[error("Invalid operator")]
-    #[diagnostic(code(my_lib::bad_code))]
-    InvalidOperator,
-
     #[error("expected token {0}")]
     #[diagnostic(code(my_lib::bad_code))]
     Expected(TokenKind),
@@ -52,7 +48,7 @@ pub struct ParseError {
     #[source_code]
     src: NamedSource<String>,
 
-    #[label("This bit here")]
+    #[label("This bit here 💩")]
     bad_bit: SourceSpan,
 
     #[diagnostic(transparent)]
@@ -94,6 +90,10 @@ impl TryFrom<Token> for Op {
             TokenKind::Add => Ok(Self::Add),
             TokenKind::Sub => Ok(Self::Sub),
             TokenKind::Eq => Ok(Self::Eq),
+            TokenKind::Asterisk => Ok(Self::Mul),
+            TokenKind::Slash => Ok(Self::Div),
+            TokenKind::Lt => Ok(Self::Lt),
+            TokenKind::Gt => Ok(Self::Gt),
             _ => todo!(),
         }
     }
@@ -288,23 +288,23 @@ impl Parser {
     }
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
-        Ok(match self.curr {
-            Some(Token {
-                kind: TokenKind::Add | TokenKind::Sub | TokenKind::Eq,
-                ..
-            }) => {
-                let op = self.curr.clone().unwrap().try_into()?;
-                self.advance();
-                let rhs = self.expr(Prec::default())?; // TODO: prec
+        let Some(ref curr) = self.curr else {
+            return Err(ErrorKind::UnexpectedEOF.into_error(self));
+        };
 
-                Expr::InfixExpr(InfixExpr {
-                    lhs: Box::new(lhs),
-                    op,
-                    rhs: Box::new(rhs),
-                })
-            }
-            _ => panic!(),
-        })
+        if !curr.kind.is_operator() {
+            // TODO: invalid operator error
+            panic!("invalid operator");
+        }
+
+        let op: Op = curr.to_owned().try_into()?;
+        let rhs = self.expr(Prec::default())?; // TODO: prec
+
+        Ok(Expr::InfixExpr(InfixExpr {
+            lhs: Box::new(lhs),
+            op,
+            rhs: Box::new(rhs),
+        }))
     }
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
@@ -328,7 +328,7 @@ impl Parser {
             TokenKind::String => Expr::StringLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
 
-            _ => Err(ErrorKind::Todo(curr.clone()).into_error(self))?,
+            _ => Err(ErrorKind::Todo(curr.clone()).into_error(self)).unwrap(),
         };
 
         self.advance();
@@ -355,11 +355,13 @@ impl Parser {
                 break;
             }
 
-            match curr.kind {
-                TokenKind::Add | TokenKind::Sub | TokenKind::Eq => lhs = self.infix_expr(lhs)?,
-                TokenKind::LParen => lhs = self.call_expr(lhs)?,
-                _ => panic!("TODO: {:?} text: {}", curr.kind, curr.text),
-            };
+            if curr.kind.is_operator() {
+                lhs = self.infix_expr(lhs)?;
+            } else if curr.kind == TokenKind::LParen {
+                lhs = self.call_expr(lhs)?;
+            } else {
+                panic!("TODO: {:?} text: {}", curr.kind, curr.text);
+            }
         }
 
         Ok(lhs)

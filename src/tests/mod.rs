@@ -1,3 +1,4 @@
+use miette::{IntoDiagnostic, Result};
 use std::{path::Path, rc::Weak};
 
 pub struct Spec {
@@ -6,21 +7,12 @@ pub struct Spec {
     pub ast: String,
 }
 
-pub fn parse(source: impl AsRef<Path>) -> Vec<Spec> {
-    let content = std::fs::read_to_string(source).unwrap();
-    let lines = content
-        .lines()
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>();
+pub fn parse(source: impl AsRef<Path>) -> Result<Vec<Spec>> {
+    let mut buff = std::fs::read_to_string(source).into_diagnostic()?;
 
-    let mut specs = vec![];
-
-    for line in lines {
-       if line.starts_with(";;")  {
-           let name = line.strip_prefix(";;").unwrap().trim();
-           let mut source = String::new();
-       }
-    }
-
-specs
+    Ok(vec![])
 }
+
+// fn parse_spec(buff: &mut String) -> Result<Spec> {
+
+// }

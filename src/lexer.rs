@@ -66,6 +66,8 @@ impl TokenKind {
                 | TokenKind::Asterisk
                 | TokenKind::Slash
                 | TokenKind::Arrow
+                | TokenKind::Lt
+                | TokenKind::Gt,
         )
     }
 }

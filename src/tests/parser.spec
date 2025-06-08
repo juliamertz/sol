@@ -1,16 +1,7 @@
-;; infix_expr
+;; test infix_expr
 
+;; input
 250 - 25 * 3
 
-;; ==
-
-AST DUMP
-
-
-;; call_expr
-
-fibonacci(n - 1)
-
-;; ==
-
+;; output
 AST DUMP
