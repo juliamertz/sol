@@ -54,6 +54,10 @@ pub enum Op {
     Eq,
     Add,
     Sub,
+    Mul,
+    Div,
+    Lt,
+    Gt,
 }
 
 #[derive(Debug, PartialEq, Eq)]

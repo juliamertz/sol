@@ -36,6 +36,8 @@ pub enum TokenKind {
     Sub,
     Asterisk,
     Slash,
+    Lt,
+    Gt,
     Arrow,
 }
 
@@ -203,6 +205,10 @@ impl Lexer {
                     Token::new(TokenKind::Sub, "-", self.pos)
                 }
             }
+            '*' => Token::new(TokenKind::Asterisk, "*", self.pos),
+            '/' => Token::new(TokenKind::Slash, "/", self.pos),
+            '<' => Token::new(TokenKind::Lt, "<", self.pos),
+            '>' => Token::new(TokenKind::Gt, ">", self.pos),
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),

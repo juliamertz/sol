@@ -79,6 +79,8 @@ impl From<&Token> for Prec {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
             TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
+            TokenKind::Lt | TokenKind::Gt => Self::Cmp,
+            TokenKind::Asterisk => Self::Product,
             _ => Self::Lowest,
         }
     }

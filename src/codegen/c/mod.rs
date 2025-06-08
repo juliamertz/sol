@@ -29,6 +29,10 @@ impl C {
             Op::Eq => "==",
             Op::Add => "+",
             Op::Sub => "-",
+            Op::Mul => "*",
+            Op::Div => "/",
+            Op::Lt => "<",
+            Op::Gt => ">",
         };
         buf.push_str(text);
     }
