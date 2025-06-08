@@ -1,6 +1,7 @@
 mod c;
 
-pub use c::{C, CCOpts};
+use crate::BuildOpts;
+pub use c::C;
 
 pub trait Emitter {
     type Input;
@@ -9,9 +10,7 @@ pub trait Emitter {
 }
 
 pub trait Compiler {
-    type Opts;
-
-    fn build_exe(&self, src: &str, program: &str, opts: Self::Opts) -> std::path::PathBuf;
+    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> std::path::PathBuf;
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, clap::ValueEnum)]

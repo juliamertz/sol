@@ -1,4 +1,7 @@
-use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+use crate::{
+    BuildOpts,
+    ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt},
+};
 use std::path::PathBuf;
 
 use super::{Compiler, Emitter, ReleaseType};
@@ -130,18 +133,13 @@ impl C {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct CCOpts {
-    /// Delete all files created in the build process after emitting binary
-    pub cleanup: bool,
-
-    pub release: ReleaseType,
-}
-
 impl Compiler for C {
-    type Opts = CCOpts;
-
-    fn build_exe(&self, src: &str, program: &str, opts: Self::Opts) -> PathBuf {
+    fn build_exe(
+        &self,
+        src: &str,
+        program: &str,
+        opts: &BuildOpts,
+    ) -> PathBuf {
         let out_path = PathBuf::from(format!("./{program}"));
         let tmp_src_path = PathBuf::from(format!("./{program}.c"));
         std::fs::write(&tmp_src_path, src).unwrap();
@@ -167,7 +165,7 @@ impl Compiler for C {
         let output = handle.wait_with_output().expect("cc failed to build");
 
         if opts.cleanup {
-            std::fs::remove_file(tmp_src_path);
+            std::fs::remove_file(tmp_src_path).unwrap();
         }
 
         out_path

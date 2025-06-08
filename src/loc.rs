@@ -11,7 +11,6 @@ pub struct Loc<'a> {
 impl<'a> Loc<'a> {
     fn walk(&mut self) {
         let chars = self.source.chars().take(self.pos + 1).collect::<Vec<_>>();
-        dbg!(&chars);
         for ch in chars {
             if ch == '\n' {
                 self.line += 1;
