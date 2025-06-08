@@ -293,11 +293,11 @@ impl Parser {
         };
 
         if !curr.kind.is_operator() {
-            // TODO: invalid operator error
             panic!("invalid operator");
         }
-
         let op: Op = curr.to_owned().try_into()?;
+        self.advance();
+
         let rhs = self.expr(Prec::default())?; // TODO: prec
 
         Ok(Expr::InfixExpr(InfixExpr {
@@ -355,7 +355,9 @@ impl Parser {
                 break;
             }
 
+            dbg!(&curr);
             if curr.kind.is_operator() {
+                println!("operator: {curr:?}");
                 lhs = self.infix_expr(lhs)?;
             } else if curr.kind == TokenKind::LParen {
                 lhs = self.call_expr(lhs)?;
