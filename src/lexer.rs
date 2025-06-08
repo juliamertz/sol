@@ -173,15 +173,15 @@ impl Lexer {
         assert_eq!(self.curr(), Some('"'),);
 
         self.advance();
-        let content = self.read_while(|ch| ch != '"');
-        content
+
+        (self.read_while(|ch| ch != '"')) as _
     }
 
     pub fn read_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
         // Dirty little hack to return EOF as last token
-        if self.curr() == None && !self.eof {
+        if self.curr().is_none() && !self.eof {
             self.eof = true;
             return Some(Token::new(TokenKind::Eof, "", self.pos));
         }

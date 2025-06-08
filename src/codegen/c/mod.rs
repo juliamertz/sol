@@ -16,7 +16,7 @@ impl Emitter for C {
         let mut buf = String::new();
 
         for node in ast {
-            self.emit_node(&mut buf, &node);
+            self.emit_node(&mut buf, node);
         }
 
         buf
@@ -80,7 +80,7 @@ impl C {
                 self.emit_expr(buf, &r#if.condition);
                 buf.push_str("){");
                 for node in &r#if.consequence.nodes {
-                    self.emit_node(buf, &node);
+                    self.emit_node(buf, node);
                 }
                 buf.push('}');
             }
@@ -139,12 +139,7 @@ impl C {
 }
 
 impl Compiler for C {
-    fn build_exe(
-        &self,
-        src: &str,
-        program: &str,
-        opts: &BuildOpts,
-    ) -> PathBuf {
+    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> PathBuf {
         let out_path = PathBuf::from(format!("./{program}"));
         let tmp_src_path = PathBuf::from(format!("./{program}.c"));
         std::fs::write(&tmp_src_path, src).unwrap();

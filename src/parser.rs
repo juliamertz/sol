@@ -193,7 +193,7 @@ impl Parser {
     }
 
     fn ty(&mut self) -> Result<Ty> {
-        Ok(self.ident()?)
+        self.ident()
     }
 
     fn r#fn(&mut self) -> Result<Fn> {
@@ -326,7 +326,7 @@ impl Parser {
             TokenKind::String => Expr::StringLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
 
-            _ => Err(ErrorKind::Todo(curr.clone()).into_error(self)).unwrap(),
+            _ => panic!("{:?}", ErrorKind::Todo(curr.clone()).into_error(self)),
         };
 
         self.advance();

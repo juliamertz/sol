@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub type Ident = String;
 
@@ -46,14 +46,14 @@ pub enum Stmnt {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Let{
+pub struct Let {
     pub ident: Ident,
     pub ty: Ty,
     pub val: Option<Expr>,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Ret{
+pub struct Ret {
     pub val: Expr,
 }
 

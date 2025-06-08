@@ -54,7 +54,7 @@ enum Command {
 }
 
 fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
-    let content = std::fs::read_to_string(&filepath).unwrap();
+    let content = std::fs::read_to_string(filepath).unwrap();
 
     let mut parser = parser::Parser::new(content);
     let nodes = match parser.parse() {
@@ -71,7 +71,7 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
 
     let mut emitter = codegen::C::default();
     let out = emitter.emit(&nodes);
-    Ok(emitter.build_exe(&out, "test", &opts))
+    Ok(emitter.build_exe(&out, "test", opts))
 }
 
 fn main() -> Result<()> {
