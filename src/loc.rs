@@ -49,7 +49,7 @@ impl<'a> Loc<'a> {
     }
 }
 
-impl <'a> Into<SourceSpan> for Loc<'a> {
+impl<'a> Into<SourceSpan> for Loc<'a> {
     fn into(self) -> SourceSpan {
         (self.line(), self.column()).into()
     }

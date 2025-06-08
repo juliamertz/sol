@@ -1,10 +1,8 @@
-use crate::ast::{
-    Block, CallExpr, Expr, Fn, FnArg, Ident, If, InfixExpr, Let, Node, Op, Ret, Stmnt, Ty, Use,
-};
-use crate::lexer::{Lexer, Token, TokenKind};
-use crate::loc::Loc;
 use miette::{Diagnostic, NamedSource, Result, SourceSpan, miette};
 use thiserror::Error;
+
+use crate::ast::*;
+use crate::lexer::{Lexer, Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
@@ -379,10 +377,18 @@ impl Parser {
             if token.kind != TokenKind::Comma {
                 break;
             }
+
             self.consume(TokenKind::Comma)?;
             tail.push(self.expr(Prec::Lowest)?);
         }
 
         Ok(tail)
+    }
+
+    fn list(&mut self) -> Result<List> {
+        self.consume(TokenKind::LBracket)?;
+        let items = self.expr_list()?;
+        self.consume(TokenKind::RBracket)?;
+        Ok(List { items })
     }
 }

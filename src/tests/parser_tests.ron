@@ -24,6 +24,16 @@
   ),
 
   (
+    name: "call_expr",
+    source: "fibonacci(n - 10)",
+    expected: [
+      Stmnt(Ret((
+          val: IntLit(0),
+      )))
+    ],
+  ),
+
+  (
     name: "return_stmnt",
     source: "return 0;",
     expected: [
@@ -47,6 +57,18 @@
           nodes: [Stmnt(Ret((val: IntLit(0))))],
         ),
       )))
+    ],
+  ),
+
+  (
+    name: "expr_list",
+    source: "10, 20, 30, fourty, 50",
+    expected: [
+      Expr(IntLit(10)),
+      Expr(IntLit(20)),
+      Expr(IntLit(30)),
+      Expr(Ident("fourty")),
+      Expr(IntLit(50)),
     ],
   ),
 ]

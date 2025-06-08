@@ -22,6 +22,11 @@ pub struct If {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct List {
+    pub items: Vec<Expr>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Expr {
     Ident(Ident),
     IntLit(i64),
@@ -29,6 +34,7 @@ pub enum Expr {
     InfixExpr(InfixExpr),
     CallExpr(CallExpr),
     If(If),
+    List(List),
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

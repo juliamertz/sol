@@ -64,7 +64,10 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
         }
     };
 
-    println!("{}", ron::ser::to_string_pretty(&nodes, PrettyConfig::new()).unwrap());
+    println!(
+        "{}",
+        ron::ser::to_string_pretty(&nodes, PrettyConfig::new()).unwrap()
+    );
 
     let mut emitter = codegen::C::default();
     let out = emitter.emit(&nodes);
@@ -82,7 +85,7 @@ fn main() -> Result<()> {
         }
         Command::Run { filepath, opts } => {
             let bin_path = build(&filepath, &opts)?;
-            let out = process::Command::new(&bin_path)
+            let _out = process::Command::new(&bin_path)
                 .spawn()
                 .unwrap()
                 .wait_with_output()

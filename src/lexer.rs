@@ -5,7 +5,6 @@ use miette::SourceSpan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
-    Illegal,
     Eof,
 
     // Literals
@@ -15,6 +14,8 @@ pub enum TokenKind {
 
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Comma,
     Colon,
     Semicolon,
@@ -213,6 +214,8 @@ impl Lexer {
             '>' => Token::new(TokenKind::Gt, ">", self.pos),
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
+            '[' => Token::new(TokenKind::LBracket, "[", self.pos),
+            ']' => Token::new(TokenKind::RBracket, "]", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),
             ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
             ',' => Token::new(TokenKind::Comma, ",", self.pos),
@@ -239,8 +242,4 @@ impl Lexer {
         self.advance();
         Some(token)
     }
-}
-
-fn is_whitespace(ch: char) -> bool {
-    ch.is_ascii_alphabetic() || ch == '_'
 }

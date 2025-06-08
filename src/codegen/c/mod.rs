@@ -84,6 +84,7 @@ impl C {
                 }
                 buf.push('}');
             }
+            Expr::List(_list) => unimplemented!(),
         };
     }
 
@@ -166,7 +167,7 @@ impl Compiler for C {
             .spawn()
             .expect("to start cc");
 
-        let output = handle.wait_with_output().expect("cc failed to build");
+        let _output = handle.wait_with_output().expect("cc failed to build");
 
         if opts.cleanup {
             std::fs::remove_file(tmp_src_path).unwrap();
