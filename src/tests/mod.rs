@@ -1,48 +1,35 @@
-use miette::{IntoDiagnostic, Result};
-use std::{path::Path, rc::Weak};
+use serde::{Deserialize, Serialize};
+use lazy_static::lazy_static;
 
-#[derive(Debug)]
-pub struct Spec {
-    pub name: String,
-    pub source: String,
-    pub ast: String,
-}
+mod parser {
+    use super::*;
 
-pub fn parse(source: impl AsRef<Path>) -> Result<Spec> {
-    let content = std::fs::read_to_string(source).into_diagnostic()?;
-    let mut lines = content.split("\n").filter(|line| !line.is_empty());
-
-    dbg!(&lines);
-
-    let name = lines
-        .next()
-        .unwrap()
-        .strip_prefix(";; test")
-        .expect("prefix")
-        .trim();
-
-    let _ = lines
-        .next()
-        .unwrap()
-        .strip_prefix(";; input")
-        .expect("input tag");
-
-    let mut input = String::new();
-    while let Some(line) = lines.next() {
-       if line.starts_with(";; output") {
-          break;
-       }
-       input.push_str(line);
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Spec {
+        pub name: String,
+        pub source: String,
+        pub expected: Vec<crate::ast::Node>,
     }
 
-    let mut output = String::new();
-    while let Some(line) = lines.next() {
-        output.push_str(line);
+    lazy_static! {
+        static ref PARSED: Vec<Spec> = ron::from_str(include_str!("./parser_tests.ron")).unwrap();
     }
 
-    Ok(Spec {
-        name: name.to_string(),
-        source: input,
-        ast: output,
-    })
+    macro_rules! generate_tests {
+        ($($i:ident$(,)?)*) => {
+            $(
+                #[test]
+                fn $i() {
+                    let spec = PARSED.iter().find(|spec| spec.name == stringify!($i)).unwrap();
+
+                    let mut parser = crate::parser::Parser::new(spec.source.to_owned());
+                    let ast = parser.parse().unwrap();
+
+                        assert_eq!(ast, spec.expected);
+                }
+            )*
+        };
+    }
+
+    generate_tests![infix_expr_mul, infix_expr_eq, if_expr, return_stmnt];
 }

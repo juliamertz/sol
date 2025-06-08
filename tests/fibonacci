@@ -1,8 +1,7 @@
+use stdio;
+
 func fibonacci(n: int) -> int
-    if n == 0 then
-        return n;
-    end;
-    if n == 1 then
+    if n < 2 then
         return n;
     end;
 
@@ -11,5 +10,6 @@ end
 
 func main() -> int
     let res: int = fibonacci(30);
+    printf("fibbobibbo: %d", res);
     return 0;
 end

@@ -4,7 +4,7 @@ mod lexer;
 mod loc;
 mod parser;
 
-// #[cfg(test)]
+#[cfg(test)]
 mod tests;
 
 use std::{
@@ -16,6 +16,7 @@ use std::{
 use clap::Parser;
 use codegen::{Compiler, Emitter, ReleaseType};
 use miette::{IntoDiagnostic, Result};
+use ron::ser::PrettyConfig;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -63,7 +64,7 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
         }
     };
 
-    println!("{}", ron::to_string(&nodes).unwrap());
+    println!("{}", ron::ser::to_string_pretty(&nodes, PrettyConfig::new()).unwrap());
 
     let mut emitter = codegen::C::default();
     let out = emitter.emit(&nodes);
