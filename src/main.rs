@@ -4,7 +4,7 @@ mod lexer;
 mod loc;
 mod parser;
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests;
 
 use std::{
@@ -62,6 +62,8 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
             return Err(err);
         }
     };
+
+    println!("{}", ron::to_string(&nodes).unwrap());
 
     let mut emitter = codegen::C::default();
     let out = emitter.emit(&nodes);

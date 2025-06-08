@@ -1,5 +1,8 @@
 func fibonacci(n: int) -> int
-    if n < 2 then
+    if n == 0 then
+        return n;
+    end;
+    if n == 1 then
         return n;
     end;
 
