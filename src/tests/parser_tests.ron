@@ -24,11 +24,28 @@
   ),
 
   (
+    name: "infix_expr_and",
+    source: "10 and 20",
+    expected: [
+      Expr(InfixExpr((
+        lhs: IntLit(10),
+        op: And,
+        rhs: IntLit(20),
+      ))),
+    ],
+  ),
+
+  (
     name: "call_expr",
     source: "fibonacci(n - 10)",
     expected: [
-      Stmnt(Ret((
-          val: IntLit(0),
+      Expr(CallExpr((
+        func: Ident("fibonacci"),
+        args: [InfixExpr ((
+          lhs: Ident("n"),
+          op: Sub,
+          rhs: IntLit(10),
+        ))],
       )))
     ],
   ),

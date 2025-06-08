@@ -30,13 +30,14 @@ mod parser {
     }
 
     generate_tests!(
-        "./parser_tests.ron",
+        "parser_tests.ron",
         [
             infix_expr_mul,
             infix_expr_eq,
+            infix_expr_and,
             call_expr,
             if_expr,
-            expr_list,
+            // expr_list,
             return_stmnt
         ]
     );

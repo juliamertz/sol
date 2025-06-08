@@ -66,6 +66,8 @@ pub enum Op {
     Div,
     Lt,
     Gt,
+    Or,
+    And,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -29,6 +29,8 @@ pub enum TokenKind {
     Else,
     End,
     Use,
+    Or,
+    And,
 
     // Operators
     Eq,
@@ -53,7 +55,9 @@ impl TokenKind {
                 | TokenKind::Else
                 | TokenKind::End
                 | TokenKind::Ret
-                | TokenKind::Use,
+                | TokenKind::Use
+                | TokenKind::Or
+                | TokenKind::And,
         )
     }
 
@@ -83,6 +87,8 @@ lazy_static! {
         ("then", TokenKind::Then),
         ("end", TokenKind::End),
         ("use", TokenKind::Use),
+        ("or", TokenKind::Or),
+        ("and", TokenKind::And),
     ]
     .iter()
     .cloned()

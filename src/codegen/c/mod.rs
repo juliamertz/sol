@@ -33,6 +33,8 @@ impl C {
             Op::Div => "/",
             Op::Lt => "<",
             Op::Gt => ">",
+            Op::And => "&&",
+            Op::Or => "||",
         };
         buf.push_str(text);
     }
@@ -146,6 +148,8 @@ impl Compiler for C {
 
         let mut args = vec![
             tmp_src_path.to_str().unwrap(),
+            "-Wall",
+            "-Wextra",
             "-o",
             out_path.to_str().expect("valid out path"),
         ];

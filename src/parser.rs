@@ -92,6 +92,8 @@ impl TryFrom<Token> for Op {
             TokenKind::Slash => Ok(Self::Div),
             TokenKind::Lt => Ok(Self::Lt),
             TokenKind::Gt => Ok(Self::Gt),
+            TokenKind::And => Ok(Self::And),
+            TokenKind::Or => Ok(Self::Or),
             _ => todo!(),
         }
     }
