@@ -3,4 +3,5 @@
 !default.nix
 !tree-sitter.json
 !grammar.js
-!queries/
+!queries
+!queries/*.scm
