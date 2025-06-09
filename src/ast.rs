@@ -1,5 +1,3 @@
-use std::path::Display;
-
 macro_rules! ast_derive {
     ($($item:item)*) => {
         $(
@@ -52,12 +50,8 @@ ast_derive! {
         Int,
         Bool,
         Str,
-        Fn {
-            r#extern: bool,
-            args: Vec<Type>,
-            returns: Box<Type>,
-        },
         List(Box<Type>),
+        Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
     }
 
     pub struct Block {

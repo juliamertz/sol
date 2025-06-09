@@ -39,3 +39,17 @@ void array_push(Array *self, void *item) {
   memcpy(target, item, self->item_size);
   self->len += 1;
 }
+
+void *array_pop(Array *self, void *dst) {
+  if (self->len == 0) {
+    return NULL;
+  }
+
+  void *ptr = array_get(self, self->len - 1);
+  void *item = memcpy(dst, ptr, self->item_size);
+  memset(ptr, 0, self->item_size);
+
+  self->len -= 1;
+}
+
+// void array_extend(Array *Self)
