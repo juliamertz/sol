@@ -111,14 +111,15 @@
     source: "func main() -> int\nreturn 0;\nend",
     expected: [
       Stmnt(Fn((
+        extern: false,
         ident: "main",
         args: [], 
         return_ty: "int",
-        body: Block(
+        body: Some(Block(
           nodes: [
             Stmnt(Ret((val: IntLit(0))))
           ],
-        ),
+        )),
       )))
     ],
   ),

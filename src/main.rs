@@ -1,8 +1,8 @@
+mod analyzer;
 mod ast;
 mod codegen;
 mod lexer;
 mod parser;
-mod ty;
 
 #[cfg(test)]
 mod tests;

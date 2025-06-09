@@ -31,8 +31,8 @@ impl C {
     // namespace prefix to be used for all identifiers
     fn prefix(&self, ident: &str) -> String {
         // TODO: make sure where set up for isolation from other c code
-        // format!("__newlang_{ident}_generated")
-        ident.to_string()
+        format!("__newlang_{ident}")
+        // ident.to_string()
     }
 
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
@@ -125,6 +125,10 @@ impl C {
     }
 
     fn emit_fn(&mut self, buf: &mut String, func: &Fn) {
+        if func.r#extern {
+            return;
+        }
+
         buf.push_str(&func.return_ty);
         buf.push(' ');
         if &func.ident != "main" {

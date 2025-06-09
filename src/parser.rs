@@ -203,7 +203,7 @@ impl Parser {
         }
         dbg!(&self.curr);
 
-        self.consume(TokenKind::Fn)?;
+        self.consume(TokenKind::Fn).unwrap();
 
         let ident = self
             .ident()
