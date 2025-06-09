@@ -1,3 +1,5 @@
+-- vim:ft=newlang
+
 use stdio
 use stdlib
 

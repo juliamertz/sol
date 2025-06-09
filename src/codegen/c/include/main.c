@@ -4,12 +4,6 @@
 #include "gc.h"
 #include "array.h"
 
-typedef struct Rgb {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-} Rgb;
-
 int main() {
   Array array = array_alloc(sizeof(int), 5);
 

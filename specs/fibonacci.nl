@@ -1,8 +1,7 @@
+-- vim:ft=newlang
+
 use stdio;
 
-extern fn printf;
-
--- fiiibooooo
 func fib(n: int) -> int
     if n == 0 or n == 1 then
         return n;
@@ -12,6 +11,6 @@ func fib(n: int) -> int
 end
 
 func main() -> int
-    printf("fibbobibbo: %d", fib(30));
+    let result: int = fib(30);
     return 0;
 end

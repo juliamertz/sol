@@ -30,7 +30,9 @@ impl Emitter for C {
 impl C {
     // namespace prefix to be used for all identifiers
     fn prefix(&self, ident: &str) -> String {
-        format!("__newlang_{ident}_generated")
+        // TODO: make sure where set up for isolation from other c code
+        // format!("__newlang_{ident}_generated")
+        ident.to_string()
     }
 
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
