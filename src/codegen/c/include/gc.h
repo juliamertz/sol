@@ -56,13 +56,13 @@ void *gc_alloc(size_t size) {
 }
 
 void *gc_realloc(void *ptr, size_t size) {
-   gc_header *old_header = GC_HEADER(ptr);
+  gc_header *old_header = GC_HEADER(ptr);
 
-   void *old_obj = GC_OBJECT(old_header);
-   void *new_obj = gc_alloc(size);
+  void *old_obj = GC_OBJECT(old_header);
+  void *new_obj = gc_alloc(size);
 
-   memcpy(new_obj, old_obj, old_header->size);
-   gc_release(old_obj);
+  memcpy(new_obj, old_obj, old_header->size);
+  gc_release(old_obj);
 
-   return new_obj;
+  return new_obj;
 }

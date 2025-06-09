@@ -239,7 +239,7 @@ impl Parser {
 
         Ok(Fn {
             r#extern: is_extern,
-            ident,
+            name: ident,
             args,
             return_ty: return_ty.text,
             body,
@@ -286,7 +286,7 @@ impl Parser {
         self.consume(TokenKind::Let)?;
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
-        let ty = self.ty()?;
+        let ty = Some(self.ty()?);
         self.consume(TokenKind::Assign)?;
         let val = Some(self.expr(Prec::Lowest)?);
         Ok(Let { ident, ty, val })

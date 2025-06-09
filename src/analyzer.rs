@@ -13,7 +13,11 @@ pub enum Type {
     Int,
     Bool,
     Str,
-    Fn { r#extern: bool, args: Vec<Type>, returns: Box<Type> },
+    Fn {
+        r#extern: bool,
+        args: Vec<Type>,
+        returns: Box<Type>,
+    },
     List(Box<Type>),
 }
 
@@ -35,10 +39,13 @@ impl FromStr for Type {
 pub enum AnalyzeError {
     #[error("Type mismatch between {lhs:?} and {rhs:?}")]
     TypeMismatch { lhs: Type, rhs: Type },
+
+    #[error("No such variable: '{name}'")]
+    UndefinedVariable { name: String },
 }
 
 #[derive(Debug, Clone)]
-struct TypeEnv {
+pub struct TypeEnv {
     variables: HashMap<String, Type>,
     functions: HashMap<String, Type>,
 }
@@ -51,18 +58,20 @@ impl TypeEnv {
         }
     }
 
-    pub fn bind(&mut self, name: impl ToString, ty: Type) {
+    pub fn bind_var(&mut self, name: impl ToString, ty: Type) {
         self.variables.insert(name.to_string(), ty);
     }
 
-    pub fn lookup(&self, name: impl AsRef<str>) -> Option<&Type> {
+    pub fn lookup_var(&self, name: impl AsRef<str>) -> Option<&Type> {
         self.variables.get(name.as_ref())
     }
 
-    pub fn extend(&self, name: impl ToString, ty: Type) -> Self {
-        let mut new_env = self.clone();
-        new_env.bind(name.to_string(), ty);
-        new_env
+    pub fn bind_fn(&mut self, name: impl ToString, ty: Type) {
+        self.functions.insert(name.to_string(), ty);
+    }
+
+    pub fn lookup_fn(&self, name: impl AsRef<str>) -> Option<&Type> {
+        self.functions.get(name.as_ref())
     }
 }
 
@@ -79,6 +88,41 @@ impl Analyzer {
         }
     }
 
+    pub fn collect_declarations(&self, nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
+        for node in nodes.iter() {
+            match node {
+                Node::Stmnt(Stmnt::Let(binding)) => {
+                    let ty = binding
+                        .ty
+                        .as_ref()
+                        .map(|ty| Type::from_str(ty.as_str()))
+                        .unwrap_or(Ok(Type::Unknown))?;
+
+                    env.bind_var(&binding.ident, ty.clone());
+                }
+                Node::Stmnt(Stmnt::Fn(binding)) => {
+                    let mut args = vec![];
+                    for arg in binding.args.iter() {
+                        let ty = Type::from_str(&arg.ty)?;
+                        args.push(ty);
+                    }
+
+                    let returns = Type::from_str(&binding.return_ty)?;
+                    let ty = Type::Fn {
+                        args,
+                        r#extern: binding.r#extern,
+                        returns: Box::new(returns),
+                    };
+
+                    env.bind_fn(binding.name.to_owned(), ty);
+                }
+                _ => {}
+            };
+        }
+
+        Ok(())
+    }
+
     pub fn check_node(&self, node: &Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
             Node::Expr(expr) => self.check_expr(expr, env),
@@ -89,7 +133,9 @@ impl Analyzer {
     fn check_expr(&self, expr: &Expr, env: &mut TypeEnv) -> Result<Type> {
         match expr {
             Expr::IntLit(_) => Ok(Type::Int),
+
             Expr::StringLit(_) => Ok(Type::Str),
+
             Expr::Infix(infix_expr) => {
                 let lhs = self.check_expr(&infix_expr.lhs, env)?;
                 let rhs = self.check_expr(&infix_expr.rhs, env)?;
@@ -97,21 +143,32 @@ impl Analyzer {
                     return Err(AnalyzeError::TypeMismatch { lhs, rhs }.into());
                 }
                 Ok(lhs)
-            },
+            }
+
             Expr::List(list) => {
                 let mut items = list.items.iter();
                 let expected_ty = self.check_expr(items.next().unwrap(), env)?;
 
                 while let Some(expr) = items.next() {
-                   let ty = self.check_expr(expr, env)?;
-                   if ty != expected_ty {
-                       return Err(AnalyzeError::TypeMismatch { lhs: ty, rhs: expected_ty }.into());
-                   }
+                    let ty = self.check_expr(expr, env)?;
+                    if ty != expected_ty {
+                        return Err(AnalyzeError::TypeMismatch {
+                            lhs: ty,
+                            rhs: expected_ty,
+                        }
+                        .into());
+                    }
                 }
 
                 Ok(Type::List(Box::new(expected_ty)))
             }
-            _ => todo!(),
+
+            Expr::Ident(name) => env
+                .lookup_var(name)
+                .cloned()
+                .ok_or_else(|| AnalyzeError::UndefinedVariable { name: name.clone() }.into()),
+
+            Expr::Call(_) | Expr::If(_) => unimplemented!(),
         }
     }
 
@@ -124,7 +181,7 @@ impl Analyzer {
                 // TODO: use type instead of inferring and then check it
 
                 let ty = self.check_expr(&expr, env).unwrap();
-                env.bind(&binding.ident, ty.clone());
+                env.bind_var(&binding.ident, ty.clone());
                 Ok(ty)
             }
 
@@ -136,12 +193,13 @@ impl Analyzer {
                 }
 
                 let returns = Type::from_str(&binding.return_ty)?;
-
-                Ok(Type::Fn {
+                let ty = Type::Fn {
                     args,
                     r#extern: binding.r#extern,
                     returns: Box::new(returns),
-                })
+                };
+
+                Ok(ty)
             }
 
             Stmnt::Ret(_) => Ok(Type::Unknown), // TODO:

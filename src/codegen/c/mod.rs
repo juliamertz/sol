@@ -114,7 +114,7 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(r#let) => {
-                buf.push_str(&r#let.ty);
+                buf.push_str(&r#let.ty.as_ref().unwrap());
                 buf.push(' ');
                 buf.push_str(&r#let.ident);
                 buf.push('=');
@@ -131,10 +131,10 @@ impl C {
 
         buf.push_str(&func.return_ty);
         buf.push(' ');
-        if &func.ident != "main" {
-            buf.push_str(&self.prefix(&func.ident));
+        if &func.name != "main" {
+            buf.push_str(&self.prefix(&func.name));
         } else {
-            buf.push_str(&func.ident);
+            buf.push_str(&func.name);
         }
         buf.push('(');
         buf.push_str(
@@ -151,7 +151,7 @@ impl C {
             for node in body.nodes.iter() {
                 self.emit_node(buf, node);
             }
-            if &func.ident == "main"
+            if &func.name == "main"
                 && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
             {
                 buf.push_str("return 0;");

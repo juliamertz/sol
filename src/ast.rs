@@ -63,7 +63,7 @@ ast_derive! {
 
     pub struct Let {
         pub ident: Ident,
-        pub ty: Ty,
+        pub ty: Option<Ty>,
         pub val: Option<Expr>,
     }
 
@@ -89,7 +89,7 @@ ast_derive! {
 
     pub struct Fn {
         pub r#extern: bool,
-        pub ident: Ident,
+        pub name: Ident,
         pub args: Vec<FnArg>,
         pub return_ty: Ident,
         pub body: Option<Block>,
