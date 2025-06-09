@@ -16,7 +16,6 @@ use std::{
 use clap::Parser;
 use codegen::{Compiler, Emitter, ReleaseType};
 use miette::{IntoDiagnostic, Result};
-use ron::ser::PrettyConfig;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -64,14 +63,9 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
         }
     };
 
-    println!(
-        "{}",
-        ron::ser::to_string_pretty(&nodes, PrettyConfig::new()).unwrap()
-    );
-
     let mut emitter = codegen::C::default();
     let out = emitter.emit(&nodes);
-    Ok(emitter.build_exe(&out, "test", opts))
+    emitter.build_exe(&out, "test", opts)
 }
 
 fn main() -> Result<()> {

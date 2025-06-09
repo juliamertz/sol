@@ -1,10 +1,14 @@
-use crate::{
-    BuildOpts,
-    ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt},
-};
+use super::{Compiler, Emitter, ReleaseType};
+
+use crate::BuildOpts;
+use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+
+use std::fs;
+use std::hash::Hasher;
 use std::path::PathBuf;
 
-use super::{Compiler, Emitter, ReleaseType};
+use miette::{IntoDiagnostic, Result};
+use wyhash2::WyHash;
 
 #[derive(Default)]
 pub struct C {}
@@ -141,10 +145,24 @@ impl C {
 }
 
 impl Compiler for C {
-    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> PathBuf {
-        let out_path = PathBuf::from(format!("./{program}"));
-        let tmp_src_path = PathBuf::from(format!("./{program}.c"));
-        std::fs::write(&tmp_src_path, src).unwrap();
+    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
+        let mut hasher = WyHash::with_seed(0);
+        hasher.write(program.as_bytes());
+        let program_hash = hasher.finish();
+
+        let out_path = opts.outdir.join(program);
+        let hash_path = opts.outdir.join("hash");
+        let tmp_src_path = opts.outdir.join("source.c");
+
+        if let Ok(hash) = fs::read_to_string(&hash_path) {
+            if hash == format!("{program_hash:x}") {
+                // TODO: verify hash of output binary, don't just assume it's right
+                return Ok(out_path);
+            }
+        };
+
+        fs::write(&tmp_src_path, src).unwrap();
+        fs::write(&hash_path, format!("{program_hash:?}")).unwrap();
 
         let mut args = vec![
             tmp_src_path.to_str().unwrap(),
@@ -161,6 +179,8 @@ impl Compiler for C {
             ]);
         }
 
+        fs::create_dir_all(&opts.outdir).into_diagnostic()?;
+
         let handle = std::process::Command::new("cc")
             .args(&args)
             .spawn()
@@ -169,9 +189,9 @@ impl Compiler for C {
         let _output = handle.wait_with_output().expect("cc failed to build");
 
         if opts.cleanup {
-            std::fs::remove_file(tmp_src_path).unwrap();
+            fs::remove_file(tmp_src_path).unwrap();
         }
 
-        out_path
+        Ok(out_path)
     }
 }
