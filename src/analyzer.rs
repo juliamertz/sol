@@ -76,14 +76,12 @@ impl TypeEnv {
 }
 
 pub struct Analyzer {
-    ast: Vec<Node>,
     root: TypeEnv,
 }
 
 impl Analyzer {
-    pub fn new(ast: Vec<Node>) -> Self {
+    pub fn new() -> Self {
         Self {
-            ast,
             root: TypeEnv::new(),
         }
     }
