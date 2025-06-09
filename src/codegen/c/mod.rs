@@ -1,6 +1,7 @@
 use super::{Compiler, Emitter, ReleaseType};
 
 use crate::BuildOpts;
+use crate::analyzer::{Analyzer, TypeEnv};
 use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt, Type};
 
 use std::fs;
@@ -18,9 +19,12 @@ impl Emitter for C {
 
     fn emit(&mut self, ast: &Self::Input) -> String {
         let mut buf = String::new();
+        let mut env = TypeEnv::new();
+
+        Analyzer::collect_declarations(&ast, &mut env).unwrap();
 
         for node in ast {
-            self.emit_node(&mut buf, node);
+            self.emit_node(&mut buf, &mut env, node);
         }
 
         buf
@@ -50,19 +54,19 @@ impl C {
         buf.push_str(text);
     }
 
-    fn emit_infix_expr(&mut self, buf: &mut String, infix_expr: &InfixExpr) {
-        self.emit_expr(buf, infix_expr.lhs.as_ref());
+    fn emit_infix_expr(&mut self, buf: &mut String, env: &mut TypeEnv, infix_expr: &InfixExpr) {
+        self.emit_expr(buf, env, infix_expr.lhs.as_ref());
         self.emit_op(buf, &infix_expr.op);
-        self.emit_expr(buf, infix_expr.rhs.as_ref());
+        self.emit_expr(buf, env, infix_expr.rhs.as_ref());
     }
 
-    fn emit_call_expr(&mut self, buf: &mut String, call_expr: &CallExpr) {
-        self.emit_expr(buf, &call_expr.func);
+    fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeEnv, call_expr: &CallExpr) {
+        self.emit_expr(buf, env, &call_expr.func);
         buf.push('(');
 
         let mut args = String::new();
         for arg in call_expr.args.iter() {
-            self.emit_expr(&mut args, arg);
+            self.emit_expr(&mut args, env, arg);
             args.push(',');
         }
 
@@ -71,17 +75,17 @@ impl C {
         buf.push(')');
     }
 
-    fn emit_node(&mut self, buf: &mut String, node: &Node) {
+    fn emit_node(&mut self, buf: &mut String, env: &mut TypeEnv, node: &Node) {
         match node {
             Node::Expr(expr) => {
-                self.emit_expr(buf, expr);
+                self.emit_expr(buf, env, expr);
                 buf.push(';');
             }
-            Node::Stmnt(stmnt) => self.emit_stmnt(buf, stmnt),
+            Node::Stmnt(stmnt) => self.emit_stmnt(buf, env, stmnt),
         }
     }
 
-    fn emit_type(&mut self, ty: &Type) -> String {
+    fn emit_type(&mut self, env: &mut TypeEnv, ty: &Type) -> String {
         match ty {
             Type::Int => "int",
             Type::Str => "char *",
@@ -91,19 +95,19 @@ impl C {
         .to_string()
     }
 
-    fn emit_expr(&mut self, buf: &mut String, expr: &Expr) {
+    fn emit_expr(&mut self, buf: &mut String, env: &mut TypeEnv, expr: &Expr) {
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
             Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
-            Expr::Infix(infix_expr) => self.emit_infix_expr(buf, infix_expr),
-            Expr::Call(call_expr) => self.emit_call_expr(buf, call_expr),
+            Expr::Infix(infix_expr) => self.emit_infix_expr(buf, env, infix_expr),
+            Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
             Expr::If(r#if) => {
                 buf.push_str("if(");
-                self.emit_expr(buf, &r#if.condition);
+                self.emit_expr(buf, env, &r#if.condition);
                 buf.push_str("){");
                 for node in &r#if.consequence.nodes {
-                    self.emit_node(buf, node);
+                    self.emit_node(buf, env, node);
                 }
                 buf.push('}');
             }
@@ -111,35 +115,35 @@ impl C {
         };
     }
 
-    fn emit_stmnt(&mut self, buf: &mut String, stmnt: &Stmnt) {
+    fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeEnv, stmnt: &Stmnt) {
         match stmnt {
-            Stmnt::Fn(func) => self.emit_fn(buf, func),
+            Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
                 buf.push_str(format!("#include <{}.h>\n", r#use.ident).as_str());
             }
             Stmnt::Ret(ret) => {
                 buf.push_str("return");
                 buf.push(' ');
-                self.emit_expr(buf, &ret.val);
+                self.emit_expr(buf, env, &ret.val);
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                buf.push_str(self.emit_type(&binding.ty.clone().unwrap()).as_str());
+                buf.push_str(self.emit_type(env, &binding.ty.clone().unwrap()).as_str());
                 buf.push(' ');
                 buf.push_str(&binding.ident);
                 buf.push('=');
-                self.emit_expr(buf, binding.val.as_ref().unwrap()); // TODO: optional emit
+                self.emit_expr(buf, env, binding.val.as_ref().unwrap()); // TODO: optional emit
                 buf.push(';');
             }
         }
     }
 
-    fn emit_fn(&mut self, buf: &mut String, func: &Fn) {
+    fn emit_fn(&mut self, buf: &mut String, env: &mut TypeEnv, func: &Fn) {
         if func.r#extern {
             return;
         }
 
-        buf.push_str(&self.emit_type(&func.return_ty));
+        buf.push_str(&self.emit_type(env, &func.return_ty));
         buf.push(' ');
         if &func.name != "main" {
             buf.push_str(&self.prefix(&func.name));
@@ -150,7 +154,13 @@ impl C {
         buf.push_str(
             func.args
                 .iter()
-                .map(|arg| format!("{} {}", self.emit_type(&arg.ty), self.prefix(&arg.ident)))
+                .map(|arg| {
+                    format!(
+                        "{} {}",
+                        self.emit_type(env, &arg.ty),
+                        self.prefix(&arg.ident)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),
@@ -159,7 +169,7 @@ impl C {
         buf.push('{');
         if let Some(ref body) = func.body {
             for node in body.nodes.iter() {
-                self.emit_node(buf, node);
+                self.emit_node(buf, env, node);
             }
             if &func.name == "main"
                 && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))

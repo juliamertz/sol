@@ -85,18 +85,10 @@ impl TypeEnv {
     }
 }
 
-pub struct Analyzer {
-    root: TypeEnv,
-}
+pub struct Analyzer;
 
 impl Analyzer {
-    pub fn new() -> Self {
-        Self {
-            root: TypeEnv::new(),
-        }
-    }
-
-    pub fn collect_declarations(&self, nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
+    pub fn collect_declarations(nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
         for node in nodes.iter() {
             match node {
                 Node::Stmnt(Stmnt::Let(binding)) => {
@@ -128,22 +120,22 @@ impl Analyzer {
         Ok(())
     }
 
-    pub fn check_node(&self, node: &Node, env: &mut TypeEnv) -> Result<Type> {
+    pub fn check_node(node: &Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
-            Node::Expr(expr) => self.check_expr(expr, env),
-            Node::Stmnt(stmnt) => self.check_stmnt(stmnt, env),
+            Node::Expr(expr) => Self::check_expr(expr, env),
+            Node::Stmnt(stmnt) => Self::check_stmnt(stmnt, env),
         }
     }
 
-    fn check_expr(&self, expr: &Expr, env: &mut TypeEnv) -> Result<Type> {
+    fn check_expr(expr: &Expr, env: &mut TypeEnv) -> Result<Type> {
         match expr {
             Expr::IntLit(_) => Ok(Type::Int),
 
             Expr::StringLit(_) => Ok(Type::Str),
 
             Expr::Infix(infix_expr) => {
-                let lhs = self.check_expr(&infix_expr.lhs, env)?;
-                let rhs = self.check_expr(&infix_expr.rhs, env)?;
+                let lhs = Self::check_expr(&infix_expr.lhs, env)?;
+                let rhs = Self::check_expr(&infix_expr.rhs, env)?;
                 if lhs != rhs {
                     return Err(AnalyzeError::TypeMismatch { lhs, rhs }.into());
                 }
@@ -152,10 +144,10 @@ impl Analyzer {
 
             Expr::List(list) => {
                 let mut items = list.items.iter();
-                let expected_ty = self.check_expr(items.next().unwrap(), env)?;
+                let expected_ty = Self::check_expr(items.next().unwrap(), env)?;
 
                 while let Some(expr) = items.next() {
-                    let ty = self.check_expr(expr, env)?;
+                    let ty = Self::check_expr(expr, env)?;
                     if ty != expected_ty {
                         return Err(AnalyzeError::TypeMismatch {
                             lhs: ty,
@@ -177,7 +169,7 @@ impl Analyzer {
         }
     }
 
-    fn check_stmnt(&self, stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
+    fn check_stmnt( stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             Stmnt::Let(binding) => {
                 let Some(ref expr) = binding.val else {
@@ -185,7 +177,7 @@ impl Analyzer {
                 };
                 // TODO: use type instead of inferring and then check it
 
-                let ty = self.check_expr(&expr, env).unwrap();
+                let ty = Self::check_expr(&expr, env).unwrap();
                 env.bind_var(&binding.ident, ty.clone());
                 Ok(ty)
             }
