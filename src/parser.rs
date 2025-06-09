@@ -192,8 +192,15 @@ impl Parser {
         Ok(token.text.clone())
     }
 
-    fn ty(&mut self) -> Result<Ty> {
-        self.ident()
+    fn ty(&mut self) -> Result<Type> {
+        let ident = self.ident()?;
+        let ty = match ident.as_str() {
+            "Int" => Type::Int,
+            "Bool" => Type::Bool,
+            "Str" => Type::Str,
+            _ => panic!("UNIMPLEMENTED: {}", ident.as_str())
+        };
+        Ok(ty)
     }
 
     fn r#fn(&mut self) -> Result<Fn> {

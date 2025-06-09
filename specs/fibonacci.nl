@@ -2,9 +2,9 @@
 
 use stdio;
 
-extern func printf() -> int;
+-- extern func printf() -> Int;
 
-func fib(n: int) -> int
+func fib(n: Int) -> Int
     if n == 0 or n == 1 then
         return n;
     end;
@@ -12,7 +12,7 @@ func fib(n: int) -> int
     return fib(n - 1) + fib(n - 2);
 end
 
-func main() -> int
-    let result: int = fib(30);
+func main() -> Int
+    let result: Int = fib(30);
     return 0;
 end

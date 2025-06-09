@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::ast::*;
+use crate::ast::{self, *};
 use crate::lexer::{Token, TokenKind};
 
 use miette::{Diagnostic, NamedSource, Result, SourceSpan, miette};
@@ -19,6 +19,16 @@ pub enum Type {
         returns: Box<Type>,
     },
     List(Box<Type>),
+}
+
+impl From<&ast::Type> for Type {
+    fn from(value: &ast::Type) -> Self {
+        match value {
+            ast::Type::Int => Self::Int,
+            ast::Type::Bool => Self::Bool,
+            _ => unimplemented!(),
+        }
+    }
 }
 
 // TODO: do this in parser first, then convert ast type to analyzer type
@@ -90,19 +100,17 @@ impl Analyzer {
         for node in nodes.iter() {
             match node {
                 Node::Stmnt(Stmnt::Let(binding)) => {
-                    let ty = binding
-                        .ty
-                        .as_ref()
-                        .map(|ty| Type::from_str(ty.as_str()))
-                        .unwrap_or(Ok(Type::Unknown))?;
+                    let ty = match binding.ty {
+                        Some(ref ty) => ty.into(),
+                        None => Type::Unknown,
+                    };
 
                     env.bind_var(&binding.ident, ty.clone());
                 }
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
                     for arg in binding.args.iter() {
-                        let ty = Type::from_str(&arg.ty)?;
-                        args.push(ty);
+                        args.push((&arg.ty).into());
                     }
 
                     let returns = Type::from_str(&binding.return_ty)?;
@@ -184,10 +192,9 @@ impl Analyzer {
             }
 
             Stmnt::Fn(binding) => {
-                let mut args = vec![];
+                let mut args: Vec<Type> = vec![];
                 for arg in binding.args.iter() {
-                    let ty = Type::from_str(&arg.ty)?;
-                    args.push(ty);
+                    args.push((&arg.ty).into());
                 }
 
                 let returns = Type::from_str(&binding.return_ty)?;

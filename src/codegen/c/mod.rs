@@ -1,7 +1,7 @@
 use super::{Compiler, Emitter, ReleaseType};
 
 use crate::BuildOpts;
-use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt, Type};
 
 use std::fs;
 use std::hash::Hasher;
@@ -81,6 +81,16 @@ impl C {
         }
     }
 
+    fn emit_type(&mut self, ty: &Type) -> String {
+        match ty {
+            Type::Int => "int",
+            Type::Str => "char *",
+            Type::Bool => "bool",
+            _ => unimplemented!(),
+        }
+        .to_string()
+    }
+
     fn emit_expr(&mut self, buf: &mut String, expr: &Expr) {
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
@@ -113,12 +123,12 @@ impl C {
                 self.emit_expr(buf, &ret.val);
                 buf.push(';');
             }
-            Stmnt::Let(r#let) => {
-                buf.push_str(&r#let.ty.as_ref().unwrap());
+            Stmnt::Let(binding) => {
+                buf.push_str(self.emit_type(&binding.ty.clone().unwrap()).as_str());
                 buf.push(' ');
-                buf.push_str(&r#let.ident);
+                buf.push_str(&binding.ident);
                 buf.push('=');
-                self.emit_expr(buf, r#let.val.as_ref().unwrap()); // TODO: optional emit
+                self.emit_expr(buf, binding.val.as_ref().unwrap()); // TODO: optional emit
                 buf.push(';');
             }
         }
@@ -140,7 +150,7 @@ impl C {
         buf.push_str(
             func.args
                 .iter()
-                .map(|arg| format!("{} {}", arg.ty, self.prefix(&arg.ident)))
+                .map(|arg| format!("{} {}", self.emit_type(&arg.ty), self.prefix(&arg.ident)))
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),

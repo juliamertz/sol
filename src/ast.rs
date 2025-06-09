@@ -1,3 +1,5 @@
+use std::path::Display;
+
 macro_rules! ast_derive {
     ($($item:item)*) => {
         $(
@@ -9,8 +11,6 @@ macro_rules! ast_derive {
 }
 
 pub type Ident = String;
-
-pub type Ty = String;
 
 ast_derive! {
     pub enum Node {
@@ -45,6 +45,19 @@ ast_derive! {
         Gt,
         And,
         Or,
+
+    }
+
+    pub enum Type {
+        Int,
+        Bool,
+        Str,
+        Fn {
+            r#extern: bool,
+            args: Vec<Type>,
+            returns: Box<Type>,
+        },
+        List(Box<Type>),
     }
 
     pub struct Block {
@@ -63,7 +76,7 @@ ast_derive! {
 
     pub struct Let {
         pub ident: Ident,
-        pub ty: Option<Ty>,
+        pub ty: Option<Type>,
         pub val: Option<Expr>,
     }
 
@@ -84,7 +97,7 @@ ast_derive! {
 
     pub struct FnArg {
         pub ident: Ident,
-        pub ty: Ty,
+        pub ty: Type,
     }
 
     pub struct Fn {
