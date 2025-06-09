@@ -47,3 +47,5 @@
 (number) @number
 (string) @string
 
+(comment) @comment
+

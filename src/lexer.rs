@@ -29,8 +29,6 @@ pub enum TokenKind {
     Else,
     End,
     Use,
-    Or,
-    And,
 
     // Operators
     Eq,
@@ -42,6 +40,8 @@ pub enum TokenKind {
     Lt,
     Gt,
     Arrow,
+    And,
+    Or,
 }
 
 impl TokenKind {

@@ -9,7 +9,8 @@ module.exports = grammar({
       $.function_def,
       $.return_stmt,
       $.expression_stmt,
-      $.if_stmt
+      $.if_stmt,
+      $.comment, // this is dumb
     ),
 
     use_stmt: $ => seq('use', $.identifier, ';'),
@@ -74,7 +75,9 @@ module.exports = grammar({
 
     number: $ => /\d+/,
 
-    string: $ => /"[^"]*"/
+    string: $ => /"[^"]*"/,
+
+    comment: $ => /--[^\n]*/,
   }
 });
 
