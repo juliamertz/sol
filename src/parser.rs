@@ -357,9 +357,7 @@ impl Parser {
                 break;
             }
 
-            dbg!(&curr);
             if curr.kind.is_operator() {
-                println!("operator: {curr:?}");
                 lhs = self.infix_expr(lhs)?;
             } else if curr.kind == TokenKind::LParen {
                 lhs = self.call_expr(lhs)?;

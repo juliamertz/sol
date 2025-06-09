@@ -22,8 +22,7 @@ mod parser {
                 fn $i() {
                     let spec = PARSED.iter().find(|spec| spec.name == stringify!($i)).unwrap();
                     let mut parser = crate::parser::Parser::new(spec.source.to_owned());
-                    let ast = parser.parse().unwrap();
-                    assert_eq!(ast, spec.expected);
+                    assert_eq!(parser.parse().unwrap(), spec.expected);
                 }
             )*
         };
@@ -39,6 +38,7 @@ mod parser {
             if_expr,
             // expr_list,
             return_stmnt
+            fn_stmnt
         ]
     );
 }

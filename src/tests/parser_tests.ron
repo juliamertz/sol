@@ -51,16 +51,6 @@
   ),
 
   (
-    name: "return_stmnt",
-    source: "return 0;",
-    expected: [
-      Stmnt(Ret((
-          val: IntLit(0),
-      )))
-    ],
-  ),
-
-  (
     name: "if_expr",
     source: "if n < 0 then return 0; end;",
     expected: [
@@ -86,6 +76,30 @@
       Expr(IntLit(30)),
       Expr(Ident("fourty")),
       Expr(IntLit(50)),
+    ],
+  ),
+
+  (
+    name: "return_stmnt",
+    source: "return 0;",
+    expected: [
+      Stmnt(Ret((
+          val: IntLit(0),
+      )))
+    ],
+  ),
+
+  (
+    name: "fn_stmnt",
+    source: r#"
+      func main() -> int
+        return 0;
+      end
+    "#,
+    expected: [
+      Stmnt(Ret((
+          val: IntLit(0),
+      )))
     ],
   ),
 ]
