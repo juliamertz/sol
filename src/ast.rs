@@ -104,7 +104,7 @@ ast_derive! {
         pub r#extern: bool,
         pub name: Ident,
         pub args: Vec<FnArg>,
-        pub return_ty: Ident,
+        pub return_ty: Type,
         pub body: Option<Block>,
     }
 

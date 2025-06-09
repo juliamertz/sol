@@ -139,7 +139,7 @@ impl C {
             return;
         }
 
-        buf.push_str(&func.return_ty);
+        buf.push_str(&self.emit_type(&func.return_ty));
         buf.push(' ');
         if &func.name != "main" {
             buf.push_str(&self.prefix(&func.name));

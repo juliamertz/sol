@@ -224,7 +224,7 @@ impl Parser {
         self.consume(TokenKind::RParen)?;
 
         self.consume(TokenKind::Arrow)?;
-        let return_ty = self.consume(TokenKind::Ident)?;
+        let return_ty = self.ty()?;
 
         let body = if self
             .curr
@@ -248,7 +248,7 @@ impl Parser {
             r#extern: is_extern,
             name: ident,
             args,
-            return_ty: return_ty.text,
+            return_ty,
             body,
         })
     }

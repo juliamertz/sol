@@ -113,11 +113,10 @@ impl Analyzer {
                         args.push((&arg.ty).into());
                     }
 
-                    let returns = Type::from_str(&binding.return_ty)?;
                     let ty = Type::Fn {
                         args,
                         r#extern: binding.r#extern,
-                        returns: Box::new(returns),
+                        returns: Box::new((&binding.return_ty).into()),
                     };
 
                     env.bind_fn(binding.name.to_owned(), ty);
@@ -197,11 +196,10 @@ impl Analyzer {
                     args.push((&arg.ty).into());
                 }
 
-                let returns = Type::from_str(&binding.return_ty)?;
                 let ty = Type::Fn {
                     args,
                     r#extern: binding.r#extern,
-                    returns: Box::new(returns),
+                    returns: Box::new((&binding.return_ty).into()),
                 };
 
                 Ok(ty)
