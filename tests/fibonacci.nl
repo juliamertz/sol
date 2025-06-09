@@ -3,7 +3,7 @@ use stdio;
 -- hello world
 
 func fib(n: int) -> int
-    if n < 2 then
+    if n == 0 or n == 1 then
         return n;
     end;
 

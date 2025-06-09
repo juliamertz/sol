@@ -56,8 +56,6 @@ impl TokenKind {
                 | TokenKind::End
                 | TokenKind::Ret
                 | TokenKind::Use
-                | TokenKind::Or
-                | TokenKind::And,
         )
     }
 
@@ -72,7 +70,9 @@ impl TokenKind {
                 | TokenKind::Slash
                 | TokenKind::Arrow
                 | TokenKind::Lt
-                | TokenKind::Gt,
+                | TokenKind::Gt
+                | TokenKind::And
+                | TokenKind::Or
         )
     }
 }
@@ -87,8 +87,8 @@ lazy_static! {
         ("then", TokenKind::Then),
         ("end", TokenKind::End),
         ("use", TokenKind::Use),
-        ("or", TokenKind::Or),
         ("and", TokenKind::And),
+        ("or", TokenKind::Or),
     ]
     .iter()
     .cloned()

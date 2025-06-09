@@ -61,6 +61,7 @@ pub enum Prec {
     Eq,      // ==
     Cmp,     // > or <
     Product, // *
+    AndOr,
     Prefix,  // -a or !a
     Call,    // func()
     Index,   // list[0]
@@ -75,6 +76,7 @@ impl From<&Token> for Prec {
             TokenKind::LParen => Self::Call,
             TokenKind::Lt | TokenKind::Gt => Self::Cmp,
             TokenKind::Asterisk => Self::Product,
+            TokenKind::And | TokenKind::Or => Self::AndOr,
             _ => Self::Lowest,
         }
     }
