@@ -25,6 +25,16 @@ void *array_get(Array *self, size_t idx) {
 }
 
 void array_push(Array *self, void *item) {
+  if (self->len >= self->capacity) {
+    size_t new_capacity = self->capacity * 2;
+
+    void *old_obj = GC_OBJECT(self->header);
+    void *new_obj = gc_realloc(old_obj, self->item_size * new_capacity);
+
+    self->capacity = new_capacity;
+    self->header = GC_HEADER(new_obj);
+  }
+
   void *target = array_get(self, self->len);
   memcpy(target, item, self->item_size);
   self->len += 1;

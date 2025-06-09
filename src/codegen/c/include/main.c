@@ -11,14 +11,12 @@ typedef struct Rgb {
 } Rgb;
 
 int main() {
-  Array array = array_alloc(sizeof(int), 6);
-
-  printf("ref count: %zu\n", array.header->ref_count);
+  Array array = array_alloc(sizeof(int), 5);
 
   void *obj = GC_OBJECT(array.header);
 
   int i = 0;
-  while (i < 6) {
+  while (i < 50) {
       int val = i * 100;
       array_push(&array, &val);
       printf("element at %d: %d\n", i, *(int *)array_get(&array, i));
