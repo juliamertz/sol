@@ -1,5 +1,5 @@
 #[cfg(test)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub type Ident = String;
 

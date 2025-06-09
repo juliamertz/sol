@@ -62,10 +62,10 @@ pub enum Prec {
     Cmp,     // > or <
     Product, // *
     AndOr,
-    Prefix,  // -a or !a
-    Call,    // func()
-    Index,   // list[0]
-    Chain,   // mod.field
+    Prefix, // -a or !a
+    Call,   // func()
+    Index,  // list[0]
+    Chain,  // mod.field
 }
 
 impl From<&Token> for Prec {

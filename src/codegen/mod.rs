@@ -1,9 +1,9 @@
 mod c;
 pub use c::C;
 
-use std::path::PathBuf;
 use crate::BuildOpts;
 use miette::Result;
+use std::path::PathBuf;
 
 pub trait Emitter {
     type Input;
