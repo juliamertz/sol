@@ -1,30 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-typedef struct Array {
+typedef struct List {
   size_t capacity;
   size_t len;
   size_t item_size;
   gc_header *header;
-} Array;
+} List;
 
-Array array_alloc(size_t size, size_t capacity) {
-  Array array;
+List list_alloc(size_t size, size_t capacity) {
+  List list;
   void *obj = gc_alloc(size * capacity);
-  array.header = GC_HEADER(obj);
-  array.item_size = size;
-  array.capacity = capacity;
-  array.len = 0;
+  list.header = GC_HEADER(obj);
+  list.item_size = size;
+  list.capacity = capacity;
+  list.len = 0;
 
-  return array;
+  return list;
 }
 
-void *array_get(Array *self, size_t idx) {
+void *list_get(List *self, size_t idx) {
   void *obj = GC_OBJECT(self->header);
   return (char *)obj + idx * self->item_size;
 }
 
-void array_push(Array *self, void *item) {
+void list_push(List *self, void *item) {
   if (self->len >= self->capacity) {
     size_t new_capacity = self->capacity * 2;
 
@@ -35,21 +36,26 @@ void array_push(Array *self, void *item) {
     self->header = GC_HEADER(new_obj);
   }
 
-  void *target = array_get(self, self->len);
+  void *target = list_get(self, self->len);
   memcpy(target, item, self->item_size);
   self->len += 1;
 }
 
-void *array_pop(Array *self, void *dst) {
+void *list_pop(List *self, void *dst) {
   if (self->len == 0) {
     return NULL;
   }
 
-  void *ptr = array_get(self, self->len - 1);
+  void *ptr = list_get(self, self->len - 1);
   void *item = memcpy(dst, ptr, self->item_size);
   memset(ptr, 0, self->item_size);
 
   self->len -= 1;
 }
 
-// void array_extend(Array *Self)
+void list_extend(List *self, void *items, size_t size, size_t len) {
+    // TODO: re-alloc if needed
+    char *obj = GC_OBJECT(self->header);
+    memcpy(obj + self->len, items, size * len);
+    self->len += len;
+}

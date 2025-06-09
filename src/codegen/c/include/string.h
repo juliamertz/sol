@@ -1,21 +1,27 @@
 #include <stdint.h>
+
 typedef struct Str {
-    Array buff;
+    List buff;
 } Str;
 
-Str str_alloc() {
+Str str_alloc(size_t size) {
     Str str;
-    str.buff = array_alloc(sizeof(uint8_t), 40);
+    str.buff = list_alloc(sizeof(char), size);
     return str;
 }
 
+size_t str_len(Str *self) {
+   return self->buff.len;
+}
+
 void str_push_ch(Str *self, char ch) {
-    array_push(&self->buff, &ch);
+    list_push(&self->buff, &ch);
 }
 
-void str_push(Str *self, char *text) {
-
+void str_push_chars(Str *self, char *text, size_t len) {
+    list_extend(&self->buff + self->buff.len, text, sizeof(char), len);
 }
 
-// void str_push(Str *self, char *text) {
-// }
+void str_push(Str *self, Str *other) {
+    list_extend(&self->buff, GC_OBJECT(other->buff.header), sizeof(char), other->buff.len);
+}

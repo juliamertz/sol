@@ -58,6 +58,8 @@ void *gc_alloc(size_t size) {
 void *gc_realloc(void *ptr, size_t size) {
   gc_header *old_header = GC_HEADER(ptr);
 
+  printf("re-allocatin to %zu\n", size);
+
   void *old_obj = GC_OBJECT(old_header);
   void *new_obj = gc_alloc(size);
 

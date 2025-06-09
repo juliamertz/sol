@@ -2,44 +2,27 @@
 
 #include "gc.h"
 
-#include "array.h"
+#include "list.h"
 
 #include "string.h"
 
 int main() {
-  Array arr = array_alloc(sizeof(int), 5);
+  List list = list_alloc(sizeof(int), 5);
 
   for (int i = 0; i < 50; i++) {
     int val = i * 100;
-    array_push(&arr, &val);
-    printf("element at %d: %d\n", i, *(int *)array_get(&arr, i));
+    list_push(&list, &val);
+    printf("element at %d: %d\n", i, *(int *)list_get(&list, i));
   }
 
   int last;
-  array_pop(&arr, &last);
-  printf("last: %d\n", last);
-  array_pop(&arr, &last);
-  printf("last: %d\n", last);
-  array_pop(&arr, &last);
-  printf("last: %d\n", last);
-  array_pop(&arr, &last);
-  printf("last: %d\n", last);
-  array_pop(&arr, &last);
+  list_pop(&list, &last);
   printf("last: %d\n", last);
 
+  Str str = str_alloc(100);
+  str_push_chars(&str,  "Hello world", 12);
 
-  Str str = str_alloc();
-  str_push_ch(&str, 'h');
-  str_push_ch(&str, 'e');
-  str_push_ch(&str, 'l');
-  str_push_ch(&str, 'l');
-  str_push_ch(&str, 'o');
-  str_push_ch(&str, ' ');
-  str_push_ch(&str, 'w');
-  str_push_ch(&str, 'o');
-  str_push_ch(&str, 'r');
-  str_push_ch(&str, 'l');
-  str_push_ch(&str, 'd');
+  str_push_chars(&str,  "aargh!\0", 7);
 
   printf("str: %s", GC_OBJECT(str.buff.header));
 
