@@ -28,6 +28,11 @@ impl Emitter for C {
 }
 
 impl C {
+    // namespace prefix to be used for all identifiers
+    fn prefix(&self, ident: &str) -> String {
+        format!("__newlang_{ident}_generated")
+    }
+
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
         let text = match op {
             Op::Eq => "==",
@@ -76,7 +81,7 @@ impl C {
 
     fn emit_expr(&mut self, buf: &mut String, expr: &Expr) {
         match expr {
-            Expr::Ident(ident) => buf.push_str(ident),
+            Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
             Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
             Expr::Infix(infix_expr) => self.emit_infix_expr(buf, infix_expr),
