@@ -29,7 +29,7 @@ mod parser {
     }
 
     generate_tests!(
-        "parser_tests.ron",
+        "parser.ron",
         [
             infix_expr_mul,
             infix_expr_eq,

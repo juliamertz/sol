@@ -37,9 +37,10 @@ pub enum Expr {
     Ident(Ident),
     IntLit(i64),
     StringLit(String),
-    InfixExpr(InfixExpr),
-    CallExpr(CallExpr),
+    Infix(InfixExpr),
+    Call(CallExpr),
     If(If),
+    #[allow(dead_code)]
     List(List),
 }
 

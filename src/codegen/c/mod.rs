@@ -79,8 +79,8 @@ impl C {
             Expr::Ident(ident) => buf.push_str(ident),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
             Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
-            Expr::InfixExpr(infix_expr) => self.emit_infix_expr(buf, infix_expr),
-            Expr::CallExpr(call_expr) => self.emit_call_expr(buf, call_expr),
+            Expr::Infix(infix_expr) => self.emit_infix_expr(buf, infix_expr),
+            Expr::Call(call_expr) => self.emit_call_expr(buf, call_expr),
             Expr::If(r#if) => {
                 buf.push_str("if(");
                 self.emit_expr(buf, &r#if.condition);

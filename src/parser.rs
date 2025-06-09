@@ -6,10 +6,6 @@ use crate::lexer::{Lexer, Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
-    #[error("Illegal token")]
-    #[diagnostic(code(my_lib::bad_code))]
-    Illegal,
-
     #[error("Unexpected EOF")]
     #[diagnostic(code(my_lib::bad_code))]
     UnexpectedEOF,
@@ -62,10 +58,10 @@ pub enum Prec {
     Cmp,     // > or <
     Product, // *
     AndOr,
-    Prefix, // -a or !a
+    // Prefix, // -a or !a
     Call,   // func()
-    Index,  // list[0]
-    Chain,  // mod.field
+    // Index,  // list[0]
+    // Chain,  // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -302,7 +298,7 @@ impl Parser {
 
         let rhs = self.expr(Prec::default())?; // TODO: prec
 
-        Ok(Expr::InfixExpr(InfixExpr {
+        Ok(Expr::Infix(InfixExpr {
             lhs: Box::new(lhs),
             op,
             rhs: Box::new(rhs),
@@ -314,7 +310,7 @@ impl Parser {
         let args = self.expr_list()?;
         self.consume(TokenKind::RParen)?;
 
-        Ok(Expr::CallExpr(CallExpr {
+        Ok(Expr::Call(CallExpr {
             func: Box::new(expr),
             args,
         }))
@@ -387,6 +383,7 @@ impl Parser {
         Ok(tail)
     }
 
+    #[allow(dead_code)]
     fn list(&mut self) -> Result<List> {
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;

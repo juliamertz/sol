@@ -45,6 +45,7 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    #[allow(dead_code)]
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
