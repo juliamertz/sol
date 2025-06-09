@@ -125,25 +125,31 @@ impl C {
     fn emit_fn(&mut self, buf: &mut String, func: &Fn) {
         buf.push_str(&func.return_ty);
         buf.push(' ');
-        buf.push_str(&func.ident);
+        if &func.ident != "main" {
+            buf.push_str(&self.prefix(&func.ident));
+        } else {
+            buf.push_str(&func.ident);
+        }
         buf.push('(');
         buf.push_str(
             func.args
                 .iter()
-                .map(|arg| format!("{} {}", arg.ty, arg.ident))
+                .map(|arg| format!("{} {}", arg.ty, self.prefix(&arg.ident)))
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),
         );
         buf.push(')');
         buf.push('{');
-        for node in func.body.nodes.iter() {
-            self.emit_node(buf, node);
-        }
-        if &func.ident == "main"
-            && !matches!(func.body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
-        {
-            buf.push_str("return 0;");
+        if let Some(ref body) = func.body {
+            for node in body.nodes.iter() {
+                self.emit_node(buf, node);
+            }
+            if &func.ident == "main"
+                && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
+            {
+                buf.push_str("return 0;");
+            }
         }
         buf.push('}');
     }
@@ -166,6 +172,7 @@ impl Compiler for C {
             }
         };
 
+        fs::create_dir_all(&opts.outdir).into_diagnostic()?;
         fs::write(&tmp_src_path, src).unwrap();
         fs::write(&hash_path, format!("{program_hash:?}")).unwrap();
 
@@ -183,8 +190,6 @@ impl Compiler for C {
                 "-flto", // link time optimization
             ]);
         }
-
-        fs::create_dir_all(&opts.outdir).into_diagnostic()?;
 
         let handle = std::process::Command::new("cc")
             .args(&args)

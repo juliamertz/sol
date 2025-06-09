@@ -29,6 +29,7 @@ pub enum TokenKind {
     Else,
     End,
     Use,
+    Extern,
 
     // Operators
     Eq,
@@ -57,6 +58,21 @@ impl TokenKind {
                 | TokenKind::End
                 | TokenKind::Ret
                 | TokenKind::Use
+                | TokenKind::Extern
+        )
+    }
+
+    // expression parsing should stop if this token is encountered
+    pub fn is_terminator(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::Eof
+                | TokenKind::End
+                | TokenKind::Semicolon
+                | TokenKind::Comma
+                | TokenKind::RBracket
+                | TokenKind::RParen
+                | TokenKind::Then
         )
     }
 
@@ -90,6 +106,7 @@ lazy_static! {
         ("use", TokenKind::Use),
         ("and", TokenKind::And),
         ("or", TokenKind::Or),
+        ("extern", TokenKind::Extern),
     ]
     .iter()
     .cloned()

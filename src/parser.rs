@@ -162,7 +162,7 @@ impl Parser {
 
         let node = if matches!(
             curr.kind,
-            TokenKind::Ret | TokenKind::Use | TokenKind::Fn | TokenKind::Let
+            TokenKind::Ret | TokenKind::Use | TokenKind::Fn | TokenKind::Extern | TokenKind::Let
         ) {
             Node::Stmnt(self.stmnt()?)
         } else {
@@ -197,6 +197,12 @@ impl Parser {
     }
 
     fn r#fn(&mut self) -> Result<Fn> {
+        let is_extern = self.curr.as_ref().map(|t| t.kind) == Some(TokenKind::Extern);
+        if is_extern {
+            self.advance();
+        }
+        dbg!(&self.curr);
+
         self.consume(TokenKind::Fn)?;
 
         let ident = self
@@ -213,18 +219,30 @@ impl Parser {
         self.consume(TokenKind::Arrow)?;
         let return_ty = self.consume(TokenKind::Ident)?;
 
-        let mut nodes = vec![];
-        while self.curr.clone().unwrap().kind != TokenKind::End {
-            nodes.push(self.node()?);
-        }
+        let body = if self
+            .curr
+            .as_ref()
+            .map(|tok| tok.kind.is_terminator())
+            .unwrap_or(true)
+        {
+            None
+        } else {
+            let mut nodes = vec![];
+            while self.curr.clone().unwrap().kind != TokenKind::End {
+                nodes.push(self.node()?);
+            }
 
-        self.consume(TokenKind::End)?;
+            self.consume(TokenKind::End)?;
+
+            Some(Block { nodes })
+        };
 
         Ok(Fn {
+            r#extern: is_extern,
             ident,
             args,
             return_ty: return_ty.text,
-            body: Block { nodes },
+            body,
         })
     }
 
@@ -248,7 +266,7 @@ impl Parser {
         let Some(ref curr) = self.curr else { panic!() };
 
         let stmnt = match curr.kind {
-            TokenKind::Fn => Stmnt::Fn(self.r#fn()?),
+            TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.r#fn()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
             TokenKind::Ret => {
@@ -351,16 +369,7 @@ impl Parser {
                 return Ok(lhs);
             };
 
-            if matches!(
-                curr.kind,
-                TokenKind::RParen
-                    | TokenKind::Eof
-                    | TokenKind::Then
-                    | TokenKind::Semicolon
-                    | TokenKind::Comma
-                    | TokenKind::End
-                    // | TokenKind::Else
-            ) {
+            if curr.kind.is_terminator() {
                 break;
             }
 

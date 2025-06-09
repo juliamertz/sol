@@ -88,10 +88,11 @@ ast_derive! {
     }
 
     pub struct Fn {
+        pub r#extern: bool,
         pub ident: Ident,
         pub args: Vec<FnArg>,
         pub return_ty: Ident,
-        pub body: Block,
+        pub body: Option<Block>,
     }
 
     pub struct Use {

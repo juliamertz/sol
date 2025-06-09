@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define GC_ZERO_BEFORE_ALLOC
 
 typedef struct gc_header {
     size_t ref_count;
@@ -12,11 +15,15 @@ typedef struct gc_header {
 #define GC_OBJECT(header) ((void*)((char*)(header) + sizeof(gc_header)))
 
 void* gc_alloc(size_t size) {
-    gc_header* header = calloc(sizeof(gc_header), size);
+    gc_header* header = malloc(sizeof(gc_header) + size);
     if (!header) {
        fprintf(stderr, "Out of memory");
        exit(1);
     }
+
+    #ifdef GC_ZERO_BEFORE_ALLOC
+        memset(GC_OBJECT(header), 0, size);
+    #endif
 
     header->ref_count = 1;
     header->size = size;
