@@ -36,7 +36,8 @@ mod parser {
             infix_expr_and,
             call_expr,
             if_expr,
-            // expr_list,
+            if_else_expr,
+            list_expr,
             return_stmnt
             fn_stmnt
         ]

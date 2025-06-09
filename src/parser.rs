@@ -59,9 +59,9 @@ pub enum Prec {
     Product, // *
     AndOr,
     // Prefix, // -a or !a
-    Call,   // func()
-    // Index,  // list[0]
-    // Chain,  // mod.field
+    Call, // func()
+          // Index,  // list[0]
+          // Chain,  // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -279,9 +279,18 @@ impl Parser {
         let condition = self.expr(Prec::Lowest)?;
         self.consume(TokenKind::Then)?;
         let consequence = self.block()?;
+        let alternative = if self.curr.as_ref().map(|t| t.kind) == Some(TokenKind::Else) {
+            self.advance();
+            Some(self.block()?)
+        } else {
+            None
+        };
+
+        // TODO: end?
         Ok(If {
             condition: Box::new(condition),
             consequence,
+            alternative,
         })
     }
 
@@ -325,6 +334,7 @@ impl Parser {
             TokenKind::Ident => Expr::Ident(text),
             TokenKind::String => Expr::StringLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
+            TokenKind::LBracket => Expr::List(self.list()?),
 
             _ => panic!("{:?}", ErrorKind::Todo(curr.clone()).into_error(self)),
         };
@@ -349,6 +359,7 @@ impl Parser {
                     | TokenKind::Semicolon
                     | TokenKind::Comma
                     | TokenKind::End
+                    // | TokenKind::Else
             ) {
                 break;
             }
@@ -383,7 +394,6 @@ impl Parser {
         Ok(tail)
     }
 
-    #[allow(dead_code)]
     fn list(&mut self) -> Result<List> {
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;

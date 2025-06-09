@@ -63,20 +63,37 @@
         consequence: Block(
           nodes: [Stmnt(Ret((val: IntLit(0))))],
         ),
+        alternative: None,
       )))
     ],
   ),
 
   (
-    name: "expr_list",
-    source: "10, 20, 30, fourty, 50",
+    name: "if_else_expr",
+    source: "if n < 0 then return 0; else return 1; end;",
     expected: [
-      Expr(IntLit(10)),
-      Expr(IntLit(20)),
-      Expr(IntLit(30)),
-      Expr(Ident("fourty")),
-      Expr(IntLit(50)),
+      Expr(If((
+        condition: Infix((
+          lhs: Ident("n"),
+          op: Lt,
+          rhs: IntLit(0),
+        )),
+        consequence: Block(
+          nodes: [Stmnt(Ret((val: IntLit(0))))],
+        ),
+        alternative: Some(Block(
+          nodes: [Stmnt(Ret((val: IntLit(1))))],
+        ))
+      )))
     ],
+  ),
+
+  (
+    name: "list_expr",
+    source: "[10, 20, 30, fourty, 50];",
+    expected: [
+      Expr(List((items: [IntLit(10), IntLit(20), IntLit(30), Ident("fourty"), IntLit(50)] )))
+    ]
   ),
 
   (

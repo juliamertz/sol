@@ -1,17 +1,15 @@
 mod ast;
 mod codegen;
 mod lexer;
-mod loc;
 mod parser;
+mod ty;
 
 #[cfg(test)]
 mod tests;
 
-use std::{
-    os::unix::fs::MetadataExt,
-    path::{Path, PathBuf},
-    process,
-};
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::process;
 
 use clap::Parser;
 use codegen::{Compiler, Emitter, ReleaseType};
