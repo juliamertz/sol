@@ -6,6 +6,7 @@
   "then"
   "end"
   "use"
+  "let"
   "extern"
 ] @keyword
 
@@ -16,7 +17,10 @@
   "-"
   "*"
   "/"
+  "and"
   "or"
+  "="
+  "=="
 ] @operator
 
 ; punctuation
@@ -32,10 +36,13 @@
 "->" @operator
 
 ; types
-(type) @type
+((type) @type 
+  (#set! "priority" 110))
 
 ; function names
-(function_def (identifier) @function)
+(function_def 
+  (identifier) @function
+  (#set! "priority" 110))
 
 (call (identifier) @function.call)
 

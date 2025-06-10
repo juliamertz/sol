@@ -10,6 +10,9 @@ use std::path::PathBuf;
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
+const CORE_INCLUDE_PATH: &str = "/Users/julia/projects/2025/newlang/src/codegen/c/include";
+const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
+
 #[derive(Default)]
 pub struct C {}
 
@@ -21,6 +24,10 @@ impl Emitter for C {
         let mut env = TypeEnv::new();
 
         Analyzer::collect_declarations(ast, &mut env).unwrap();
+
+        for file in CORE_INCLUDES {
+            buf.push_str(&format!("#include \"{CORE_INCLUDE_PATH}/{file}\"\n"));
+        }
 
         for node in ast {
             self.emit_node(&mut buf, &mut env, node);
@@ -64,7 +71,7 @@ impl C {
             Expr::Ident(ident) => ident,
             _ => todo!(),
         };
-        let declaration = env.lookup_fn(name);
+        let declaration = env.get(name);
 
         if let Some(Checked::Known(analyzer::Type::Fn {
             is_extern: true, ..
@@ -98,14 +105,15 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &mut TypeEnv, ty: &ast::Type) -> String {
+    fn emit_type(&mut self, env: &mut TypeEnv, ty: &ast::Type) -> String {
         match ty {
             ast::Type::Int => "int",
             ast::Type::Str => "char *",
             ast::Type::Bool => "bool",
+            ast::Type::List(_) => "List",
             _ => unimplemented!(),
         }
-        .to_string()
+        .into()
     }
 
     fn emit_expr(&mut self, buf: &mut String, env: &mut TypeEnv, expr: &Expr) {
@@ -123,12 +131,21 @@ impl C {
                     self.emit_node(buf, env, node);
                 }
                 buf.push('}');
+                if let Some(ref alternative) = r#if.alternative {
+                    buf.push_str("else{");
+                    for node in &alternative.nodes {
+                        self.emit_node(buf, env, node);
+                    }
+                    buf.push('}');
+                }
             }
             Expr::List(_list) => unimplemented!(),
         };
     }
 
     fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeEnv, stmnt: &Stmnt) {
+        let checked = Analyzer::check_stmnt(stmnt, env).unwrap();
+
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
@@ -141,11 +158,29 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                buf.push_str(self.emit_type(env, &binding.ty.clone().unwrap()).as_str());
+                let ty = match checked {
+                    Checked::Known(ref ty) => ty.into(),
+                    Checked::Unknown => unreachable!(),
+                };
+
+                buf.push_str(self.emit_type(env, &ty).as_str());
                 buf.push(' ');
-                buf.push_str(&self.prefix(&binding.ident));
+                buf.push_str(&self.prefix(&binding.name));
                 buf.push('=');
-                self.emit_expr(buf, env, binding.val.as_ref().unwrap()); // TODO: optional emit
+
+                match binding.val.as_ref().unwrap() {
+                    Expr::List(_) => {
+                        buf.push_str(
+                            format!(
+                                "list_alloc(sizeof({ty}), 64)",
+                                ty = self.emit_type(env, &ty)
+                            )
+                            .as_str(),
+                        );
+                    }
+                    _ => self.emit_expr(buf, env, binding.val.as_ref().unwrap()),
+                };
+
                 buf.push(';');
             }
         }
@@ -180,7 +215,11 @@ impl C {
         );
         buf.push(')');
         buf.push('{');
+
         if let Some(ref body) = func.body {
+            let env = &mut env.clone();
+            Analyzer::collect_declarations(&body.nodes, env).unwrap();
+
             for node in body.nodes.iter() {
                 self.emit_node(buf, env, node);
             }
@@ -190,6 +229,7 @@ impl C {
                 buf.push_str("return 0;");
             }
         }
+
         buf.push('}');
     }
 }
@@ -215,20 +255,22 @@ impl Compiler for C {
         fs::write(&tmp_src_path, src).unwrap();
         fs::write(&hash_path, format!("{program_hash:?}")).unwrap();
 
+        // let include_arg = format!("-I{CORE_INCLUDE_PATH}");
         let mut args = vec![
             tmp_src_path.to_str().unwrap(),
-            "-Wall",
-            "-Wextra",
             "-o",
             out_path.to_str().expect("valid out path"),
         ];
 
-        if opts.release {
-            args.extend_from_slice(&[
-                "-O3",   // turn on all optimizations
-                "-flto", // link time optimization
-            ]);
+        if cfg!(debug_assertions) {
+            args.extend_from_slice(&["-Wall", "-Wextra"]);
         }
+
+        if opts.release {
+            args.extend_from_slice(&["-O3", "-flto"]);
+        }
+
+        println!("{}", args.join(" "));
 
         let handle = std::process::Command::new("cc")
             .args(&args)

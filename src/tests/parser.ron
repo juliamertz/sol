@@ -108,13 +108,13 @@
 
   (
     name: "fn_stmnt",
-    source: "func main() -> int\nreturn 0;\nend",
+    source: "func main() -> Int\nreturn 0;\nend",
     expected: [
       Stmnt(Fn((
-        extern: false,
-        ident: "main",
-        args: [], 
-        return_ty: "int",
+        name: "main",
+        is_extern: false,
+        args: [],
+        return_ty: Int,
         body: Some(Block(
           nodes: [
             Stmnt(Ret((val: IntLit(0))))

@@ -1,4 +1,4 @@
-macro_rules! ast_derive {
+macro_rules! ast_impl {
     ($($item:item)*) => {
         $(
             #[derive(Debug, PartialEq, Eq, Clone)]
@@ -10,7 +10,7 @@ macro_rules! ast_derive {
 
 pub type Ident = String;
 
-ast_derive! {
+ast_impl! {
     pub enum Node {
         Expr(Expr),
         Stmnt(Stmnt),
@@ -68,7 +68,7 @@ ast_derive! {
     }
 
     pub struct Let {
-        pub ident: Ident,
+        pub name: Ident,
         pub ty: Option<Type>,
         pub val: Option<Expr>,
     }

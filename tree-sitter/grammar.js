@@ -7,6 +7,7 @@ module.exports = grammar({
     _statement: $ => choice(
       $.use_stmt,
       $.function_def,
+      $.let_stmt,
       $.return_stmt,
       $.expression_stmt,
       $.if_stmt,
@@ -47,6 +48,8 @@ module.exports = grammar({
       optional(';')
     ),
 
+    let_stmt: $ => seq('let', $.identifier, optional(seq(':', $.type)), '=', $.expression),
+
     return_stmt: $ => seq('return', $.expression, ';'),
 
     expression_stmt: $ => seq($.expression, ';'),
@@ -61,7 +64,7 @@ module.exports = grammar({
 
     binary_expr: $ => prec.left(seq(
       $.expression,
-      choice('<', '+', '-', '*', '/', 'or'),
+      choice('<', '+', '-', '*', '/', 'and', 'or', '=='),
       $.expression
     )),
 

@@ -72,7 +72,7 @@ impl From<&Token> for Prec {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
             TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
-            TokenKind::Lt | TokenKind::Gt => Self::Cmp,
+            TokenKind::LAngle | TokenKind::RAngle => Self::Cmp,
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
             _ => Self::Lowest,
@@ -90,8 +90,8 @@ impl TryFrom<Token> for Op {
             TokenKind::Eq => Ok(Self::Eq),
             TokenKind::Asterisk => Ok(Self::Mul),
             TokenKind::Slash => Ok(Self::Div),
-            TokenKind::Lt => Ok(Self::Lt),
-            TokenKind::Gt => Ok(Self::Gt),
+            TokenKind::LAngle => Ok(Self::Lt),
+            TokenKind::RAngle => Ok(Self::Gt),
             TokenKind::And => Ok(Self::And),
             TokenKind::Or => Ok(Self::Or),
             _ => todo!(),
@@ -179,10 +179,13 @@ impl Parser {
     fn block(&mut self) -> Result<Block> {
         let mut nodes = vec![];
         while let Some(ref curr) = self.curr {
-            if matches!(curr.kind, TokenKind::End | TokenKind::Eof) {
-                self.advance();
+            if curr.kind.is_terminator() {
                 break;
             }
+            // if matches!(curr.kind, TokenKind::End | TokenKind::Eof) {
+            //     self.advance();
+            //     break;
+            // }
             nodes.push(self.node()?);
         }
 
@@ -201,6 +204,12 @@ impl Parser {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
             "Str" => Type::Str,
+            "List" => {
+                self.consume(TokenKind::LAngle)?;
+                let inner = self.ty()?;
+                self.consume(TokenKind::RAngle)?;
+                Type::List(Box::new(inner))
+            }
             _ => {
                 return Err(ErrorKind::InvalidType {
                     token: curr.clone().unwrap(),
@@ -299,11 +308,20 @@ impl Parser {
     fn r#let(&mut self) -> Result<Let> {
         self.consume(TokenKind::Let)?;
         let ident = self.ident()?;
-        self.consume(TokenKind::Colon)?;
-        let ty = Some(self.ty()?);
+
+        let mut ty = None;
+        if let Some(TokenKind::Colon) = self.curr.as_ref().map(|t| t.kind) {
+            self.consume(TokenKind::Colon)?;
+            ty = Some(self.ty()?);
+        }
+
         self.consume(TokenKind::Assign)?;
         let val = Some(self.expr(Prec::Lowest)?);
-        Ok(Let { ident, ty, val })
+        Ok(Let {
+            name: ident,
+            ty,
+            val,
+        })
     }
 
     fn r#if(&mut self) -> Result<If> {

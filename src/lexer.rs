@@ -16,6 +16,8 @@ pub enum TokenKind {
     RParen,
     LBracket,
     RBracket,
+    LAngle,
+    RAngle,
     Comma,
     Colon,
     Semicolon,
@@ -39,8 +41,6 @@ pub enum TokenKind {
     Sub,
     Asterisk,
     Slash,
-    Lt,
-    Gt,
     Arrow,
     And,
     Or,
@@ -74,7 +74,9 @@ impl TokenKind {
                 | TokenKind::Comma
                 | TokenKind::RBracket
                 | TokenKind::RParen
+                | TokenKind::RAngle
                 | TokenKind::Then
+                | TokenKind::Else // TODO: This feels hacky...
         )
     }
 
@@ -88,8 +90,8 @@ impl TokenKind {
                 | TokenKind::Asterisk
                 | TokenKind::Slash
                 | TokenKind::Arrow
-                | TokenKind::Lt
-                | TokenKind::Gt
+                | TokenKind::RAngle
+                | TokenKind::LAngle
                 | TokenKind::And
                 | TokenKind::Or
         )
@@ -237,12 +239,12 @@ impl Lexer {
             }
             '*' => Token::new(TokenKind::Asterisk, "*", self.pos),
             '/' => Token::new(TokenKind::Slash, "/", self.pos),
-            '<' => Token::new(TokenKind::Lt, "<", self.pos),
-            '>' => Token::new(TokenKind::Gt, ">", self.pos),
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
             '[' => Token::new(TokenKind::LBracket, "[", self.pos),
             ']' => Token::new(TokenKind::RBracket, "]", self.pos),
+            '<' => Token::new(TokenKind::LAngle, "<", self.pos),
+            '>' => Token::new(TokenKind::RAngle, ">", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),
             ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
             ',' => Token::new(TokenKind::Comma, ",", self.pos),

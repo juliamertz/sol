@@ -41,9 +41,10 @@ void list_push(List *self, void *item) {
   self->len += 1;
 }
 
-void *list_pop(List *self, void *dst) {
+// TODO: return popped element somehow
+void list_pop(List *self, void *dst) {
   if (self->len == 0) {
-    return NULL;
+    // return NULL;
   }
 
   void *ptr = list_get(self, self->len - 1);
