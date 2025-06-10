@@ -30,6 +30,7 @@ pub enum TokenKind {
     End,
     Use,
     Extern,
+    Struct,
 
     // Operators
     Eq,
@@ -59,6 +60,7 @@ impl TokenKind {
                 | TokenKind::Ret
                 | TokenKind::Use
                 | TokenKind::Extern
+                | TokenKind::Struct
         )
     }
 
@@ -107,6 +109,7 @@ lazy_static! {
         ("and", TokenKind::And),
         ("or", TokenKind::Or),
         ("extern", TokenKind::Extern),
+        ("struct", TokenKind::Struct),
     ]
     .iter()
     .cloned()
@@ -132,7 +135,7 @@ impl Token {
         Self {
             kind,
             text: text.to_string(),
-            span: (pos, text.len()).into(),
+            span: (pos - text.len(), text.len()).into(),
         }
     }
 }

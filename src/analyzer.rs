@@ -1,11 +1,8 @@
+use miette::{Diagnostic, Result};
 use std::collections::HashMap;
-use std::str::FromStr;
-
-use crate::ast::{self, *};
-use crate::lexer::{Token, TokenKind};
-
-use miette::{Diagnostic, NamedSource, Result, SourceSpan, miette};
 use thiserror::Error;
+
+use crate::ast::{self, Expr, Node, Stmnt};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -14,7 +11,7 @@ pub enum Type {
     Bool,
     Str,
     Fn {
-        r#extern: bool,
+        is_extern: bool,
         args: Vec<Type>,
         returns: Box<Type>,
     },
@@ -26,21 +23,12 @@ impl From<&ast::Type> for Type {
         match value {
             ast::Type::Int => Self::Int,
             ast::Type::Bool => Self::Bool,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-// TODO: do this in parser first, then convert ast type to analyzer type
-impl FromStr for Type {
-    type Err = miette::Report;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "Int" => Ok(Self::Int),
-            "Bool" => Ok(Self::Bool),
-            "Str" => Ok(Self::Str),
-            _ => Err(miette!("cannot parse type from '{s}'")),
+            ast::Type::Str => Self::Str,
+            ast::Type::List(ty) => {
+                let unboxed = Type::from(&(**ty)); // damn this is ugly
+                Self::List(Box::new(unboxed))
+            }
+            _ => panic!("TODO: {value:?}"),
         }
     }
 }
@@ -107,7 +95,7 @@ impl Analyzer {
 
                     let ty = Type::Fn {
                         args,
-                        r#extern: binding.r#extern,
+                        is_extern: binding.r#extern,
                         returns: Box::new((&binding.return_ty).into()),
                     };
 
@@ -146,7 +134,7 @@ impl Analyzer {
                 let mut items = list.items.iter();
                 let expected_ty = Self::check_expr(items.next().unwrap(), env)?;
 
-                while let Some(expr) = items.next() {
+                for expr in items {
                     let ty = Self::check_expr(expr, env)?;
                     if ty != expected_ty {
                         return Err(AnalyzeError::TypeMismatch {
@@ -169,7 +157,7 @@ impl Analyzer {
         }
     }
 
-    fn check_stmnt( stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
+    fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             Stmnt::Let(binding) => {
                 let Some(ref expr) = binding.val else {
@@ -177,7 +165,7 @@ impl Analyzer {
                 };
                 // TODO: use type instead of inferring and then check it
 
-                let ty = Self::check_expr(&expr, env).unwrap();
+                let ty = Self::check_expr(expr, env).unwrap();
                 env.bind_var(&binding.ident, ty.clone());
                 Ok(ty)
             }
@@ -190,7 +178,7 @@ impl Analyzer {
 
                 let ty = Type::Fn {
                     args,
-                    r#extern: binding.r#extern,
+                    is_extern: binding.r#extern,
                     returns: Box::new((&binding.return_ty).into()),
                 };
 

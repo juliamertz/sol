@@ -16,6 +16,7 @@ module.exports = grammar({
     use_stmt: $ => seq('use', $.identifier, ';'),
 
     function_def: $ => seq(
+      optional('extern'),
       'func',
       $.identifier,
       $.param_list,

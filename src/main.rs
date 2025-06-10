@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 use clap::Parser;
-use codegen::{Compiler, Emitter, ReleaseType};
+use codegen::{Compiler, Emitter};
 use miette::{IntoDiagnostic, Result};
 
 #[derive(clap::Parser)]
@@ -24,13 +24,16 @@ struct Cli {
 
 #[derive(clap::Args)]
 struct BuildOpts {
-    #[arg(short, long, default_value = "debug")]
-    release: ReleaseType,
+    /// Set release mode enabling all optimizations
+    #[arg(short, long)]
+    release: bool,
 
+    /// Path to directory which all build artifacts get written to
     #[arg(short, long, default_value = "out")]
     outdir: PathBuf,
 
-    #[arg(short, long)]
+    /// Whether to clean up build artifacts
+    #[arg(short, long, default_value_t = !cfg!(debug_assertions))]
     cleanup: bool,
 }
 

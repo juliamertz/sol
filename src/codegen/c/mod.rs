@@ -1,8 +1,7 @@
-use super::{Compiler, Emitter, ReleaseType};
-
 use crate::BuildOpts;
-use crate::analyzer::{Analyzer, TypeEnv};
-use crate::ast::{CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt, Type};
+use crate::analyzer::{self, Analyzer, TypeEnv};
+use crate::ast::{self, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+use crate::codegen::{Compiler, Emitter};
 
 use std::fs;
 use std::hash::Hasher;
@@ -21,7 +20,7 @@ impl Emitter for C {
         let mut buf = String::new();
         let mut env = TypeEnv::new();
 
-        Analyzer::collect_declarations(&ast, &mut env).unwrap();
+        Analyzer::collect_declarations(ast, &mut env).unwrap();
 
         for node in ast {
             self.emit_node(&mut buf, &mut env, node);
@@ -61,7 +60,21 @@ impl C {
     }
 
     fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeEnv, call_expr: &CallExpr) {
-        self.emit_expr(buf, env, &call_expr.func);
+        let name = match call_expr.func.as_ref() {
+            Expr::Ident(ident) => ident,
+            _ => todo!(),
+        };
+        let declaration = env.lookup_fn(name);
+
+        if let Some(analyzer::Type::Fn {
+            is_extern: true, ..
+        }) = declaration
+        {
+            buf.push_str(name);
+        } else {
+            self.emit_expr(buf, env, &call_expr.func);
+        }
+
         buf.push('(');
 
         let mut args = String::new();
@@ -85,11 +98,11 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, env: &mut TypeEnv, ty: &Type) -> String {
+    fn emit_type(&mut self, _env: &mut TypeEnv, ty: &ast::Type) -> String {
         match ty {
-            Type::Int => "int",
-            Type::Str => "char *",
-            Type::Bool => "bool",
+            ast::Type::Int => "int",
+            ast::Type::Str => "char *",
+            ast::Type::Bool => "bool",
             _ => unimplemented!(),
         }
         .to_string()
@@ -130,7 +143,7 @@ impl C {
             Stmnt::Let(binding) => {
                 buf.push_str(self.emit_type(env, &binding.ty.clone().unwrap()).as_str());
                 buf.push(' ');
-                buf.push_str(&binding.ident);
+                buf.push_str(&self.prefix(&binding.ident));
                 buf.push('=');
                 self.emit_expr(buf, env, binding.val.as_ref().unwrap()); // TODO: optional emit
                 buf.push(';');
@@ -210,7 +223,7 @@ impl Compiler for C {
             out_path.to_str().expect("valid out path"),
         ];
 
-        if opts.release == ReleaseType::Fast {
+        if opts.release {
             args.extend_from_slice(&[
                 "-O3",   // turn on all optimizations
                 "-flto", // link time optimization

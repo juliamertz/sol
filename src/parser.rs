@@ -7,15 +7,16 @@ use crate::lexer::{Lexer, Token, TokenKind};
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
     #[error("Unexpected EOF")]
-    #[diagnostic(code(my_lib::bad_code))]
     UnexpectedEOF,
 
     #[error("expected token {0}")]
-    #[diagnostic(code(my_lib::bad_code))]
     Expected(TokenKind),
 
+    #[diagnostic(code(lib::bad_code))]
+    #[error("invalid type: {}", token.text)]
+    InvalidType { token: Token },
+
     #[error("unhandled token: {0:?}")]
-    #[diagnostic(code(my_lib::bad_code))]
     Todo(Token),
 }
 
@@ -23,6 +24,7 @@ impl ErrorKind {
     fn into_error(self, parser: &Parser) -> miette::Report {
         let span = match self {
             ErrorKind::Todo(ref token) => token.span,
+            ErrorKind::InvalidType { ref token } => token.span,
             _ => (parser.lex.pos, 1).into(),
         };
 
@@ -193,12 +195,18 @@ impl Parser {
     }
 
     fn ty(&mut self) -> Result<Type> {
+        let curr = self.curr.clone();
         let ident = self.ident()?;
         let ty = match ident.as_str() {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
             "Str" => Type::Str,
-            _ => panic!("UNIMPLEMENTED: {}", ident.as_str())
+            _ => {
+                return Err(ErrorKind::InvalidType {
+                    token: curr.clone().unwrap(),
+                }
+                .into_error(self));
+            }
         };
         Ok(ty)
     }
@@ -208,7 +216,6 @@ impl Parser {
         if is_extern {
             self.advance();
         }
-        dbg!(&self.curr);
 
         self.consume(TokenKind::Fn).unwrap();
 

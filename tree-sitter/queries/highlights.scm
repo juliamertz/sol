@@ -6,6 +6,7 @@
   "then"
   "end"
   "use"
+  "extern"
 ] @keyword
 
 ; operators

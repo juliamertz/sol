@@ -1,20 +1,24 @@
 -- vim:ft=newlang
 
--- struct Point
+use stdio
+
+func main() -> Int
+    printf("Hello world!");
+end
+
+-- struct Point =
 --     x : Int,
 --     y : Int,
 -- end
 --
--- enum Node =
---     | Expr
---     | Stmnt
+-- enum Direction =
+--     | Up
+--     | Down
+--     | Left
+--     | Right
 -- end
-
-use stdio
-use stdlib
-
-func main() -> int
-    20 - 10;
-
-    printf("Hello world!");
-end
+--
+-- enum Node =
+--     | Expr(Expr)
+--     | Stmnt(Stmnt)
+-- end
