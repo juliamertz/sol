@@ -252,7 +252,7 @@ impl Parser {
         };
 
         Ok(Fn {
-            r#extern: is_extern,
+            is_extern,
             name: ident,
             args,
             return_ty,

@@ -43,7 +43,6 @@ ast_derive! {
         Gt,
         And,
         Or,
-
     }
 
     pub enum Type {
@@ -95,7 +94,7 @@ ast_derive! {
     }
 
     pub struct Fn {
-        pub r#extern: bool,
+        pub is_extern: bool,
         pub name: Ident,
         pub args: Vec<FnArg>,
         pub return_ty: Type,

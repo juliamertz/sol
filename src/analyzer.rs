@@ -18,6 +18,12 @@ pub enum Type {
     List(Box<Type>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Checked<T> {
+    Known(T),
+    Unknown,
+}
+
 impl From<&ast::Type> for Type {
     fn from(value: &ast::Type) -> Self {
         match value {
@@ -36,7 +42,10 @@ impl From<&ast::Type> for Type {
 #[derive(Error, Diagnostic, Debug)]
 pub enum AnalyzeError {
     #[error("Type mismatch between {lhs:?} and {rhs:?}")]
-    TypeMismatch { lhs: Type, rhs: Type },
+    TypeMismatch {
+        lhs: Checked<Type>,
+        rhs: Checked<Type>,
+    },
 
     #[error("No such variable: '{name}'")]
     UndefinedVariable { name: String },
@@ -44,8 +53,8 @@ pub enum AnalyzeError {
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
-    variables: HashMap<String, Type>,
-    functions: HashMap<String, Type>,
+    variables: HashMap<String, Checked<Type>>,
+    functions: HashMap<String, Checked<Type>>,
 }
 
 impl TypeEnv {
@@ -56,19 +65,19 @@ impl TypeEnv {
         }
     }
 
-    pub fn bind_var(&mut self, name: impl ToString, ty: Type) {
+    pub fn bind_var(&mut self, name: impl ToString, ty: Checked<Type>) {
         self.variables.insert(name.to_string(), ty);
     }
 
-    pub fn lookup_var(&self, name: impl AsRef<str>) -> Option<&Type> {
+    pub fn lookup_var(&self, name: impl AsRef<str>) -> Option<&Checked<Type>> {
         self.variables.get(name.as_ref())
     }
 
-    pub fn bind_fn(&mut self, name: impl ToString, ty: Type) {
+    pub fn bind_fn(&mut self, name: impl ToString, ty: Checked<Type>) {
         self.functions.insert(name.to_string(), ty);
     }
 
-    pub fn lookup_fn(&self, name: impl AsRef<str>) -> Option<&Type> {
+    pub fn lookup_fn(&self, name: impl AsRef<str>) -> Option<&Checked<Type>> {
         self.functions.get(name.as_ref())
     }
 }
@@ -85,8 +94,9 @@ impl Analyzer {
                         None => Type::Unknown,
                     };
 
-                    env.bind_var(&binding.ident, ty.clone());
+                    env.bind_var(&binding.ident, Checked::Known(ty.clone()));
                 }
+
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
                     for arg in binding.args.iter() {
@@ -95,12 +105,13 @@ impl Analyzer {
 
                     let ty = Type::Fn {
                         args,
-                        is_extern: binding.r#extern,
+                        is_extern: binding.is_extern,
                         returns: Box::new((&binding.return_ty).into()),
                     };
 
-                    env.bind_fn(binding.name.to_owned(), ty);
+                    env.bind_fn(binding.name.to_owned(), Checked::Known(ty));
                 }
+
                 _ => {}
             };
         }
@@ -108,18 +119,18 @@ impl Analyzer {
         Ok(())
     }
 
-    pub fn check_node(node: &Node, env: &mut TypeEnv) -> Result<Type> {
+    pub fn check_node(node: &Node, env: &mut TypeEnv) -> Result<Checked<Type>> {
         match node {
             Node::Expr(expr) => Self::check_expr(expr, env),
             Node::Stmnt(stmnt) => Self::check_stmnt(stmnt, env),
         }
     }
 
-    fn check_expr(expr: &Expr, env: &mut TypeEnv) -> Result<Type> {
+    fn check_expr(expr: &Expr, env: &mut TypeEnv) -> Result<Checked<Type>> {
         match expr {
-            Expr::IntLit(_) => Ok(Type::Int),
+            Expr::IntLit(_) => Ok(Checked::Known(Type::Int)),
 
-            Expr::StringLit(_) => Ok(Type::Str),
+            Expr::StringLit(_) => Ok(Checked::Known(Type::Str)),
 
             Expr::Infix(infix_expr) => {
                 let lhs = Self::check_expr(&infix_expr.lhs, env)?;
@@ -145,7 +156,7 @@ impl Analyzer {
                     }
                 }
 
-                Ok(Type::List(Box::new(expected_ty)))
+                Ok(expected_ty)
             }
 
             Expr::Ident(name) => env
@@ -157,11 +168,11 @@ impl Analyzer {
         }
     }
 
-    fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
+    fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Checked<Type>> {
         match stmnt {
             Stmnt::Let(binding) => {
                 let Some(ref expr) = binding.val else {
-                    return Ok(Type::Unknown);
+                    return Ok(Checked::Unknown);
                 };
                 // TODO: use type instead of inferring and then check it
 
@@ -178,16 +189,16 @@ impl Analyzer {
 
                 let ty = Type::Fn {
                     args,
-                    is_extern: binding.r#extern,
+                    is_extern: binding.is_extern,
                     returns: Box::new((&binding.return_ty).into()),
                 };
 
-                Ok(ty)
+                Ok(Checked::Known(ty))
             }
 
-            Stmnt::Ret(_) => Ok(Type::Unknown), // TODO:
+            Stmnt::Ret(_) => Ok(Checked::Unknown), // TODO:
 
-            Stmnt::Use(_) => Ok(Type::Unknown),
+            Stmnt::Use(_) => Ok(Checked::Unknown),
         }
     }
 }

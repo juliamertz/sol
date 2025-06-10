@@ -1,5 +1,5 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, Analyzer, TypeEnv};
+use crate::analyzer::{self, Analyzer, Checked, TypeEnv};
 use crate::ast::{self, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
 use crate::codegen::{Compiler, Emitter};
 
@@ -66,9 +66,9 @@ impl C {
         };
         let declaration = env.lookup_fn(name);
 
-        if let Some(analyzer::Type::Fn {
+        if let Some(Checked::Known(analyzer::Type::Fn {
             is_extern: true, ..
-        }) = declaration
+        })) = declaration
         {
             buf.push_str(name);
         } else {
@@ -152,7 +152,7 @@ impl C {
     }
 
     fn emit_fn(&mut self, buf: &mut String, env: &mut TypeEnv, func: &Fn) {
-        if func.r#extern {
+        if func.is_extern {
             return;
         }
 
