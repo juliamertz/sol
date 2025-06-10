@@ -16,6 +16,7 @@
   "-"
   "*"
   "/"
+  "or"
 ] @operator
 
 ; punctuation

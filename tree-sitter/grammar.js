@@ -61,7 +61,7 @@ module.exports = grammar({
 
     binary_expr: $ => prec.left(seq(
       $.expression,
-      choice('<', '+', '-', '*', '/'),
+      choice('<', '+', '-', '*', '/', 'or'),
       $.expression
     )),
 
