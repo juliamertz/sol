@@ -10,12 +10,12 @@ typedef struct List {
 } List;
 
 List list_alloc(size_t size, size_t capacity) {
-  List list;
   void *obj = gc_alloc(size * capacity);
-  list.header = GC_HEADER(obj);
-  list.item_size = size;
-  list.capacity = capacity;
-  list.len = 0;
+  List list = {
+      .header = GC_HEADER(obj),
+      .capacity = capacity,
+      .len = 0,
+  };
 
   return list;
 }
