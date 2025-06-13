@@ -33,6 +33,7 @@ ast_impl! {
         Ret(Ret),
         Use(Use),
         Let(Let),
+        Struct(Struct)
     }
 
     pub enum Op {
@@ -90,7 +91,7 @@ ast_impl! {
         pub args: Vec<Expr>,
     }
 
-    pub struct FnArg {
+    pub struct TypedArg {
         pub ident: Ident,
         pub ty: Type,
     }
@@ -98,7 +99,7 @@ ast_impl! {
     pub struct Fn {
         pub is_extern: bool,
         pub name: Ident,
-        pub args: Vec<FnArg>,
+        pub args: Vec<TypedArg>,
         pub return_ty: Type,
         pub body: Option<Block>,
     }

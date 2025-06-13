@@ -157,6 +157,16 @@ impl Parser {
         }
     }
 
+    // fn kind(&self) -> &TokenKind {
+    //     self.curr.as_ref().map(|token| token.kind)
+    // }
+    //
+    fn match_kind(&self, kind: TokenKind) -> bool {
+        let actual = self.curr.as_ref().map(|token| token.kind);
+        let expected = Some(kind);
+        matches!(expected, actual)
+    }
+
     pub fn node(&mut self) -> Result<Node> {
         let Some(ref curr) = self.curr else {
             return Err(ErrorKind::UnexpectedEOF.into_error(self));
@@ -164,7 +174,12 @@ impl Parser {
 
         let node = if matches!(
             curr.kind,
-            TokenKind::Ret | TokenKind::Use | TokenKind::Fn | TokenKind::Extern | TokenKind::Let
+            TokenKind::Ret
+                | TokenKind::Use
+                | TokenKind::Fn
+                | TokenKind::Extern
+                | TokenKind::Let
+                | TokenKind::Struct
         ) {
             Node::Stmnt(self.stmnt()?)
         } else {
@@ -235,7 +250,7 @@ impl Parser {
         self.consume(TokenKind::LParen)?;
         let mut args = vec![];
         while self.curr.clone().unwrap().kind != TokenKind::RParen {
-            args.push(self.fn_arg()?);
+            args.push(self.typed_arg()?);
         }
         self.consume(TokenKind::RParen)?;
 
@@ -276,14 +291,44 @@ impl Parser {
         })
     }
 
-    fn fn_arg(&mut self) -> Result<FnArg> {
+    fn typed_arg(&mut self) -> Result<TypedArg> {
+        dbg!("sup");
         let ident = self.ident()?;
+        dbg!(&ident);
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
-        Ok(FnArg { ident, ty })
+        Ok(TypedArg { ident, ty })
     }
 
-    // fn ret(&mut self) -> Result<
+    fn typed_args(&mut self) -> Result<Vec<TypedArg>> {
+        let mut args = vec![];
+
+        loop {
+            if self.match_kind(TokenKind::Comma) {
+                self.advance();
+            }
+
+            let Some(kind) = self.curr.as_ref().map(|t| t.kind) else {
+                break;
+            };
+
+            dbg!(&kind);
+
+            if kind == TokenKind::Comma {
+                self.advance();
+            } else if kind.is_terminator() {
+                break;
+            }
+
+            let arg = self.typed_arg()?;
+
+            dbg!(&arg);
+
+            dbg!(&self.curr);
+        }
+
+        Ok(args)
+    }
 
     fn stmnt(&mut self) -> Result<Stmnt> {
         let Some(ref curr) = self.curr else { panic!() };
@@ -292,6 +337,7 @@ impl Parser {
             TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.r#fn()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
+            TokenKind::Struct => Stmnt::Struct(self.r#struct()?),
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
@@ -440,5 +486,19 @@ impl Parser {
         let items = self.expr_list()?;
         self.consume(TokenKind::RBracket)?;
         Ok(List { items })
+    }
+
+    fn r#struct(&mut self) -> Result<Struct> {
+        self.consume(TokenKind::Struct)?;
+
+        let ident = self.ident()?;
+
+        self.consume(TokenKind::Assign)?;
+
+        let fields = self.typed_args()?;
+
+        dbg!(&ident, &fields);
+
+        todo!()
     }
 }

@@ -183,6 +183,7 @@ impl C {
 
                 buf.push(';');
             }
+            Stmnt::Struct(_) => {}
         }
     }
 
