@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 macro_rules! ast_impl {
     ($($item:item)*) => {
         $(
@@ -103,5 +105,10 @@ ast_impl! {
 
     pub struct Use {
         pub ident: Ident,
+    }
+
+    pub struct Struct {
+        pub ident: Ident,
+        pub fields: HashMap<Ident, Type>,
     }
 }
