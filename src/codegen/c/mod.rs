@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
-const CORE_INCLUDE_PATH: &str = "/Users/julia/projects/2025/newlang/src/codegen/c/include";
+const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/newlang/src/codegen/c/include";
 const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
 
 #[derive(Default)]
@@ -183,7 +183,21 @@ impl C {
 
                 buf.push(';');
             }
-            Stmnt::Struct(_) => {}
+            Stmnt::Struct(strct) => {
+                buf.push_str("typedef struct ");
+                buf.push_str(&strct.ident);
+                buf.push('{');
+                for field in strct.fields.iter() {
+                    buf.push_str(&self.emit_type(env, &field.ty));
+                    buf.push(' ');
+                    buf.push_str(&field.ident);
+                    buf.push(';');
+                }
+                // TODO: emit fields
+                buf.push('}');
+                buf.push_str(&strct.ident);
+                buf.push(';');
+            }
         }
     }
 

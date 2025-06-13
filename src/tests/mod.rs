@@ -22,7 +22,17 @@ mod parser {
                 fn $i() {
                     let spec = PARSED.iter().find(|spec| spec.name == stringify!($i)).unwrap();
                     let mut parser = crate::parser::Parser::new(spec.source.to_owned());
-                    assert_eq!(parser.parse().unwrap(), spec.expected);
+                    let parsed = parser.parse().unwrap();
+
+                    if parsed != spec.expected {
+                        std::fs::write(
+                            "./test-expected",
+                            ron::ser::to_string_pretty(&parsed, ron::ser::PrettyConfig::default())
+                                .unwrap(),
+                        ).unwrap();
+                    }
+
+                    assert_eq!(parsed, spec.expected);
                 }
             )*
         };
@@ -40,6 +50,7 @@ mod parser {
             list_expr,
             return_stmnt
             fn_stmnt
+            struct_declr
         ]
     );
 }

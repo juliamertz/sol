@@ -69,7 +69,59 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     emitter.build_exe(&out, "test", opts)
 }
 
+// struct Spec<'a> {
+//     source_code: &'a str,
+//     expected: &'a str,
+// }
+
+fn parse_spec() {
+    use comrak::nodes::{AstNode, NodeValue};
+    use comrak::{Arena, Options, format_html, parse_document};
+
+    let text = std::fs::read_to_string("./src/tests/struct.spec.md").unwrap();
+    let arena = Arena::new();
+    let opts = Options::default();
+    let root = comrak::parse_document(&arena, &text, &opts);
+
+    let mut children = root.descendants();
+    children.next();
+
+    match children.next().unwrap().data.borrow().value {
+        NodeValue::Text(ref title) => {
+            dbg!(title);
+        },
+        // NodeValue::CodeBlock(ref mut codeblock) => {
+        //     dbg!(codeblock);
+        // },
+        ref x => todo!("{x:?}"),
+    }
+
+    // let NodeValue::Text(title) =  children.next().unwrap().data.borrow() else {
+    //     panic!();
+    // };
+
+    // for node in root.descendants() {
+    //     match node.data.borrow_mut().value {
+    //         NodeValue::CodeBlock(ref mut codeblock) => {
+    //             dbg!(codeblock);
+    //         }
+    //
+    //         NodeValue::CodeBlock(ref mut codeblock) => {
+    //             dbg!(codeblock);
+    //         }
+    //
+    //         ref val => {
+    //             dbg!(val);
+    //         }
+    //     }
+    //     // dbg!(&node.data);
+    // }
+}
+
 fn main() -> Result<()> {
+    parse_spec();
+    std::process::exit(0);
+
     let opts = Cli::parse();
 
     match opts.command {

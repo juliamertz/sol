@@ -110,6 +110,6 @@ ast_impl! {
 
     pub struct Struct {
         pub ident: Ident,
-        pub fields: HashMap<Ident, Type>,
+        pub fields: Vec<TypedArg>,
     }
 }

@@ -465,15 +465,10 @@ impl Parser {
 
     fn r#struct(&mut self) -> Result<Struct> {
         self.consume(TokenKind::Struct)?;
-
         let ident = self.ident()?;
-
         self.consume(TokenKind::Assign)?;
-
         let fields = self.typed_args()?;
-
-        dbg!(&ident, &fields);
-
-        todo!()
+        self.consume(TokenKind::End)?;
+        Ok(Struct { ident, fields })
     }
 }
