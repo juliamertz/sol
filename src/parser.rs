@@ -102,14 +102,16 @@ impl TryFrom<Token> for Op {
 pub struct Parser {
     lex: Lexer,
     pub tokens: Vec<Token>,
-    curr: Option<Token>,
+    curr: Token,
     next: Option<Token>,
 }
 
 impl Parser {
     pub fn new(content: impl ToString) -> Self {
         let mut lex = Lexer::new(content);
-        let curr = lex.read_token();
+        let curr = lex
+            .read_token()
+            .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos));
         let next = lex.read_token();
         Self {
             lex,
@@ -123,7 +125,7 @@ impl Parser {
         let mut nodes = vec![];
 
         loop {
-            if self.curr.as_ref().map(|c| c.kind) == Some(TokenKind::Eof) {
+            if self.curr.kind == TokenKind::Eof {
                 break;
             }
 
@@ -141,39 +143,34 @@ impl Parser {
     fn advance(&mut self) -> Option<Token> {
         // TODO: whole lot of cloning going on
         let curr = self.next.clone();
-        self.curr = self.next.clone();
+
+        if let Some(next) = self.next.clone() {
+            self.curr = next;
+        }
+        // self.curr = self.next.clone();
         self.next = self.lex.read_token();
         self.tokens.push(self.next.clone()?);
         curr
     }
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token> {
-        match self.curr.clone() {
-            Some(token) if token.kind == expected => {
-                self.advance();
-                Ok(token)
-            }
-            _ => Err(ErrorKind::Expected(expected).into_error(self)),
+        if self.curr.kind != expected {
+            return Err(ErrorKind::Expected(expected).into_error(self));
         }
+
+        let tok = self.curr.clone();
+        self.advance();
+        Ok(tok)
     }
 
     // fn kind(&self) -> &TokenKind {
     //     self.curr.as_ref().map(|token| token.kind)
     // }
     //
-    fn match_kind(&self, kind: TokenKind) -> bool {
-        let actual = self.curr.as_ref().map(|token| token.kind);
-        let expected = Some(kind);
-        matches!(expected, actual)
-    }
 
     pub fn node(&mut self) -> Result<Node> {
-        let Some(ref curr) = self.curr else {
-            return Err(ErrorKind::UnexpectedEOF.into_error(self));
-        };
-
         let node = if matches!(
-            curr.kind,
+            self.curr.kind,
             TokenKind::Ret
                 | TokenKind::Use
                 | TokenKind::Fn
@@ -193,8 +190,8 @@ impl Parser {
 
     fn block(&mut self) -> Result<Block> {
         let mut nodes = vec![];
-        while let Some(ref curr) = self.curr {
-            if curr.kind.is_terminator() {
+        loop {
+            if self.curr.kind.is_terminator() {
                 break;
             }
             // if matches!(curr.kind, TokenKind::End | TokenKind::Eof) {
@@ -227,7 +224,7 @@ impl Parser {
             }
             _ => {
                 return Err(ErrorKind::InvalidType {
-                    token: curr.clone().unwrap(),
+                    token: curr.clone(),
                 }
                 .into_error(self));
             }
@@ -236,7 +233,7 @@ impl Parser {
     }
 
     fn r#fn(&mut self) -> Result<Fn> {
-        let is_extern = self.curr.as_ref().map(|t| t.kind) == Some(TokenKind::Extern);
+        let is_extern = self.curr.kind == TokenKind::Extern;
         if is_extern {
             self.advance();
         }
@@ -249,7 +246,7 @@ impl Parser {
 
         self.consume(TokenKind::LParen)?;
         let mut args = vec![];
-        while self.curr.clone().unwrap().kind != TokenKind::RParen {
+        while self.curr.kind != TokenKind::RParen {
             args.push(self.typed_arg()?);
         }
         self.consume(TokenKind::RParen)?;
@@ -257,16 +254,11 @@ impl Parser {
         self.consume(TokenKind::Arrow)?;
         let return_ty = self.ty()?;
 
-        let body = if self
-            .curr
-            .as_ref()
-            .map(|tok| tok.kind.is_terminator())
-            .unwrap_or(true)
-        {
+        let body = if self.curr.kind.is_terminator() {
             None
         } else {
             let mut nodes = vec![];
-            while self.curr.clone().unwrap().kind != TokenKind::End {
+            while self.curr.kind != TokenKind::End {
                 nodes.push(self.node()?);
             }
 
@@ -304,19 +296,13 @@ impl Parser {
         let mut args = vec![];
 
         loop {
-            if self.match_kind(TokenKind::Comma) {
+            if self.curr.kind == TokenKind::Comma {
                 self.advance();
             }
 
-            let Some(kind) = self.curr.as_ref().map(|t| t.kind) else {
-                break;
-            };
-
-            dbg!(&kind);
-
-            if kind == TokenKind::Comma {
+            if self.curr.kind == TokenKind::Comma {
                 self.advance();
-            } else if kind.is_terminator() {
+            } else if self.curr.kind.is_terminator() {
                 break;
             }
 
@@ -325,15 +311,15 @@ impl Parser {
             dbg!(&arg);
 
             dbg!(&self.curr);
+
+            args.push(arg);
         }
 
         Ok(args)
     }
 
     fn stmnt(&mut self) -> Result<Stmnt> {
-        let Some(ref curr) = self.curr else { panic!() };
-
-        let stmnt = match curr.kind {
+        let stmnt = match self.curr.kind {
             TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.r#fn()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
@@ -344,7 +330,7 @@ impl Parser {
                 self.consume(TokenKind::Semicolon)?;
                 Stmnt::Ret(Ret { val: expr })
             }
-            _ => panic!("TODO: {}", curr.kind),
+            _ => panic!("TODO: {}", self.curr.kind),
             // _ => unreachable!(),
         };
 
@@ -356,7 +342,7 @@ impl Parser {
         let ident = self.ident()?;
 
         let mut ty = None;
-        if let Some(TokenKind::Colon) = self.curr.as_ref().map(|t| t.kind) {
+        if self.curr.kind == TokenKind::Colon {
             self.consume(TokenKind::Colon)?;
             ty = Some(self.ty()?);
         }
@@ -375,7 +361,7 @@ impl Parser {
         let condition = self.expr(Prec::Lowest)?;
         self.consume(TokenKind::Then)?;
         let consequence = self.block()?;
-        let alternative = if self.curr.as_ref().map(|t| t.kind) == Some(TokenKind::Else) {
+        let alternative = if self.curr.kind == TokenKind::Else {
             self.advance();
             Some(self.block()?)
         } else {
@@ -391,14 +377,10 @@ impl Parser {
     }
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
-        let Some(ref curr) = self.curr else {
-            return Err(ErrorKind::UnexpectedEOF.into_error(self));
-        };
-
-        if !curr.kind.is_operator() {
+        if !self.curr.kind.is_operator() {
             panic!("invalid operator");
         }
-        let op: Op = curr.to_owned().try_into()?;
+        let op: Op = self.curr.to_owned().try_into()?;
         self.advance();
 
         let rhs = self.expr(Prec::default())?; // TODO: prec
@@ -422,41 +404,34 @@ impl Parser {
     }
 
     pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
-        let Some(ref curr) = self.curr else { panic!() };
-
-        let text = curr.text.clone();
-        let mut lhs = match curr.kind {
+        let text = self.curr.text.clone();
+        let mut lhs = match self.curr.kind {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
             TokenKind::String => Expr::StringLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
 
-            _ => panic!("{:?}", ErrorKind::Todo(curr.clone()).into_error(self)),
+            _ => panic!("{:?}", ErrorKind::Todo(self.curr.clone()).into_error(self)),
         };
 
         self.advance();
 
-        // TODO: fix this horribleness
-        let Some(curr) = self.curr.clone() else {
+        if self.curr.kind == TokenKind::Eof {
             return Ok(lhs);
-        };
+        }
 
-        while prec < Prec::from(&curr) {
-            let Some(curr) = self.curr.clone() else {
-                return Ok(lhs);
-            };
-
-            if curr.kind.is_terminator() {
+        while prec < Prec::from(&self.curr) {
+            if self.curr.kind.is_terminator() {
                 break;
             }
 
-            if curr.kind.is_operator() {
+            if self.curr.kind.is_operator() {
                 lhs = self.infix_expr(lhs)?;
-            } else if curr.kind == TokenKind::LParen {
+            } else if self.curr.kind == TokenKind::LParen {
                 lhs = self.call_expr(lhs)?;
             } else {
-                panic!("TODO: {:?} text: {}", curr.kind, curr.text);
+                panic!("TODO: {:?} text: {}", self.curr.kind, self.curr.text);
             }
         }
 
@@ -469,8 +444,8 @@ impl Parser {
         let mut tail = vec![];
         tail.push(head);
 
-        while let Some(ref token) = self.curr {
-            if token.kind != TokenKind::Comma {
+        loop {
+            if self.curr.kind != TokenKind::Comma {
                 break;
             }
 
