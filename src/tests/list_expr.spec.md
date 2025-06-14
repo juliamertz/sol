@@ -10,6 +10,12 @@
 
 ```ron
 [
-    Expr(List((items: [IntLit(10), IntLit(20), IntLit(30), Ident("fourty"), IntLit(50)])))
+    Expr(List((items: [
+        IntLit(10),
+        IntLit(20),
+        IntLit(30),
+        Ident("fourty"),
+        IntLit(50)
+    ])))
 ]
 ```
