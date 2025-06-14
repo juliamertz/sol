@@ -1,90 +1,81 @@
 module.exports = grammar({
-  name: 'newlang',
+	name: "newlang",
+	extras: ($) => [/\s/, $.comment],
+	rules: {
+		source_file: ($) => repeat($._statement),
 
-  rules: {
-    source_file: $ => repeat($._statement),
+		_statement: ($) =>
+			choice(
+				$.use_stmt,
+				$.function_def,
+				$.struct_def,
+				$.let_stmt,
+				$.return_stmt,
+				$.expression_stmt,
+				$.if_stmt,
+				$.comment,
+			),
 
-    _statement: $ => choice(
-      $.use_stmt,
-      $.function_def,
-      $.let_stmt,
-      $.return_stmt,
-      $.expression_stmt,
-      $.if_stmt,
-      $.comment, // this is dumb
-    ),
+		use_stmt: ($) => seq("use", $.identifier, ";"),
 
-    use_stmt: $ => seq('use', $.identifier, ';'),
+		function_def: ($) =>
+			seq(
+				optional("extern"),
+				"func",
+				$.identifier,
+				$.param_list,
+				"->",
+				$.type,
+				$.block,
+				"end",
+			),
 
-    function_def: $ => seq(
-      optional('extern'),
-      'func',
-      $.identifier,
-      $.param_list,
-      '->',
-      $.type,
-      $.block,
-      'end'
-    ),
+		struct_def: ($) => seq("struct", $.identifier, "=", $.field_list, "end"),
 
-    param_list: $ => seq(
-      '(',
-      optional(commaSep($.param)),
-      ')'
-    ),
+		field_list: ($) => repeat1(seq($.field, ",")),
 
-    param: $ => seq($.identifier, ':', $.type),
+		field: ($) => seq($.identifier, ":", $.type),
 
-    type: $ => $.identifier,
+		param_list: ($) => seq("(", optional(commaSep($.param)), ")"),
 
-    block: $ => repeat1($._statement),
+		param: ($) => seq($.identifier, ":", $.type),
 
-    if_stmt: $ => seq(
-      'if',
-      $.expression,
-      'then',
-      $.block,
-      'end',
-      optional(';')
-    ),
+		type: ($) => $.identifier,
 
-    let_stmt: $ => seq('let', $.identifier, optional(seq(':', $.type)), '=', $.expression),
+		block: ($) => repeat1($._statement),
 
-    return_stmt: $ => seq('return', $.expression, ';'),
+		if_stmt: ($) =>
+			seq("if", $.expression, "then", $.block, "end", optional(";")),
 
-    expression_stmt: $ => seq($.expression, ';'),
+		let_stmt: ($) =>
+			seq("let", $.identifier, optional(seq(":", $.type)), "=", $.expression),
 
-    expression: $ => choice(
-      $.call,
-      $.binary_expr,
-      $.identifier,
-      $.number,
-      $.string
-    ),
+		return_stmt: ($) => seq("return", $.expression, ";"),
 
-    binary_expr: $ => prec.left(seq(
-      $.expression,
-      choice('<', '+', '-', '*', '/', 'and', 'or', '=='),
-      $.expression
-    )),
+		expression_stmt: ($) => seq($.expression, ";"),
 
-    call: $ => seq(
-      $.identifier,
-      '(',
-      optional(commaSep($.expression)),
-      ')'
-    ),
+		expression: ($) =>
+			choice($.call, $.binary_expr, $.identifier, $.number, $.string),
 
-    identifier: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,
+		binary_expr: ($) =>
+			prec.left(
+				seq(
+					$.expression,
+					choice("<", "+", "-", "*", "/", "and", "or", "=="),
+					$.expression,
+				),
+			),
 
-    number: $ => /\d+/,
+		call: ($) => seq($.identifier, "(", optional(commaSep($.expression)), ")"),
 
-    string: $ => /"[^"]*"/,
+		identifier: ($) => /[a-zA-Z_][a-zA-Z0-9_]*/,
 
-    comment: $ => /--[^\n]*/,
-  }
+		number: ($) => /\d+/,
+		string: ($) => /"[^"]*"/,
+		comment: ($) => /--[^\n]*/,
+	},
 });
 
 function commaSep(rule) {
-  return seq(rule, repeat(seq(',', rule)));
+	return seq(rule, repeat(seq(",", rule)));
 }

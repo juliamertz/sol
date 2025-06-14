@@ -8,6 +8,7 @@
   "use"
   "let"
   "extern"
+  "struct"
 ] @keyword
 
 ; operators

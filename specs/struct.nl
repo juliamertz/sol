@@ -8,3 +8,5 @@ extern func printf() -> Int;
 func main() -> Int 
   printf("hello world");
 end
+
+-- vim:ft=newlang
