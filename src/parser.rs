@@ -163,11 +163,6 @@ impl Parser {
         Ok(tok)
     }
 
-    // fn kind(&self) -> &TokenKind {
-    //     self.curr.as_ref().map(|token| token.kind)
-    // }
-    //
-
     pub fn node(&mut self) -> Result<Node> {
         let node = if matches!(
             self.curr.kind,
@@ -194,10 +189,6 @@ impl Parser {
             if self.curr.kind.is_terminator() {
                 break;
             }
-            // if matches!(curr.kind, TokenKind::End | TokenKind::Eof) {
-            //     self.advance();
-            //     break;
-            // }
             nodes.push(self.node()?);
         }
 
