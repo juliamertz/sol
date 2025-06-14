@@ -9,8 +9,7 @@ mod tests;
 
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::{process, vec};
+use std::process;
 
 use clap::Parser;
 use codegen::{Compiler, Emitter};

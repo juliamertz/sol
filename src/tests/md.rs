@@ -51,7 +51,7 @@ impl<'a> Node<'a> {
     pub fn set_level(&mut self, new_level: u8) -> Result<(), &'static str> {
         match self {
             Node::Title { level, .. } => {
-                if new_level >= 1 && new_level <= 6 {
+                if (1..=6).contains(&new_level) {
                     *level = new_level;
                     Ok(())
                 } else {
