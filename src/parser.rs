@@ -247,7 +247,7 @@ impl Parser {
         self.consume(TokenKind::LParen)?;
         let mut args = vec![];
         while self.curr.kind != TokenKind::RParen {
-            args.push(self.typed_arg()?);
+            args.push(self.arg_type()?);
         }
         self.consume(TokenKind::RParen)?;
 
@@ -283,16 +283,21 @@ impl Parser {
         })
     }
 
-    fn typed_arg(&mut self) -> Result<TypedArg> {
-        dbg!("sup");
+    fn arg_type(&mut self) -> Result<ArgType> {
         let ident = self.ident()?;
-        dbg!(&ident);
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
-        Ok(TypedArg { ident, ty })
+        Ok(ArgType { ident, ty })
     }
 
-    fn typed_args(&mut self) -> Result<Vec<TypedArg>> {
+    fn arg_value(&mut self) -> Result<ArgValue> {
+        let ident = self.ident()?;
+        self.consume(TokenKind::Colon)?;
+        let expr = self.expr(Prec::Lowest)?;
+        Ok(ArgValue { ident, expr })
+    }
+
+    fn arg_types(&mut self) -> Result<Vec<ArgType>> {
         let mut args = vec![];
 
         loop {
@@ -306,13 +311,27 @@ impl Parser {
                 break;
             }
 
-            let arg = self.typed_arg()?;
+            args.push(self.arg_type()?);
+        }
 
-            dbg!(&arg);
+        Ok(args)
+    }
 
-            dbg!(&self.curr);
+    fn arg_values(&mut self) -> Result<Vec<ArgValue>> {
+        let mut args = vec![];
 
-            args.push(arg);
+        loop {
+            if self.curr.kind == TokenKind::Comma {
+                self.advance();
+            }
+
+            if self.curr.kind == TokenKind::Comma {
+                self.advance();
+            } else if self.curr.kind.is_terminator() {
+                break;
+            }
+
+            args.push(self.arg_value()?);
         }
 
         Ok(args)
@@ -323,7 +342,7 @@ impl Parser {
             TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.r#fn()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
-            TokenKind::Struct => Stmnt::Struct(self.r#struct()?),
+            TokenKind::Struct => Stmnt::StructDef(self.struct_def()?),
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
@@ -426,12 +445,18 @@ impl Parser {
                 break;
             }
 
-            if self.curr.kind.is_operator() {
-                lhs = self.infix_expr(lhs)?;
-            } else if self.curr.kind == TokenKind::LParen {
-                lhs = self.call_expr(lhs)?;
-            } else {
-                panic!("TODO: {:?} text: {}", self.curr.kind, self.curr.text);
+            match self.curr.kind {
+                kind if kind.is_operator() => {
+                    lhs = self.infix_expr(lhs)?;
+                }
+                TokenKind::LParen => {
+                    lhs = self.call_expr(lhs)?;
+                }
+                TokenKind::LSquirly => {
+                    dbg!(&self.curr);
+                    unimplemented!()
+                }
+                _ => todo!(),
             }
         }
 
@@ -463,12 +488,20 @@ impl Parser {
         Ok(List { items })
     }
 
-    fn r#struct(&mut self) -> Result<Struct> {
+    fn struct_def(&mut self) -> Result<StructDef> {
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
-        let fields = self.typed_args()?;
+        let fields = self.arg_types()?;
         self.consume(TokenKind::End)?;
-        Ok(Struct { ident, fields })
+        Ok(StructDef { ident, fields })
+    }
+
+    fn struct_init_expr(&mut self) -> Result<StructInitExpr> {
+        let ident = self.ident()?;
+        self.consume(TokenKind::LSquirly)?;
+        let fields = self.arg_values()?;
+        self.consume(TokenKind::RSquirly)?;
+        Ok(StructInitExpr { ident, fields })
     }
 }

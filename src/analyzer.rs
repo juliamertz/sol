@@ -250,7 +250,7 @@ impl Analyzer {
                 Ok(ty)
             }
 
-            Stmnt::Struct(_declaration) => Ok(Checked::Unknown),
+            Stmnt::StructDef(_declaration) => Ok(Checked::Unknown),
 
             Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];

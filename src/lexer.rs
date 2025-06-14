@@ -19,6 +19,8 @@ pub enum TokenKind {
     RBracket,
     LAngle,
     RAngle,
+    LSquirly,
+    RSquirly,
     Comma,
     Colon,
     Semicolon,
@@ -138,7 +140,7 @@ impl Token {
         Self {
             kind,
             text: text.to_string(),
-            span: (pos - text.len(), text.len()).into(),
+            span: (pos, text.len()).into(),
         }
     }
 }
@@ -244,6 +246,8 @@ impl Lexer {
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
             '[' => Token::new(TokenKind::LBracket, "[", self.pos),
             ']' => Token::new(TokenKind::RBracket, "]", self.pos),
+            '{' => Token::new(TokenKind::LSquirly, "{", self.pos),
+            '}' => Token::new(TokenKind::RSquirly, "}", self.pos),
             '<' => Token::new(TokenKind::LAngle, "<", self.pos),
             '>' => Token::new(TokenKind::RAngle, ">", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),

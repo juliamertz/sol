@@ -13,7 +13,7 @@ end
 
 ```ron
 [
-  Stmnt(Struct((
+  Stmnt(StructDef((
     ident: "Point",
     fields: [
       (
@@ -27,4 +27,21 @@ end
     ],
   ))),
 ]
+```
+
+
+# Struct instantiation
+
+## Source
+
+```newlang
+let point = Point{
+    x : 10,
+    y : 20,
+};
+```
+
+## Expected (AST)
+
+```ron
 ```

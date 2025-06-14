@@ -31,7 +31,7 @@ ast_impl! {
         Ret(Ret),
         Use(Use),
         Let(Let),
-        Struct(Struct)
+        StructDef(StructDef)
     }
 
     pub enum Op {
@@ -89,15 +89,20 @@ ast_impl! {
         pub args: Vec<Expr>,
     }
 
-    pub struct TypedArg {
+    pub struct ArgType {
         pub ident: Ident,
         pub ty: Type,
+    }
+
+    pub struct ArgValue {
+        pub ident: Ident,
+        pub expr: Expr,
     }
 
     pub struct Fn {
         pub is_extern: bool,
         pub name: Ident,
-        pub args: Vec<TypedArg>,
+        pub args: Vec<ArgType>,
         pub return_ty: Type,
         pub body: Option<Block>,
     }
@@ -106,8 +111,13 @@ ast_impl! {
         pub ident: Ident,
     }
 
-    pub struct Struct {
+    pub struct StructDef {
         pub ident: Ident,
-        pub fields: Vec<TypedArg>,
+        pub fields: Vec<ArgType>,
+    }
+
+    pub struct StructInitExpr {
+        pub ident: Ident,
+        pub fields: Vec<ArgValue>,
     }
 }

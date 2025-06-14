@@ -183,7 +183,7 @@ impl C {
 
                 buf.push(';');
             }
-            Stmnt::Struct(strct) => {
+            Stmnt::StructDef(strct) => {
                 buf.push_str("typedef struct ");
                 buf.push_str(&strct.ident);
                 buf.push('{');
