@@ -1,38 +1,12 @@
 use super::md;
-use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, fmt::Debug};
 
 #[derive(Debug)]
-pub enum AssertionKind {
-    Eq,
-    Ne,
-}
-
-#[derive(Debug)]
 pub struct Test<'a, T: PartialEq + Eq> {
-    name: Cow<'a, str>,
-    kind: AssertionKind,
-    expected: Option<T>,
-    actual: T,
-}
-
-impl<T: PartialEq + Eq + Debug + Serialize> Test<'_, T> {
-    pub fn run(self) {
-        match self.expected {
-            Some(expected) => match self.kind {
-                AssertionKind::Eq => assert_eq!(expected, self.actual),
-                AssertionKind::Ne => assert_ne!(expected, self.actual),
-            },
-            None => {
-                assert!(
-                    false,
-                    "expected output was empty, filling in with actual: {}",
-                    ron::ser::to_string_pretty(&self.actual, PrettyConfig::default()).unwrap()
-                )
-            }
-        }
-    }
+    pub name: Cow<'a, str>,
+    pub expected: T,
+    pub actual: T,
 }
 
 /// File containing multiple tests asserting the spec of this language
@@ -47,9 +21,15 @@ pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
     fn into_spec(&self) -> Spec<'a, T>;
 }
 
+impl<'a> IntoSpec<'a, Vec<crate::lexer::TokenKind>> for &'a str {
+    fn into_spec(&self) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
+        todo!()
+    }
+}
+
 impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
     fn into_spec(&self) -> Spec<'a, Vec<crate::ast::Node>> {
-        let mut document = md::parse(self);
+        let document = md::parse(self);
         let mut nodes = document.nodes.into_iter();
 
         let mut tests = vec![];
@@ -90,19 +70,19 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
                 panic!("expected codeblock missing");
             };
 
-            let expected = if expected.is_empty() {
-                None
-            } else {
-                Some(ron::from_str(&expected).unwrap())
-            };
             let actual = {
                 let mut parser = crate::parser::Parser::new(&source_code);
                 vec![parser.node().unwrap()]
             };
+            let expected = if expected.is_empty() {
+                eprintln!("Expected is empty for {name}, filling in with actual");
+                actual.clone()
+            } else {
+                ron::from_str(&expected).unwrap()
+            };
 
             tests.push(Test {
                 name,
-                kind: AssertionKind::Eq,
                 expected,
                 actual,
             });

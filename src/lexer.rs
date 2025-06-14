@@ -2,8 +2,10 @@ use std::{collections::HashMap, fmt::Display};
 
 use lazy_static::lazy_static;
 use miette::SourceSpan;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub enum TokenKind {
     Eof,
 

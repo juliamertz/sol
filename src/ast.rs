@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 macro_rules! ast_impl {
     ($($item:item)*) => {
         $(

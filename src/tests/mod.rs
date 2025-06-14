@@ -15,12 +15,20 @@ mod parser {
                     let raw_spec = include_str!(concat!("./", stringify!($name), ".spec.md"));
                     let spec: Spec<Vec<Node>> = raw_spec.into_spec();
                     for test in spec.tests {
-                        test.run();
+                        assert_eq!(test.expected, test.actual)
                     }
                 }
             )*
         };
     }
 
-    generate_tests![structures, binop, call_expr, if_expr];
+    generate_tests![
+        structures,
+        binop,
+        call_expr,
+        if_expr,
+        list_expr,
+        return_stmnt
+        fn_stmnt,
+    ];
 }
