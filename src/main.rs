@@ -9,7 +9,8 @@ mod tests;
 
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::process;
+use std::{process, vec};
+use std::str::FromStr;
 
 use clap::Parser;
 use codegen::{Compiler, Emitter};
@@ -69,58 +70,83 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     emitter.build_exe(&out, "test", opts)
 }
 
-// struct Spec<'a> {
-//     source_code: &'a str,
-//     expected: &'a str,
-// }
+mod spec {
+    use std::str::FromStr;
 
-fn parse_spec() {
-    use comrak::nodes::{AstNode, NodeValue};
-    use comrak::{Arena, Options, format_html, parse_document};
-
-    let text = std::fs::read_to_string("./src/tests/struct.spec.md").unwrap();
-    let arena = Arena::new();
-    let opts = Options::default();
-    let root = comrak::parse_document(&arena, &text, &opts);
-
-    let mut children = root.descendants();
-    children.next();
-
-    match children.next().unwrap().data.borrow().value {
-        NodeValue::Text(ref title) => {
-            dbg!(title);
-        },
-        // NodeValue::CodeBlock(ref mut codeblock) => {
-        //     dbg!(codeblock);
-        // },
-        ref x => todo!("{x:?}"),
+    #[derive(Debug)]
+    pub struct Raw {
+        pub source_code: String,
+        pub expected: String,
     }
 
-    // let NodeValue::Text(title) =  children.next().unwrap().data.borrow() else {
-    //     panic!();
-    // };
+    #[derive(Debug)]
+    pub struct Spec<T> {
+        pub source: T,
+        pub expected: T,
+    }
 
-    // for node in root.descendants() {
-    //     match node.data.borrow_mut().value {
-    //         NodeValue::CodeBlock(ref mut codeblock) => {
-    //             dbg!(codeblock);
-    //         }
-    //
-    //         NodeValue::CodeBlock(ref mut codeblock) => {
-    //             dbg!(codeblock);
-    //         }
-    //
-    //         ref val => {
-    //             dbg!(val);
-    //         }
-    //     }
-    //     // dbg!(&node.data);
-    // }
+    impl<T: PartialEq + Eq + std::fmt::Debug> Spec<T> {
+        fn eq(&self) -> bool {
+            self.source == self.expected
+        }
+    }
+
+    impl FromStr for Raw {
+        type Err = ();
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let mut lines = s.lines().filter(|line| !line.is_empty());
+
+            let line = lines.next().unwrap();
+            assert_eq!(line, "# Source");
+
+            let line = lines.next().unwrap();
+            assert!(line.starts_with("```"));
+            let lang = line.strip_prefix("```").unwrap();
+            assert_eq!(lang, "newlang");
+
+            let mut source_code = String::new();
+            let mut line = lines.next().unwrap();
+            while !line.starts_with("```") {
+                source_code.push_str(line);
+                line = lines.next().unwrap();
+            }
+
+            let line = lines.next().unwrap();
+            assert!(line.starts_with("# Expected"));
+
+            let line = lines.next().unwrap();
+            assert!(line.starts_with("```"));
+            let lang = line.strip_prefix("```").unwrap();
+            assert_eq!(lang, "ron");
+
+            let mut expected = String::new();
+            let mut line = lines.next().unwrap();
+            while !line.starts_with("```") {
+                expected.push_str(line);
+                line = lines.next().unwrap();
+            }
+
+            Ok(Self {
+                source_code,
+                expected,
+            })
+        }
+    }
 }
 
 fn main() -> Result<()> {
-    parse_spec();
-    std::process::exit(0);
+    // let text = std::fs::read_to_string("./src/tests/struct.spec.md").unwrap();
+    // let raw_spec = spec::Raw::from_str(&text).unwrap();
+    //
+    // let parser = parser::Parser::new(raw_spec.source_code);
+    // // let spec: spec::Spec<Vec<crate::ast::Node>> = spec::Spec {
+    // //     source: parser.,
+    // //     expected: vec![],
+    // // };
+    // dbg!(&raw_spec, &spec);
+    //
+    // std::process::exit(0);
 
     let opts = Cli::parse();
 
