@@ -1,6 +1,7 @@
 use super::md;
+use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 
 #[derive(Debug)]
 pub enum AssertionKind {
@@ -10,17 +11,26 @@ pub enum AssertionKind {
 
 #[derive(Debug)]
 pub struct Test<'a, T: PartialEq + Eq> {
-    name: &'a str,
+    name: Cow<'a, str>,
     kind: AssertionKind,
-    expected: T,
+    expected: Option<T>,
     actual: T,
 }
 
-impl<T: PartialEq + Eq + Debug> Test<'_, T> {
-    pub fn run(&self) {
-        match self.kind {
-            AssertionKind::Eq => assert_eq!(self.expected, self.actual),
-            AssertionKind::Ne => assert_ne!(self.expected, self.actual),
+impl<T: PartialEq + Eq + Debug + Serialize> Test<'_, T> {
+    pub fn run(self) {
+        match self.expected {
+            Some(expected) => match self.kind {
+                AssertionKind::Eq => assert_eq!(expected, self.actual),
+                AssertionKind::Ne => assert_ne!(expected, self.actual),
+            },
+            None => {
+                assert!(
+                    false,
+                    "expected output was empty, filling in with actual: {}",
+                    ron::ser::to_string_pretty(&self.actual, PrettyConfig::default()).unwrap()
+                )
+            }
         }
     }
 }
@@ -39,7 +49,8 @@ pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
 
 impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
     fn into_spec(&self) -> Spec<'a, Vec<crate::ast::Node>> {
-        let mut nodes = md::parse(self).into_iter();
+        let mut document = md::parse(self);
+        let mut nodes = document.nodes.into_iter();
 
         let mut tests = vec![];
         while let Some(node) = nodes.next() {
@@ -55,12 +66,12 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
                 nodes.next(),
                 Some(md::Node::Title {
                     level: 2,
-                    text: "Source"
+                    text: Cow::Borrowed("Source")
                 })
             );
 
             let Some(md::Node::CodeBlock {
-                kind: Some("newlang"),
+                kind: Some(Cow::Borrowed("newlang")),
                 content: source_code,
             }) = nodes.next()
             else {
@@ -72,14 +83,18 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             nodes.next();
 
             let Some(md::Node::CodeBlock {
-                kind: Some("ron"),
+                kind: Some(Cow::Borrowed("ron")),
                 content: expected,
             }) = nodes.next()
             else {
                 panic!("expected codeblock missing");
             };
 
-            let expected = ron::from_str(expected).unwrap();
+            let expected = if expected.is_empty() {
+                None
+            } else {
+                Some(ron::from_str(&expected).unwrap())
+            };
             let actual = {
                 let mut parser = crate::parser::Parser::new(&source_code);
                 vec![parser.node().unwrap()]
