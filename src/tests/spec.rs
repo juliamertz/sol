@@ -1,7 +1,6 @@
 use super::md;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::str::FromStr;
 
 #[derive(Debug)]
 pub enum AssertionKind {
@@ -9,21 +8,16 @@ pub enum AssertionKind {
     Ne,
 }
 
-// struct RawTest<'a> {
-//     source_code: &'a str,
-//     expected: &'a str,
-// }
-
 #[derive(Debug)]
-pub struct Test<T: PartialEq + Eq> {
-    name: String,
+pub struct Test<'a, T: PartialEq + Eq> {
+    name: &'a str,
     kind: AssertionKind,
     expected: T,
     actual: T,
 }
 
-impl<T: PartialEq + Eq + Debug> Test<T> {
-    fn run(&self) {
+impl<T: PartialEq + Eq + Debug> Test<'_, T> {
+    pub fn run(&self) {
         match self.kind {
             AssertionKind::Eq => assert_eq!(self.expected, self.actual),
             AssertionKind::Ne => assert_ne!(self.expected, self.actual),
@@ -34,9 +28,9 @@ impl<T: PartialEq + Eq + Debug> Test<T> {
 /// File containing multiple tests asserting the spec of this language
 #[derive(Debug)]
 pub struct Spec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
-    name: String,
-    source: &'a str,
-    tests: Vec<Test<T>>,
+    pub name: String,
+    pub source: &'a str,
+    pub tests: Vec<Test<'a, T>>,
 }
 
 pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
@@ -87,35 +81,22 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
             let expected = ron::from_str(expected).unwrap();
             let actual = {
-               let mut parser = crate::parser::Parser::new(&source_code);
-               vec![parser.node().unwrap()]
+                let mut parser = crate::parser::Parser::new(&source_code);
+                vec![parser.node().unwrap()]
             };
 
-            // TODO: add lifetimes to avoid clones
             tests.push(Test {
-                name: name.to_string(),
+                name,
                 kind: AssertionKind::Eq,
                 expected,
                 actual,
             });
-            // dbg!(nodes);
-            // let parser = crate::parser::Parser::new(self);
-            // let actual =
         }
 
-        todo!()
+        Spec {
+            name: "TODO: spec title".into(),
+            source: self,
+            tests,
+        }
     }
 }
-
-// impl<'a, T> Spec<'a, T>
-// where
-//     T: PartialEq + Eq + Deserialize<'a> + Serialize,
-// {
-//     fn from_source(name: impl ToString, source: &'a str) -> Self {
-//         Self {
-//             name: name.to_string(),
-//             source,
-//             tests: vec![],
-//         }
-//     }
-// }
