@@ -9,12 +9,13 @@ mod tests;
 
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::{process, vec};
 use std::str::FromStr;
+use std::{process, vec};
 
 use clap::Parser;
 use codegen::{Compiler, Emitter};
 use miette::{IntoDiagnostic, Result};
+// use tests::spec2::IntoSpec;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -70,84 +71,7 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     emitter.build_exe(&out, "test", opts)
 }
 
-mod spec {
-    use std::str::FromStr;
-
-    #[derive(Debug)]
-    pub struct Raw {
-        pub source_code: String,
-        pub expected: String,
-    }
-
-    #[derive(Debug)]
-    pub struct Spec<T> {
-        pub source: T,
-        pub expected: T,
-    }
-
-    impl<T: PartialEq + Eq + std::fmt::Debug> Spec<T> {
-        fn eq(&self) -> bool {
-            self.source == self.expected
-        }
-    }
-
-    impl FromStr for Raw {
-        type Err = ();
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let mut lines = s.lines().filter(|line| !line.is_empty());
-
-            let line = lines.next().unwrap();
-            assert_eq!(line, "# Source");
-
-            let line = lines.next().unwrap();
-            assert!(line.starts_with("```"));
-            let lang = line.strip_prefix("```").unwrap();
-            assert_eq!(lang, "newlang");
-
-            let mut source_code = String::new();
-            let mut line = lines.next().unwrap();
-            while !line.starts_with("```") {
-                source_code.push_str(line);
-                line = lines.next().unwrap();
-            }
-
-            let line = lines.next().unwrap();
-            assert!(line.starts_with("# Expected"));
-
-            let line = lines.next().unwrap();
-            assert!(line.starts_with("```"));
-            let lang = line.strip_prefix("```").unwrap();
-            assert_eq!(lang, "ron");
-
-            let mut expected = String::new();
-            let mut line = lines.next().unwrap();
-            while !line.starts_with("```") {
-                expected.push_str(line);
-                line = lines.next().unwrap();
-            }
-
-            Ok(Self {
-                source_code,
-                expected,
-            })
-        }
-    }
-}
-
 fn main() -> Result<()> {
-    // let text = std::fs::read_to_string("./src/tests/struct.spec.md").unwrap();
-    // let raw_spec = spec::Raw::from_str(&text).unwrap();
-    //
-    // let parser = parser::Parser::new(raw_spec.source_code);
-    // // let spec: spec::Spec<Vec<crate::ast::Node>> = spec::Spec {
-    // //     source: parser.,
-    // //     expected: vec![],
-    // // };
-    // dbg!(&raw_spec, &spec);
-    //
-    // std::process::exit(0);
-
     let opts = Cli::parse();
 
     match opts.command {

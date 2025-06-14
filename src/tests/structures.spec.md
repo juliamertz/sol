@@ -1,4 +1,6 @@
-# Source
+# Struct declaration
+
+## Source
 
 ```newlang
 struct Point =
@@ -7,7 +9,7 @@ struct Point =
 end
 ```
 
-# Expected (AST)
+## Expected (AST)
 
 ```ron
 [
