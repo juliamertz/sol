@@ -1,6 +1,6 @@
 use super::md;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug, path::Path};
 
 #[derive(Debug)]
 pub struct Test<'a, T: PartialEq + Eq> {
@@ -16,22 +16,20 @@ pub struct Spec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
     pub tests: Vec<Test<'a, T>>,
 }
 
-
-
 pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
-    fn into_spec(&self) -> Spec<'a, T>;
+    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, T>;
 }
 
 impl<'a> IntoSpec<'a, Vec<crate::lexer::TokenKind>> for &'a str {
-    fn into_spec(&self) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
+    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
         todo!()
     }
 }
 
 impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
-    fn into_spec(&self) -> Spec<'a, Vec<crate::ast::Node>> {
-        let document = md::parse(self);
-        let mut nodes = document.nodes.into_iter();
+    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, Vec<crate::ast::Node>> {
+        let mut document = md::parse(self);
+        let mut nodes = document.nodes.iter_mut();
 
         let mut tests = vec![];
         while let Some(node) = nodes.next() {
@@ -47,7 +45,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
             assert_eq!(
                 nodes.next(),
-                Some(md::Node::Title {
+                Some(&mut md::Node::Title {
                     level: 2,
                     text: Cow::Borrowed("Source")
                 })
@@ -67,7 +65,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
             let Some(md::Node::CodeBlock {
                 kind: Some(Cow::Borrowed("ron")),
-                content: mut expected,
+                content: expected,
             }) = nodes.next()
             else {
                 panic!("expected codeblock missing");
@@ -79,21 +77,23 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             };
             let expected = if expected.is_empty() {
                 eprintln!("Expected is empty for {name}, filling in with actual");
-                expected = Cow::Owned("".into());
-                actual.clone()
+                *expected = Cow::Owned("AHAHAHAHAHAHHÃaslkjdhaslkjdhsalkjdhasdlkjashdlksajh".into());
+                // actual.clone()
+                vec![]
             } else {
                 ron::from_str(&expected).unwrap()
             };
 
 
-            panic!("len: {}, {nodes:?}", nodes.len());
-
             tests.push(Test {
-                name,
+                name: name.clone(),
                 expected,
                 actual,
             });
         }
+
+        let rendered = document.to_markdown();
+        std::fs::write(source.as_ref(), rendered).unwrap();
 
         Spec {
             _name: "TODO: spec title".into(),

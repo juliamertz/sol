@@ -43,6 +43,4 @@ let point = Point{
 ## Expected (AST)
 
 ```ron
-[
-]
 ```

@@ -13,7 +13,7 @@ mod parser {
                 #[test]
                 fn $name() {
                     let raw_spec = include_str!(concat!("./", stringify!($name), ".spec.md"));
-                    let spec: Spec<Vec<Node>> = raw_spec.into_spec();
+                    let spec: Spec<Vec<Node>> = raw_spec.into_spec(concat!("./", stringify!($name), ".spec.md"));
                     for test in spec.tests {
                         assert_eq!(
                             test.expected,
