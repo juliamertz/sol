@@ -6,9 +6,6 @@ use crate::lexer::{Lexer, Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
-    #[error("Unexpected EOF")]
-    UnexpectedEOF,
-
     #[error("expected token {0}")]
     Expected(TokenKind),
 
@@ -431,10 +428,12 @@ impl Parser {
             return Ok(lhs);
         }
 
-        while prec < Prec::from(&self.curr) {
+        while prec <= Prec::from(&self.curr) {
             if self.curr.kind.is_terminator() {
                 break;
             }
+
+            dbg!(&lhs);
 
             match self.curr.kind {
                 kind if kind.is_operator() => {
@@ -444,10 +443,9 @@ impl Parser {
                     lhs = self.call_expr(lhs)?;
                 }
                 TokenKind::LSquirly => {
-                    dbg!(&self.curr);
-                    unimplemented!()
+                    lhs = self.struct_constructor(lhs)?;
                 }
-                _ => todo!(),
+                _ => todo!("kind: {}", self.curr.kind),
             }
         }
 
@@ -488,11 +486,16 @@ impl Parser {
         Ok(StructDef { ident, fields })
     }
 
-    fn struct_init_expr(&mut self) -> Result<StructInitExpr> {
-        let ident = self.ident()?;
+    fn struct_constructor(&mut self, lhs: Expr) -> Result<Expr> {
+        // TODO: helper function to make extracting ident from expr easier
+
+        let Expr::Ident(ident) = lhs else {
+            return Err(ErrorKind::Expected(TokenKind::Ident).into_error(self));
+        };
+
         self.consume(TokenKind::LSquirly)?;
         let fields = self.arg_values()?;
         self.consume(TokenKind::RSquirly)?;
-        Ok(StructInitExpr { ident, fields })
+        Ok(Expr::StructConstructor(StructConstructor { ident, fields }))
     }
 }

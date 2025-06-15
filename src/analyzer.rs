@@ -45,7 +45,7 @@ impl<T> Checked<T> {
         matches!(self, Self::Unknown)
     }
 
-    pub fn is_known(&self) -> bool {
+    pub fn _is_known(&self) -> bool {
         !self.is_unknown()
     }
 }
@@ -160,7 +160,7 @@ impl Analyzer {
         Ok(())
     }
 
-    pub fn check_node(node: &Node, env: &mut TypeEnv) -> Result<Checked<Type>> {
+    pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Checked<Type>> {
         match node {
             Node::Expr(expr) => Self::check_expr(expr, env),
             Node::Stmnt(stmnt) => Self::check_stmnt(stmnt, env),
@@ -212,7 +212,7 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::Call(_) | Expr::If(_) => unimplemented!(),
+            Expr::Call(_) | Expr::If(_) | Expr::StructConstructor(_) => unimplemented!(),
         }
     }
 
@@ -270,6 +270,8 @@ impl Analyzer {
             Stmnt::Ret(_) => Ok(Checked::Unknown), // TODO:
 
             Stmnt::Use(_) => Ok(Checked::Unknown),
+
+            Stmnt::StructDef(_) => Ok(Checked::Unknown),
         }
     }
 }

@@ -11,10 +11,12 @@ pub struct Test<'a, T: PartialEq + Eq> {
 
 #[derive(Debug)]
 pub struct Spec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
-    pub name: String,
-    pub source: &'a str,
+    pub _name: String,
+    pub _source: &'a str,
     pub tests: Vec<Test<'a, T>>,
 }
+
+
 
 pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
     fn into_spec(&self) -> Spec<'a, T>;
@@ -33,6 +35,8 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
         let mut tests = vec![];
         while let Some(node) = nodes.next() {
+            dbg!(&nodes, nodes.len());
+
             let md::Node::Title {
                 level: 1,
                 text: name,
@@ -63,7 +67,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
             let Some(md::Node::CodeBlock {
                 kind: Some(Cow::Borrowed("ron")),
-                content: expected,
+                content: mut expected,
             }) = nodes.next()
             else {
                 panic!("expected codeblock missing");
@@ -75,10 +79,14 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             };
             let expected = if expected.is_empty() {
                 eprintln!("Expected is empty for {name}, filling in with actual");
+                expected = Cow::Owned("".into());
                 actual.clone()
             } else {
                 ron::from_str(&expected).unwrap()
             };
+
+
+            panic!("len: {}, {nodes:?}", nodes.len());
 
             tests.push(Test {
                 name,
@@ -88,8 +96,8 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
         }
 
         Spec {
-            name: "TODO: spec title".into(),
-            source: self,
+            _name: "TODO: spec title".into(),
+            _source: self,
             tests,
         }
     }

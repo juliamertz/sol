@@ -78,8 +78,9 @@ impl TokenKind {
                 | TokenKind::RBracket
                 | TokenKind::RParen
                 | TokenKind::RAngle
+                | TokenKind::RSquirly
                 | TokenKind::Then
-                | TokenKind::Else // TODO: This feels hacky...
+                | TokenKind::Else
         )
     }
 

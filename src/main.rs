@@ -14,7 +14,6 @@ use std::process;
 use clap::Parser;
 use codegen::{Compiler, Emitter};
 use miette::{IntoDiagnostic, Result};
-// use tests::spec2::IntoSpec;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]

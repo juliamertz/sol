@@ -36,7 +36,7 @@ end
 ```newlang
 let point = Point{
     x : 10,
-    y : 20,
+    y : 20
 };
 ```
 
@@ -44,10 +44,5 @@ let point = Point{
 
 ```ron
 [
-    Stmnt(Let((
-        name: "point",
-        ty: None,
-        val: Some(Ident("Point"))
-    )))
 ]
 ```

@@ -15,7 +15,12 @@ mod parser {
                     let raw_spec = include_str!(concat!("./", stringify!($name), ".spec.md"));
                     let spec: Spec<Vec<Node>> = raw_spec.into_spec();
                     for test in spec.tests {
-                        assert_eq!(test.expected, test.actual)
+                        assert_eq!(
+                            test.expected,
+                            test.actual,
+                            "{} test failed",
+                            test.name
+                        )
                     }
                 }
             )*

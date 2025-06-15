@@ -105,7 +105,7 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, env: &mut TypeEnv, ty: &ast::Type) -> String {
+    fn emit_type(&mut self, _env: &mut TypeEnv, ty: &ast::Type) -> String {
         match ty {
             ast::Type::Int => "int",
             ast::Type::Str => "char *",
@@ -139,7 +139,7 @@ impl C {
                     buf.push('}');
                 }
             }
-            Expr::List(_list) => unimplemented!(),
+            Expr::List(_) | Expr::StructConstructor(_) => unimplemented!(),
         };
     }
 

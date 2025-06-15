@@ -24,6 +24,7 @@ ast_impl! {
         Call(CallExpr),
         If(If),
         List(List),
+        StructConstructor(StructConstructor),
     }
 
     pub enum Stmnt {
@@ -116,7 +117,7 @@ ast_impl! {
         pub fields: Vec<ArgType>,
     }
 
-    pub struct StructInitExpr {
+    pub struct StructConstructor {
         pub ident: Ident,
         pub fields: Vec<ArgValue>,
     }
