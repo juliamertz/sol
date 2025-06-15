@@ -40,7 +40,7 @@ impl<'a> Node<'a> {
     }
 
     /// Get mutable access to code block language
-    pub fn kind_mut(&mut self) -> Option<&mut Option<Cow<'a, str>>> {
+    pub fn _kind_mut(&mut self) -> Option<&mut Option<Cow<'a, str>>> {
         match self {
             Node::CodeBlock { kind, .. } => Some(kind),
             _ => None,

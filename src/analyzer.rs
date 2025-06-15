@@ -212,7 +212,7 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::Call(_) | Expr::If(_) | Expr::StructConstructor(_) => unimplemented!(),
+            Expr::If(_) | Expr::StructConstructor(_) => unimplemented!(),
         }
     }
 
@@ -250,8 +250,6 @@ impl Analyzer {
                 Ok(ty)
             }
 
-            Stmnt::StructDef(_declaration) => Ok(Checked::Unknown),
-
             Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];
                 for arg in binding.args.iter() {
@@ -267,11 +265,11 @@ impl Analyzer {
                 Ok(Checked::Known(ty))
             }
 
+            Stmnt::StructDef(_) => Ok(Checked::Unknown),
+
             Stmnt::Ret(_) => Ok(Checked::Unknown), // TODO:
 
             Stmnt::Use(_) => Ok(Checked::Unknown),
-
-            Stmnt::StructDef(_) => Ok(Checked::Unknown),
         }
     }
 }

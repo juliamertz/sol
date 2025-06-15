@@ -1,11 +1,13 @@
 # Add
 
 ## Source
+
 ```newlang
 10 + 40
 ```
 
 ## Expected (AST)
+
 ```ron
 [
     Expr(Infix((
@@ -19,11 +21,13 @@
 # Sub
 
 ## Source
+
 ```newlang
 200 - 100
 ```
 
 ## Expected (AST)
+
 ```ron
 [
     Expr(Infix((
@@ -37,11 +41,13 @@
 # Mul
 
 ## Source
+
 ```newlang
 200 * 100
 ```
 
 ## Expected (AST)
+
 ```ron
 [
     Expr(Infix((
@@ -55,11 +61,13 @@
 # Eq
 
 ## Source
+
 ```newlang
 200 == 100
 ```
 
 ## Expected (AST)
+
 ```ron
 [
     Expr(Infix((
@@ -73,11 +81,13 @@
 # And
 
 ## Source
+
 ```newlang
 200 and 100
 ```
 
 ## Expected (AST)
+
 ```ron
 [
     Expr(Infix((

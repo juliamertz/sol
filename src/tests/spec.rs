@@ -21,7 +21,7 @@ pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
 }
 
 impl<'a> IntoSpec<'a, Vec<crate::lexer::TokenKind>> for &'a str {
-    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
+    fn into_spec(&self, _source: impl AsRef<Path>) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
         todo!()
     }
 }
@@ -76,14 +76,13 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
                 vec![parser.node().unwrap()]
             };
             let expected = if expected.is_empty() {
-                eprintln!("Expected is empty for {name}, filling in with actual");
-                *expected = Cow::Owned("AHAHAHAHAHAHHÃaslkjdhaslkjdhsalkjdhasdlkjashdlksajh".into());
-                // actual.clone()
-                vec![]
+                let ser =
+                    ron::ser::to_string_pretty(&actual, ron::ser::PrettyConfig::default()).unwrap();
+                *expected = Cow::Owned(ser);
+                actual.clone()
             } else {
                 ron::from_str(&expected).unwrap()
             };
-
 
             tests.push(Test {
                 name: name.clone(),

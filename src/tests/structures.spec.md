@@ -43,4 +43,23 @@ let point = Point{
 ## Expected (AST)
 
 ```ron
+[
+    Stmnt(Let((
+        name: "point",
+        ty: None,
+        val: Some(StructConstructor((
+            ident: "Point",
+            fields: [
+                (
+                    ident: "x",
+                    expr: IntLit(10),
+                ),
+                (
+                    ident: "y",
+                    expr: IntLit(20),
+                ),
+            ],
+        ))),
+    ))),
+]
 ```

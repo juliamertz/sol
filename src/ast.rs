@@ -52,7 +52,7 @@ ast_impl! {
         Bool,
         Str,
         List(Box<Type>),
-        Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
+        _Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
     }
 
     pub struct Block {
