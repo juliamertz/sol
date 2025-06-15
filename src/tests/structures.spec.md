@@ -29,7 +29,6 @@ end
 ]
 ```
 
-
 # Struct instantiation
 
 ## Source
@@ -44,4 +43,11 @@ let point = Point{
 ## Expected (AST)
 
 ```ron
+[
+    Stmnt(Let((
+        name: "point",
+        ty: None,
+        val: Some(Ident("Point"))
+    )))
+]
 ```

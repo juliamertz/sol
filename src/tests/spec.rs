@@ -9,7 +9,6 @@ pub struct Test<'a, T: PartialEq + Eq> {
     pub actual: T,
 }
 
-/// File containing multiple tests asserting the spec of this language
 #[derive(Debug)]
 pub struct Spec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
     pub name: String,
