@@ -212,7 +212,9 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::If(_) | Expr::StructConstructor(_) => unimplemented!(),
+            Expr::StructConstructor(_) => Ok(Checked::Unknown),
+
+            Expr::If(_) => unimplemented!(),
         }
     }
 

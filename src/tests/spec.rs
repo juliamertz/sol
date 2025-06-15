@@ -30,6 +30,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
     fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, Vec<crate::ast::Node>> {
         let mut document = md::parse(self);
         let mut nodes = document.nodes.iter_mut();
+        let mut write_back = false;
 
         let mut tests = vec![];
         while let Some(node) = nodes.next() {
@@ -79,6 +80,8 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
                 let ser =
                     ron::ser::to_string_pretty(&actual, ron::ser::PrettyConfig::default()).unwrap();
                 *expected = Cow::Owned(ser);
+                write_back = true;
+
                 actual.clone()
             } else {
                 ron::from_str(&expected).unwrap()
@@ -91,8 +94,10 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             });
         }
 
-        let rendered = document.to_markdown();
-        std::fs::write(source.as_ref(), rendered).unwrap();
+        if write_back {
+            let rendered = document.to_markdown();
+            std::fs::write(source.as_ref(), rendered).unwrap();
+        }
 
         Spec {
             _name: "TODO: spec title".into(),
