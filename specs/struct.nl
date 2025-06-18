@@ -11,6 +11,8 @@ func main() -> Int
     y : 20,
   };
 
+  let x_ref = &x;
+
   printf("x: %d", point.x);
 end
 

@@ -9,9 +9,11 @@ pub enum ErrorKind {
     #[error("expected token {0}")]
     Expected(TokenKind),
 
-    #[diagnostic(code(lib::bad_code))]
     #[error("invalid type: {}", token.text)]
     InvalidType { token: Token },
+
+    #[error("invalid operator: {}", token.text)]
+    InvalidOperator { token: Token },
 
     #[error("unhandled token: {0:?}")]
     Todo(Token),
@@ -57,10 +59,10 @@ pub enum Prec {
     Cmp,     // > or <
     Product, // *
     AndOr,
-    // Prefix, // -a or !a
+    Prefix, // -a, !a or &a
     Call, // func()
-          // Index,  // list[0]
-          // Chain,  // mod.field
+    // Index, // list[0]
+    Chain, // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -72,16 +74,18 @@ impl From<&Token> for Prec {
             TokenKind::LAngle | TokenKind::RAngle => Self::Cmp,
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
+            TokenKind::Dot => Self::Chain,
+            TokenKind::Bang | TokenKind::Sub | TokenKind::Ampersand => Self::Prefix,
             _ => Self::Lowest,
         }
     }
 }
 
 impl TryFrom<Token> for Op {
-    type Error = ParseError;
+    type Error = ErrorKind;
 
-    fn try_from(value: Token) -> std::result::Result<Self, Self::Error> {
-        match value.kind {
+    fn try_from(token: Token) -> std::result::Result<Self, Self::Error> {
+        match token.kind {
             TokenKind::Add => Ok(Self::Add),
             TokenKind::Sub => Ok(Self::Sub),
             TokenKind::Eq => Ok(Self::Eq),
@@ -92,7 +96,7 @@ impl TryFrom<Token> for Op {
             TokenKind::And => Ok(Self::And),
             TokenKind::Or => Ok(Self::Or),
             TokenKind::Dot => Ok(Self::Chain),
-            _ => todo!(),
+            _ => Err(ErrorKind::InvalidOperator { token }),
         }
     }
 }
@@ -382,6 +386,14 @@ impl Parser {
             consequence,
             alternative,
         })
+    }
+
+    fn prefix_expr(&mut self, op: Op) -> Result<Expr> {
+        let rhs = self.expr(Prec::default())?;
+        Ok(Expr::Prefix(PrefixExpr {
+            op,
+            rhs: Box::new(rhs),
+        }))
     }
 
     fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {

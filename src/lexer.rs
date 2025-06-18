@@ -48,6 +48,8 @@ pub enum TokenKind {
     Arrow,
     And,
     Or,
+    Bang,
+    Ampersand,
 }
 
 impl TokenKind {
@@ -100,6 +102,7 @@ impl TokenKind {
                 | TokenKind::And
                 | TokenKind::Or
                 | TokenKind::Dot
+                | TokenKind::Ampersand
         )
     }
 }
@@ -245,6 +248,7 @@ impl Lexer {
             }
             '*' => Token::new(TokenKind::Asterisk, "*", self.pos),
             '/' => Token::new(TokenKind::Slash, "/", self.pos),
+            '&' => Token::new(TokenKind::Ampersand, "&", self.pos),
             '(' => Token::new(TokenKind::LParen, "(", self.pos),
             ')' => Token::new(TokenKind::RParen, ")", self.pos),
             '[' => Token::new(TokenKind::LBracket, "[", self.pos),

@@ -21,6 +21,7 @@ ast_impl! {
         IntLit(i64),
         StringLit(String),
         Infix(InfixExpr),
+        Prefix(PrefixExpr),
         Call(CallExpr),
         If(If),
         List(List),
@@ -53,7 +54,7 @@ ast_impl! {
         Bool,
         Str,
         List(Box<Type>),
-        _Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
+        Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
         Struct { ident: Ident, fields: Vec<(Ident, Type)> }
     }
 
@@ -79,6 +80,11 @@ ast_impl! {
 
     pub struct Ret {
         pub val: Expr,
+    }
+
+    pub struct PrefixExpr {
+        pub op: Op,
+        pub rhs: Box<Expr>,
     }
 
     pub struct InfixExpr {

@@ -10,6 +10,7 @@ pub enum Type {
     Bool,
     Str,
     List(Box<Checked<Type>>),
+    Ptr(Box<Checked<Type>>),
     Fn {
         is_extern: bool,
         args: Vec<Type>,
@@ -64,16 +65,15 @@ impl From<&ast::Type> for Type {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
                 Self::list(Checked::Known(unboxed))
             }
-            _ => panic!("TODO: {value:?}"),
+            ast::Type::Struct { ident, fields } => todo!(),
+            ast::Type::Fn {
+                args,
+                returns,
+                is_extern,
+            } => todo!(),
         }
     }
 }
-
-// pub struct LetBinding {
-//     ident: String,
-//     declared_type: Checked<Type>,
-//     actual_type: Checked<Type>,
-// }
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum AnalyzeError {
@@ -119,12 +119,13 @@ impl Analyzer {
         for node in nodes.iter() {
             match node {
                 Node::Stmnt(Stmnt::Let(binding)) => {
-                    let ty = match binding.ty {
-                        Some(ref ty) => Checked::Known(ty.into()),
-                        None => Checked::Unknown,
-                    };
-
-                    env.bind(&binding.name, ty);
+                    env.bind(
+                        &binding.name,
+                        match binding.ty {
+                            Some(ref ty) => Checked::Known(ty.into()),
+                            None => Checked::Unknown,
+                        },
+                    );
                 }
 
                 Node::Stmnt(Stmnt::Fn(binding)) => {
@@ -133,13 +134,14 @@ impl Analyzer {
                         args.push(ty.into());
                     }
 
-                    let ty = Type::Fn {
-                        args,
-                        is_extern: binding.is_extern,
-                        returns: Box::new((&binding.return_ty).into()),
-                    };
-
-                    env.bind(binding.name.to_owned(), Checked::Known(ty));
+                    env.bind(
+                        binding.name.to_owned(),
+                        Checked::Known(Type::Fn {
+                            args,
+                            is_extern: binding.is_extern,
+                            returns: Box::new((&binding.return_ty).into()),
+                        }),
+                    );
                 }
 
                 Node::Stmnt(Stmnt::StructDef(def)) => {
@@ -175,6 +177,10 @@ impl Analyzer {
             Expr::IntLit(_) => Ok(Checked::Known(Type::Int)),
 
             Expr::StringLit(_) => Ok(Checked::Known(Type::Str)),
+
+            Expr::Prefix(prefix_expr) => {
+                todo!();
+            },
 
             Expr::Infix(infix_expr) => {
                 let lhs = Self::check_expr(&infix_expr.lhs, env)?;

@@ -113,7 +113,8 @@ impl C {
             analyzer::Type::Bool => "bool",
             analyzer::Type::List(_) => "List",
             analyzer::Type::Struct { ref ident, .. } => ident,
-            _ => unimplemented!(),
+            analyzer::Type::Ptr(_ty) => todo!(),
+            analyzer::Type::Fn { .. } => todo!(),
         }
         .into()
     }
@@ -123,6 +124,7 @@ impl C {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
             Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
+            Expr::Prefix(prefix_expr) => todo!("prefix expr"),
             Expr::Infix(infix_expr) => self.emit_infix_expr(buf, env, infix_expr),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
             Expr::If(r#if) => {
@@ -292,8 +294,6 @@ impl Compiler for C {
         if opts.release {
             args.extend_from_slice(&["-O3", "-flto"]);
         }
-
-        println!("{}", args.join(" "));
 
         let handle = std::process::Command::new("cc")
             .args(&args)
