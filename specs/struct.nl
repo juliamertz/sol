@@ -11,7 +11,7 @@ func main() -> Int
     y : 20,
   };
 
-  printf("hello world");
+  printf("x: %d", point.x);
 end
 
 -- vim:ft=newlang

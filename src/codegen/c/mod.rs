@@ -56,6 +56,7 @@ impl C {
             Op::Gt => ">",
             Op::And => "&&",
             Op::Or => "||",
+            Op::Chain => ".",
         };
         buf.push_str(text);
     }
@@ -148,7 +149,7 @@ impl C {
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {
                     buf.push('.');
-                    buf.push_str(ident);
+                    buf.push_str(&self.prefix(ident));
                     buf.push('=');
                     self.emit_expr(buf, env, expr);
                     buf.push(',');
@@ -204,7 +205,7 @@ impl C {
                 for (ident, ty) in strct.fields.iter() {
                     buf.push_str(&self.emit_type(env, ty));
                     buf.push(' ');
-                    buf.push_str(ident);
+                    buf.push_str(&self.prefix(ident));
                     buf.push(';');
                 }
                 buf.push('}');

@@ -21,6 +21,7 @@ pub enum TokenKind {
     RAngle,
     LSquirly,
     RSquirly,
+    Dot,
     Comma,
     Colon,
     Semicolon,
@@ -98,6 +99,7 @@ impl TokenKind {
                 | TokenKind::LAngle
                 | TokenKind::And
                 | TokenKind::Or
+                | TokenKind::Dot
         )
     }
 }
@@ -253,6 +255,7 @@ impl Lexer {
             '>' => Token::new(TokenKind::RAngle, ">", self.pos),
             ':' => Token::new(TokenKind::Colon, ":", self.pos),
             ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
+            '.' => Token::new(TokenKind::Dot, ".", self.pos),
             ',' => Token::new(TokenKind::Comma, ",", self.pos),
             ch if ch.is_ascii_digit() => {
                 let start = self.pos;

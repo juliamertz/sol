@@ -45,6 +45,7 @@ ast_impl! {
         Gt,
         And,
         Or,
+        Chain, // TODO: think of better name
     }
 
     pub enum Type {
