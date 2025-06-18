@@ -271,21 +271,21 @@ impl Parser {
         })
     }
 
-    fn arg_type(&mut self) -> Result<ArgType> {
+    fn arg_type(&mut self) -> Result<(Ident, Type)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
-        Ok(ArgType { ident, ty })
+        Ok((ident, ty))
     }
 
-    fn arg_value(&mut self) -> Result<ArgValue> {
+    fn arg_value(&mut self) -> Result<(Ident, Expr)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let expr = self.expr(Prec::Lowest)?;
-        Ok(ArgValue { ident, expr })
+        Ok((ident, expr))
     }
 
-    fn arg_types(&mut self) -> Result<Vec<ArgType>> {
+    fn arg_types(&mut self) -> Result<Vec<(Ident, Type)>> {
         let mut args = vec![];
 
         loop {
@@ -305,7 +305,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn arg_values(&mut self) -> Result<Vec<ArgValue>> {
+    fn arg_values(&mut self) -> Result<Vec<(Ident, Expr)>> {
         let mut args = vec![];
 
         loop {

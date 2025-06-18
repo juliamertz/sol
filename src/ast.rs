@@ -90,20 +90,10 @@ ast_impl! {
         pub args: Vec<Expr>,
     }
 
-    pub struct ArgType {
-        pub ident: Ident,
-        pub ty: Type,
-    }
-
-    pub struct ArgValue {
-        pub ident: Ident,
-        pub expr: Expr,
-    }
-
     pub struct Fn {
         pub is_extern: bool,
         pub name: Ident,
-        pub args: Vec<ArgType>,
+        pub args: Vec<(Ident, Type)>,
         pub return_ty: Type,
         pub body: Option<Block>,
     }
@@ -114,11 +104,11 @@ ast_impl! {
 
     pub struct StructDef {
         pub ident: Ident,
-        pub fields: Vec<ArgType>,
+        pub fields: Vec<(Ident, Type)>,
     }
 
     pub struct StructConstructor {
         pub ident: Ident,
-        pub fields: Vec<ArgValue>,
+        pub fields: Vec<(Ident, Expr)>,
     }
 }

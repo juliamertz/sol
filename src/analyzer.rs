@@ -2,19 +2,23 @@ use miette::{Diagnostic, Result};
 use std::collections::HashMap;
 use thiserror::Error;
 
-use crate::ast::{self, Expr, Node, Stmnt};
+use crate::ast::{self, Expr, Ident, Node, Stmnt};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Int,
     Bool,
     Str,
+    List(Box<Checked<Type>>),
     Fn {
         is_extern: bool,
         args: Vec<Type>,
         returns: Box<Type>,
     },
-    List(Box<Checked<Type>>),
+    Struct {
+        ident: Ident,
+        fields: Vec<(Ident, Type)>,
+    },
 }
 
 impl Type {
@@ -140,8 +144,8 @@ impl Analyzer {
 
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
-                    for arg in binding.args.iter() {
-                        args.push((&arg.ty).into());
+                    for (_, ty) in binding.args.iter() {
+                        args.push(ty.into());
                     }
 
                     let ty = Type::Fn {
@@ -212,7 +216,7 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::StructConstructor(_) => Ok(Checked::Unknown),
+            Expr::StructConstructor(constructor) => Ok(Checked::Unknown),
 
             Expr::If(_) => unimplemented!(),
         }
@@ -254,8 +258,8 @@ impl Analyzer {
 
             Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];
-                for arg in binding.args.iter() {
-                    args.push((&arg.ty).into());
+                for (_, ty) in binding.args.iter() {
+                    args.push((ty).into());
                 }
 
                 let ty = Type::Fn {

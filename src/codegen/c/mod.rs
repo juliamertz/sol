@@ -187,13 +187,12 @@ impl C {
                 buf.push_str("typedef struct ");
                 buf.push_str(&strct.ident);
                 buf.push('{');
-                for field in strct.fields.iter() {
-                    buf.push_str(&self.emit_type(env, &field.ty));
+                for (ident, ty) in strct.fields.iter() {
+                    buf.push_str(&self.emit_type(env, ty));
                     buf.push(' ');
-                    buf.push_str(&field.ident);
+                    buf.push_str(ident);
                     buf.push(';');
                 }
-                // TODO: emit fields
                 buf.push('}');
                 buf.push_str(&strct.ident);
                 buf.push(';');
@@ -217,11 +216,11 @@ impl C {
         buf.push_str(
             func.args
                 .iter()
-                .map(|arg| {
+                .map(|(ident, ty)| {
                     format!(
                         "{} {}",
-                        self.emit_type(env, &arg.ty),
-                        self.prefix(&arg.ident)
+                        self.emit_type(env, ty),
+                        self.prefix(ident)
                     )
                 })
                 .collect::<Vec<_>>()
