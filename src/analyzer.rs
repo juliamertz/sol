@@ -69,21 +69,6 @@ impl From<&ast::Type> for Type {
     }
 }
 
-impl From<&Type> for ast::Type {
-    fn from(value: &Type) -> ast::Type {
-        match value {
-            Type::Int => Self::Int,
-            Type::Bool => Self::Bool,
-            Type::Str => Self::Str,
-            Type::List(ty) => {
-                let unboxed = ast::Type::from(&(**ty).clone().unwrap()); // damn this is ugly
-                ast::Type::List(Box::new(unboxed))
-            }
-            _ => panic!("TODO: {value:?}"),
-        }
-    }
-}
-
 // pub struct LetBinding {
 //     ident: String,
 //     declared_type: Checked<Type>,
@@ -157,6 +142,20 @@ impl Analyzer {
                     env.bind(binding.name.to_owned(), Checked::Known(ty));
                 }
 
+                Node::Stmnt(Stmnt::StructDef(def)) => {
+                    env.bind(
+                        &def.ident,
+                        Checked::Known(Type::Struct {
+                            ident: def.ident.clone(),
+                            fields: def
+                                .fields
+                                .iter()
+                                .map(|(ident, ty)| (ident.clone(), ty.into()))
+                                .collect(),
+                        }),
+                    );
+                }
+
                 _ => {}
             };
         }
@@ -216,7 +215,17 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::StructConstructor(constructor) => Ok(Checked::Unknown),
+            Expr::StructConstructor(constructor) => {
+                // TODO: get type from type-env
+                // let a= Checked::Known(Type::Struct { ident: constructor.ident, fields: () })
+
+                let Some(ty) = env.get(&constructor.ident) else {
+                    todo!("nice error message when struct does not exist {constructor:?}")
+                };
+
+                // TODO: i don't like having to clone here
+                Ok(ty.clone())
+            }
 
             Expr::If(_) => unimplemented!(),
         }

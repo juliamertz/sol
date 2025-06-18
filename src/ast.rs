@@ -53,6 +53,7 @@ ast_impl! {
         Str,
         List(Box<Type>),
         _Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
+        Struct { ident: Ident, fields: Vec<(Ident, Type)> }
     }
 
     pub struct Block {

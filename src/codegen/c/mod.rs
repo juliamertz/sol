@@ -105,12 +105,13 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &mut TypeEnv, ty: &ast::Type) -> String {
-        match ty {
-            ast::Type::Int => "int",
-            ast::Type::Str => "char *",
-            ast::Type::Bool => "bool",
-            ast::Type::List(_) => "List",
+    fn emit_type(&mut self, _env: &mut TypeEnv, ty: impl Into<analyzer::Type>) -> String {
+        match ty.into() {
+            analyzer::Type::Int => "int",
+            analyzer::Type::Str => "char *",
+            analyzer::Type::Bool => "bool",
+            analyzer::Type::List(_) => "List",
+            analyzer::Type::Struct { ref ident, .. } => ident,
             _ => unimplemented!(),
         }
         .into()
@@ -139,7 +140,23 @@ impl C {
                     buf.push('}');
                 }
             }
-            Expr::List(_) | Expr::StructConstructor(_) => unimplemented!(),
+
+            // TODO: this is kind of a hack
+            // i'd rather have it push these infront of the current node initializing the struct in a more robust way
+            // This currently only works when it's in a let binding
+            Expr::StructConstructor(constructor) => {
+                buf.push('{');
+                for (ident, expr) in constructor.fields.iter() {
+                    buf.push('.');
+                    buf.push_str(ident);
+                    buf.push('=');
+                    self.emit_expr(buf, env, expr);
+                    buf.push(',');
+                }
+                buf.push('}');
+            }
+
+            Expr::List(_) => unimplemented!(),
         };
     }
 
@@ -159,11 +176,11 @@ impl C {
             }
             Stmnt::Let(binding) => {
                 let ty = match checked {
-                    Checked::Known(ref ty) => ty.into(),
+                    Checked::Known(ty) => ty,
                     Checked::Unknown => unreachable!(),
                 };
 
-                buf.push_str(self.emit_type(env, &ty).as_str());
+                buf.push_str(self.emit_type(env, ty.clone()).as_str());
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.name));
                 buf.push('=');
@@ -171,11 +188,8 @@ impl C {
                 match binding.val.as_ref().unwrap() {
                     Expr::List(_) => {
                         buf.push_str(
-                            format!(
-                                "list_alloc(sizeof({ty}), 64)",
-                                ty = self.emit_type(env, &ty)
-                            )
-                            .as_str(),
+                            format!("list_alloc(sizeof({ty}), 64)", ty = self.emit_type(env, ty))
+                                .as_str(),
                         );
                     }
                     _ => self.emit_expr(buf, env, binding.val.as_ref().unwrap()),
@@ -216,13 +230,7 @@ impl C {
         buf.push_str(
             func.args
                 .iter()
-                .map(|(ident, ty)| {
-                    format!(
-                        "{} {}",
-                        self.emit_type(env, ty),
-                        self.prefix(ident)
-                    )
-                })
+                .map(|(ident, ty)| format!("{} {}", self.emit_type(env, ty), self.prefix(ident)))
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),
