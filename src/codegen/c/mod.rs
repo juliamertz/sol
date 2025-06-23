@@ -179,8 +179,8 @@ impl C {
             }
             Stmnt::Let(binding) => {
                 let ty = match checked {
-                    Checked::Known(ty) => ty,
-                    Checked::Unknown => unreachable!(),
+                    Checked::Known(ref ty) => ty.into(),
+                    Checked::Unknown => todo!("implement type checking for {binding:?}"),
                 };
 
                 buf.push_str(self.emit_type(env, ty.clone()).as_str());

@@ -13,15 +13,15 @@ end
 ```ron
 [
     Expr(If((
-    condition: Infix((
-        lhs: Ident("n"),
-        op: Lt,
-        rhs: IntLit(0),
-    )),
-    consequence: Block(
-        nodes: [Stmnt(Ret((val: IntLit(0))))],
-    ),
-    alternative: None,
+        condition: Infix((
+            lhs: Ident("n"),
+            op: Lt,
+            rhs: IntLit(0),
+        )),
+        consequence: Block(
+            nodes: [Stmnt(Ret((val: IntLit(0))))],
+        ),
+        alternative: None,
     )))
 ]
 ```
@@ -43,17 +43,17 @@ end
 ```ron
 [
     Expr(If((
-    condition: Infix((
-        lhs: Ident("n"),
-        op: Lt,
-        rhs: IntLit(0),
-    )),
-    consequence: Block(
-        nodes: [Stmnt(Ret((val: IntLit(0))))],
-    ),
-    alternative: Some(Block(
-        nodes: [Stmnt(Ret((val: IntLit(1))))],
-    ))
+        condition: Infix((
+            lhs: Ident("n"),
+            op: Lt,
+            rhs: IntLit(0),
+        )),
+        consequence: Block(
+            nodes: [Stmnt(Ret((val: IntLit(0))))],
+        ),
+        alternative: Some(Block(
+            nodes: [Stmnt(Ret((val: IntLit(1))))],
+        ))
     )))
 ]
 ```
