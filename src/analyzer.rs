@@ -110,23 +110,33 @@ impl TypeEnv {
     pub fn get_mut(&mut self, name: impl AsRef<str>) -> Option<&mut Checked<Type>> {
         self.definitions.get_mut(name.as_ref())
     }
+
+    pub fn extend(&mut self, declarations: Vec<(&String, Checked<Type>)>) {
+        for (ident, ty) in declarations {
+            // TODO: lol we have to rename one of these
+            self.definitions.insert(ident.to_string(), ty);
+        }
+    }
 }
 
 pub struct Analyzer;
 
 impl Analyzer {
-    pub fn collect_declarations(nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
-        for node in nodes.iter() {
-            match node {
-                Node::Stmnt(Stmnt::Let(binding)) => {
-                    env.bind(
-                        &binding.name,
-                        match binding.ty {
-                            Some(ref ty) => Checked::Known(ty.into()),
-                            None => Checked::Unknown,
-                        },
-                    );
-                }
+    pub fn collect_declarations<'a>(
+        nodes: &'a [Node],
+        env: &mut TypeEnv,
+    ) -> Result<Vec<(&'a Ident, Checked<Type>)>> {
+        Ok(nodes
+            .iter()
+            .filter_map(|node| match node {
+                Node::Stmnt(Stmnt::Let(binding)) => Some((
+                    &binding.name,
+                    match binding.ty {
+                        Some(ref ty) => Checked::Known(ty.into()),
+                        // TODO: check binding type
+                        None => Self::check_expr(binding.val.as_ref().unwrap(), env).unwrap(),
+                    },
+                )),
 
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
@@ -134,35 +144,31 @@ impl Analyzer {
                         args.push(ty.into());
                     }
 
-                    env.bind(
-                        binding.name.to_owned(),
-                        Checked::Known(Type::Fn {
-                            args,
-                            is_extern: binding.is_extern,
-                            returns: Box::new((&binding.return_ty).into()),
-                        }),
-                    );
+                    let ty = Checked::Known(Type::Fn {
+                        args,
+                        is_extern: binding.is_extern,
+                        returns: Box::new((&binding.return_ty).into()),
+                    });
+
+                    Some((&binding.name, ty))
                 }
 
                 Node::Stmnt(Stmnt::StructDef(def)) => {
-                    env.bind(
-                        &def.ident,
-                        Checked::Known(Type::Struct {
-                            ident: def.ident.clone(),
-                            fields: def
-                                .fields
-                                .iter()
-                                .map(|(ident, ty)| (ident.clone(), ty.into()))
-                                .collect(),
-                        }),
-                    );
+                    let ty = Checked::Known(Type::Struct {
+                        ident: def.ident.clone(),
+                        fields: def
+                            .fields
+                            .iter()
+                            .map(|(ident, ty)| (ident.clone(), ty.into()))
+                            .collect(),
+                    });
+
+                    Some((&def.ident, ty))
                 }
 
-                _ => {}
-            };
-        }
-
-        Ok(())
+                _ => None,
+            })
+            .collect())
     }
 
     pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Checked<Type>> {
@@ -176,11 +182,15 @@ impl Analyzer {
         match expr {
             Expr::IntLit(_) => Ok(Checked::Known(Type::Int)),
 
+            Expr::Block(block) => {
+                todo!("check block expressions")
+            }
+
             Expr::StringLit(_) => Ok(Checked::Known(Type::Str)),
 
             Expr::Prefix(prefix_expr) => {
                 todo!();
-            },
+            }
 
             Expr::Infix(infix_expr) => {
                 let lhs = Self::check_expr(&infix_expr.lhs, env)?;
@@ -244,18 +254,18 @@ impl Analyzer {
                 dbg!(&value_ty);
 
                 match env.get_mut(&binding.name) {
-                    Some(Checked::Known(ty)) => {
-                        if *ty != Type::list(value_ty.clone()) {
+                    Some(checked) if checked.is_unknown() => {
+                        *checked = value_ty;
+                    }
+
+                    Some(known) => {
+                        if *known != value_ty {
                             return Err(AnalyzeError::TypeMismatch {
-                                lhs: ty.clone().checked(),
+                                lhs: known.clone(),
                                 rhs: value_ty,
                             }
                             .into());
                         }
-                    }
-
-                    Some(checked) if checked.is_unknown() => {
-                        *checked = value_ty;
                     }
 
                     _ => todo!(),

@@ -1,6 +1,6 @@
 use crate::BuildOpts;
 use crate::analyzer::{self, Analyzer, Checked, TypeEnv};
-use crate::ast::{self, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+use crate::ast::{self, Block, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
 use crate::codegen::{Compiler, Emitter};
 
 use std::fs;
@@ -23,7 +23,8 @@ impl Emitter for C {
         let mut buf = String::new();
         let mut env = TypeEnv::new();
 
-        Analyzer::collect_declarations(ast, &mut env).unwrap();
+        let declarations = Analyzer::collect_declarations(ast, &mut env).unwrap();
+        env.extend(declarations);
 
         for file in CORE_INCLUDES {
             buf.push_str(&format!("#include \"{CORE_INCLUDE_PATH}/{file}\"\n"));
@@ -119,6 +120,18 @@ impl C {
         .into()
     }
 
+    fn emit_block(&mut self, buf: &mut String, env: &mut TypeEnv, block: &Block) {
+        let env = &mut env.clone();
+        let declarations = Analyzer::collect_declarations(&block.nodes, env).unwrap();
+        dbg!(&declarations);
+
+        env.extend(declarations);
+
+        for node in &block.nodes {
+            self.emit_node(buf, env, node);
+        }
+    }
+
     fn emit_expr(&mut self, buf: &mut String, env: &mut TypeEnv, expr: &Expr) {
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
@@ -144,10 +157,10 @@ impl C {
                 }
             }
 
-            // TODO: this is kind of a hack
-            // i'd rather have it push these infront of the current node initializing the struct in a more robust way
-            // This currently only works when it's in a let binding
             Expr::StructConstructor(constructor) => {
+                buf.push('(');
+                buf.push_str(&constructor.ident);
+                buf.push(')');
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {
                     buf.push('.');
@@ -158,6 +171,8 @@ impl C {
                 }
                 buf.push('}');
             }
+
+            Expr::Block(block) => self.emit_block(buf, env, block),
 
             Expr::List(_) => unimplemented!(),
         };
@@ -178,8 +193,8 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                let ty = match checked {
-                    Checked::Known(ref ty) => ty.into(),
+                let ty: analyzer::Type = match checked {
+                    Checked::Known(ty) => ty,
                     Checked::Unknown => todo!("implement type checking for {binding:?}"),
                 };
 
@@ -243,11 +258,7 @@ impl C {
 
         if let Some(ref body) = func.body {
             let env = &mut env.clone();
-            Analyzer::collect_declarations(&body.nodes, env).unwrap();
-
-            for node in body.nodes.iter() {
-                self.emit_node(buf, env, node);
-            }
+            self.emit_block(buf, env, body);
             if &func.name == "main"
                 && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
             {

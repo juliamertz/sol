@@ -20,6 +20,7 @@ ast_impl! {
         Ident(Ident),
         IntLit(i64),
         StringLit(String),
+        Block(Block),
         Infix(InfixExpr),
         Prefix(PrefixExpr),
         Call(CallExpr),
