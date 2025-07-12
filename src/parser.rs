@@ -212,7 +212,7 @@ impl Parser {
                 self.consume(TokenKind::LAngle)?;
                 let inner = self.ty()?;
                 self.consume(TokenKind::RAngle)?;
-                Type::List(Box::new(inner))
+                Type::List((Box::new(inner), None))
             }
             _ => Type::Var(ident),
         };

@@ -9,7 +9,7 @@ pub enum Type {
     Int,
     Bool,
     Str,
-    List(Box<Type>),
+    List((Box<Type>, Option<usize>)),
     Ptr(Box<Type>),
     Fn {
         is_extern: bool,
@@ -25,8 +25,8 @@ pub enum Type {
 }
 
 impl Type {
-    fn list(ty: Type) -> Self {
-        Self::List(Box::new(ty))
+    fn list(ty: Type, size: Option<usize>) -> Self {
+        Self::List((Box::new(ty), size))
     }
 
     fn is_concrete(&self) -> bool {
@@ -40,9 +40,9 @@ impl From<&ast::Type> for Type {
             ast::Type::Int => Self::Int,
             ast::Type::Bool => Self::Bool,
             ast::Type::Str => Self::Str,
-            ast::Type::List(ty) => {
+            ast::Type::List((ty, size)) => {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
-                Self::list(unboxed)
+                Self::list(unboxed, size.clone())
             }
             ast::Type::Fn {
                 args,
@@ -98,7 +98,7 @@ impl TypeEnv {
 pub struct Analyzer;
 
 impl Analyzer {
-    pub fn collect_declarations<'a>(nodes: &'a [Node], env: &mut TypeEnv) -> Result<()> {
+    pub fn collect_declarations(nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
         for node in nodes {
             let def = match node {
                 Node::Stmnt(Stmnt::Let(binding)) => Some((

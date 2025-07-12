@@ -54,7 +54,7 @@ ast_impl! {
         Int,
         Bool,
         Str,
-        List(Box<Type>),
+        List((Box<Type>, Option<usize>)),
         Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
         Var(Ident),
     }
