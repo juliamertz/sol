@@ -1,4 +1,4 @@
-use miette::{Diagnostic, Result};
+use miette::{Diagnostic, Result, SourceSpan};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -9,8 +9,8 @@ pub enum Type {
     Int,
     Bool,
     Str,
-    List(Box<Checked<Type>>),
-    Ptr(Box<Checked<Type>>),
+    List(Box<Type>),
+    Ptr(Box<Type>),
     Fn {
         is_extern: bool,
         args: Vec<Type>,
@@ -20,38 +20,17 @@ pub enum Type {
         ident: Ident,
         fields: Vec<(Ident, Type)>,
     },
+    // TODO: include sourcespan so we can have nicer debug messages
+    Var(Ident)
 }
 
 impl Type {
-    fn list(ty: Checked<Type>) -> Self {
+    fn list(ty: Type) -> Self {
         Self::List(Box::new(ty))
     }
 
-    fn checked(self) -> Checked<Type> {
-        Checked::Known(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Checked<T> {
-    Known(T),
-    Unknown,
-}
-
-impl<T> Checked<T> {
-    pub fn unwrap(self) -> T {
-        match self {
-            Self::Known(value) => value,
-            Self::Unknown => panic!("unwrap called on unknown"),
-        }
-    }
-
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, Self::Unknown)
-    }
-
-    pub fn _is_known(&self) -> bool {
-        !self.is_unknown()
+    fn is_concrete(&self) -> bool {
+       !matches!(self, Self::Var(_))
     }
 }
 
@@ -63,7 +42,7 @@ impl From<&ast::Type> for Type {
             ast::Type::Str => Self::Str,
             ast::Type::List(ty) => {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
-                Self::list(Checked::Known(unboxed))
+                Self::list(unboxed)
             }
             ast::Type::Struct { ident, fields } => todo!(),
             ast::Type::Fn {
@@ -79,8 +58,8 @@ impl From<&ast::Type> for Type {
 pub enum AnalyzeError {
     #[error("Type mismatch between {lhs:?} and {rhs:?}")]
     TypeMismatch {
-        lhs: Checked<Type>,
-        rhs: Checked<Type>,
+        lhs: Type,
+        rhs: Type,
     },
 
     #[error("No such variable: '{name}'")]
@@ -89,7 +68,7 @@ pub enum AnalyzeError {
 
 #[derive(Debug, Clone)]
 pub struct TypeEnv {
-    definitions: HashMap<String, Checked<Type>>,
+    definitions: HashMap<String, Type>,
 }
 
 impl TypeEnv {
@@ -99,19 +78,19 @@ impl TypeEnv {
         }
     }
 
-    pub fn bind(&mut self, name: impl ToString, ty: Checked<Type>) {
+    pub fn bind(&mut self, name: impl ToString, ty: Type) {
         self.definitions.insert(name.to_string(), ty);
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Option<&Checked<Type>> {
+    pub fn get(&self, name: impl AsRef<str>) -> Option<&Type> {
         self.definitions.get(name.as_ref())
     }
 
-    pub fn get_mut(&mut self, name: impl AsRef<str>) -> Option<&mut Checked<Type>> {
+    pub fn get_mut(&mut self, name: impl AsRef<str>) -> Option<&mut Type> {
         self.definitions.get_mut(name.as_ref())
     }
 
-    pub fn extend(&mut self, declarations: Vec<(&String, Checked<Type>)>) {
+    pub fn extend(&mut self, declarations: Vec<(&String, Type)>) {
         for (ident, ty) in declarations {
             // TODO: lol we have to rename one of these
             self.definitions.insert(ident.to_string(), ty);
@@ -125,14 +104,14 @@ impl Analyzer {
     pub fn collect_declarations<'a>(
         nodes: &'a [Node],
         env: &mut TypeEnv,
-    ) -> Result<Vec<(&'a Ident, Checked<Type>)>> {
+    ) -> Result<Vec<(&'a Ident, Type)>> {
         Ok(nodes
             .iter()
             .filter_map(|node| match node {
                 Node::Stmnt(Stmnt::Let(binding)) => Some((
                     &binding.name,
                     match binding.ty {
-                        Some(ref ty) => Checked::Known(ty.into()),
+                        Some(ref ty) => ty.into(),
                         // TODO: check binding type
                         None => Self::check_expr(binding.val.as_ref().unwrap(), env).unwrap(),
                     },
@@ -144,24 +123,24 @@ impl Analyzer {
                         args.push(ty.into());
                     }
 
-                    let ty = Checked::Known(Type::Fn {
+                    let ty = Type::Fn {
                         args,
                         is_extern: binding.is_extern,
                         returns: Box::new((&binding.return_ty).into()),
-                    });
+                    };
 
                     Some((&binding.name, ty))
                 }
 
                 Node::Stmnt(Stmnt::StructDef(def)) => {
-                    let ty = Checked::Known(Type::Struct {
+                    let ty = Type::Struct {
                         ident: def.ident.clone(),
                         fields: def
                             .fields
                             .iter()
                             .map(|(ident, ty)| (ident.clone(), ty.into()))
                             .collect(),
-                    });
+                    };
 
                     Some((&def.ident, ty))
                 }
@@ -171,22 +150,22 @@ impl Analyzer {
             .collect())
     }
 
-    pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Checked<Type>> {
+    pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
             Node::Expr(expr) => Self::check_expr(expr, env),
             Node::Stmnt(stmnt) => Self::check_stmnt(stmnt, env),
         }
     }
 
-    pub fn check_expr(expr: &Expr, env: &mut TypeEnv) -> Result<Checked<Type>> {
+    pub fn check_expr(expr: &Expr, env: &mut TypeEnv) -> Result<Type> {
         match expr {
-            Expr::IntLit(_) => Ok(Checked::Known(Type::Int)),
+            Expr::IntLit(_) => Ok(Type::Int),
 
             Expr::Block(block) => {
                 todo!("check block expressions")
             }
 
-            Expr::StringLit(_) => Ok(Checked::Known(Type::Str)),
+            Expr::StringLit(_) => Ok(Type::Str),
 
             Expr::Prefix(prefix_expr) => {
                 todo!();
@@ -226,8 +205,7 @@ impl Analyzer {
                 .ok_or_else(|| AnalyzeError::UndefinedVariable { name: name.clone() }.into()),
 
             Expr::Call(call_expr) => match Self::check_expr(&call_expr.func, env)? {
-                Checked::Unknown => Ok(Checked::Unknown),
-                Checked::Known(Type::Fn { returns, .. }) => Ok(Checked::Known(*returns)),
+                Type::Fn { returns, .. } => Ok(*returns),
                 _ => todo!(),
             },
 
@@ -247,15 +225,15 @@ impl Analyzer {
         }
     }
 
-    pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Checked<Type>> {
+    pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             Stmnt::Let(binding) => {
                 let value_ty = Analyzer::check_expr(binding.val.as_ref().unwrap(), env)?;
                 dbg!(&value_ty);
 
                 match env.get_mut(&binding.name) {
-                    Some(checked) if checked.is_unknown() => {
-                        *checked = value_ty;
+                    Some(ty) if !ty.is_concrete() => {
+                        *ty = value_ty;
                     }
 
                     Some(known) => {
@@ -272,7 +250,7 @@ impl Analyzer {
                 }
 
                 let Some(ref expr) = binding.val else {
-                    return Ok(Checked::Unknown);
+                    return Ok(Type::Var(binding.name.clone()));
                 };
                 // TODO: use type instead of inferring and then check it
 
@@ -293,14 +271,14 @@ impl Analyzer {
                     returns: Box::new((&binding.return_ty).into()),
                 };
 
-                Ok(Checked::Known(ty))
+                Ok(ty)
             }
 
-            Stmnt::StructDef(_) => Ok(Checked::Unknown),
+            Stmnt::StructDef(_) => todo!(),
 
-            Stmnt::Ret(_) => Ok(Checked::Unknown), // TODO:
+            Stmnt::Ret(_) => todo!(),
 
-            Stmnt::Use(_) => Ok(Checked::Unknown),
+            Stmnt::Use(_) => todo!(),
         }
     }
 }

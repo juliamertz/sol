@@ -13,19 +13,13 @@ end
 
 ```ron
 [
-  Stmnt(StructDef((
-    ident: "Point",
-    fields: [
-      (
-        ident: "x",
-        ty: Int,
-      ),
-      (
-        ident: "y",
-        ty: Int,
-      ),
-    ],
-  ))),
+    Stmnt(StructDef((
+        ident: "Point",
+        fields: [
+            ("x", Int),
+            ("y", Int),
+        ],
+    ))),
 ]
 ```
 
@@ -50,14 +44,8 @@ let point = Point{
         val: Some(StructConstructor((
             ident: "Point",
             fields: [
-                (
-                    ident: "x",
-                    expr: IntLit(10),
-                ),
-                (
-                    ident: "y",
-                    expr: IntLit(20),
-                ),
+                ("x", IntLit(10)),
+                ("y", IntLit(20)),
             ],
         ))),
     ))),

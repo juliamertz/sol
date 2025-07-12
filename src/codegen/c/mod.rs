@@ -1,5 +1,5 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, Analyzer, Checked, TypeEnv};
+use crate::analyzer::{self, Analyzer, TypeEnv};
 use crate::ast::{self, Block, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
 use crate::codegen::{Compiler, Emitter};
 
@@ -75,9 +75,9 @@ impl C {
         };
         let declaration = env.get(name);
 
-        if let Some(Checked::Known(analyzer::Type::Fn {
+        if let Some(analyzer::Type::Fn {
             is_extern: true, ..
-        })) = declaration
+        }) = declaration
         {
             buf.push_str(name);
         } else {
@@ -114,6 +114,7 @@ impl C {
             analyzer::Type::Bool => "bool",
             analyzer::Type::List(_) => "List",
             analyzer::Type::Struct { ref ident, .. } => ident,
+            analyzer::Type::Var(ref name) => name,
             analyzer::Type::Ptr(_ty) => todo!(),
             analyzer::Type::Fn { .. } => todo!(),
         }
@@ -179,7 +180,7 @@ impl C {
     }
 
     fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeEnv, stmnt: &Stmnt) {
-        let checked = Analyzer::check_stmnt(stmnt, env).unwrap();
+        let ty = Analyzer::check_stmnt(stmnt, env).unwrap();
 
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
@@ -193,11 +194,6 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                let ty: analyzer::Type = match checked {
-                    Checked::Known(ty) => ty,
-                    Checked::Unknown => todo!("implement type checking for {binding:?}"),
-                };
-
                 buf.push_str(self.emit_type(env, ty.clone()).as_str());
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.name));
