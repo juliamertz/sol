@@ -77,7 +77,11 @@ fn main() -> Result<()> {
     let opts = Cli::parse();
 
     match opts.command {
-        Command::Build { filepath, skip_codegen, opts } => {
+        Command::Build {
+            filepath,
+            skip_codegen,
+            opts,
+        } => {
             let bin_path = build(&filepath, &opts)?;
             let metadata = std::fs::metadata(&bin_path).into_diagnostic()?;
             println!("{} bytes written to {bin_path:?}", metadata.size());

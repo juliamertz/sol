@@ -1,4 +1,4 @@
-use miette::{Diagnostic, Result, SourceSpan};
+use miette::{Diagnostic, Result};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -21,7 +21,7 @@ pub enum Type {
         fields: Vec<(Ident, Type)>,
     },
     // TODO: include sourcespan so we can have nicer debug messages
-    Var(Ident)
+    Var(Ident),
 }
 
 impl Type {
@@ -30,7 +30,7 @@ impl Type {
     }
 
     fn is_concrete(&self) -> bool {
-       !matches!(self, Self::Var(_))
+        !matches!(self, Self::Var(_))
     }
 }
 
@@ -57,10 +57,7 @@ impl From<&ast::Type> for Type {
 #[derive(Error, Diagnostic, Debug)]
 pub enum AnalyzeError {
     #[error("Type mismatch between {lhs:?} and {rhs:?}")]
-    TypeMismatch {
-        lhs: Type,
-        rhs: Type,
-    },
+    TypeMismatch { lhs: Type, rhs: Type },
 
     #[error("No such variable: '{name}'")]
     UndefinedVariable { name: String },

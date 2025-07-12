@@ -84,7 +84,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
                 actual.clone()
             } else {
-                ron::from_str(&expected).unwrap()
+                ron::from_str(expected).unwrap()
             };
 
             tests.push(Test {

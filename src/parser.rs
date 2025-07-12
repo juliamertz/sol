@@ -60,7 +60,7 @@ pub enum Prec {
     Product, // *
     AndOr,
     Prefix, // -a, !a or &a
-    Call, // func()
+    Call,   // func()
     // Index, // list[0]
     Chain, // mod.field
 }

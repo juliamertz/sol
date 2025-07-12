@@ -20,11 +20,11 @@ impl<'a> Node<'a> {
         match self {
             Node::Title { level, text } => {
                 let hashes = "#".repeat(*level as usize);
-                format!("{} {}", hashes, text)
+                format!("{hashes} {text}")
             }
             Node::CodeBlock { kind, content } => {
                 let lang = kind.as_ref().map(|k| k.as_ref()).unwrap_or("");
-                format!("```{}\n{}\n```", lang, content)
+                format!("```{lang}\n{content}\n```")
             }
             Node::Text(text) => text.to_string(),
         }

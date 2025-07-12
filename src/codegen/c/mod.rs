@@ -1,6 +1,6 @@
 use crate::BuildOpts;
 use crate::analyzer::{self, Analyzer, TypeEnv};
-use crate::ast::{self, Block, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
+use crate::ast::{Block, CallExpr, Expr, Fn, InfixExpr, Node, Op, Stmnt};
 use crate::codegen::{Compiler, Emitter};
 
 use std::fs;
