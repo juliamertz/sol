@@ -203,7 +203,6 @@ impl Parser {
     }
 
     fn ty(&mut self) -> Result<Type> {
-        let curr = self.curr.clone();
         let ident = self.ident()?;
         let ty = match ident.as_str() {
             "Int" => Type::Int,
@@ -215,12 +214,7 @@ impl Parser {
                 self.consume(TokenKind::RAngle)?;
                 Type::List(Box::new(inner))
             }
-            _ => {
-                return Err(ErrorKind::InvalidType {
-                    token: curr.clone(),
-                }
-                .into_error(self));
-            }
+            _ => Type::Var(ident),
         };
         Ok(ty)
     }
@@ -445,8 +439,6 @@ impl Parser {
             if self.curr.kind.is_terminator() {
                 break;
             }
-
-            dbg!(&lhs);
 
             match self.curr.kind {
                 kind if kind.is_operator() => {

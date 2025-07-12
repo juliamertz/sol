@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
-const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/newlang/src/codegen/c/include";
+const CORE_INCLUDE_PATH: &str = "/Users/julia/projects/2025/sol/src/codegen/c/include";
 const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
 
 #[derive(Default)]
@@ -19,19 +19,17 @@ pub struct C {}
 impl Emitter for C {
     type Input = Vec<Node>;
 
-    fn emit(&mut self, ast: &Self::Input) -> String {
+    fn emit(&mut self, ast: &Self::Input, env: &mut TypeEnv) -> String {
         let mut buf = String::new();
-        let mut env = TypeEnv::new();
 
-        let declarations = Analyzer::collect_declarations(ast, &mut env).unwrap();
-        env.extend(declarations);
+        Analyzer::collect_declarations(ast, env).unwrap();
 
         for file in CORE_INCLUDES {
             buf.push_str(&format!("#include \"{CORE_INCLUDE_PATH}/{file}\"\n"));
         }
 
         for node in ast {
-            self.emit_node(&mut buf, &mut env, node);
+            self.emit_node(&mut buf, env, node);
         }
 
         buf
@@ -123,10 +121,7 @@ impl C {
 
     fn emit_block(&mut self, buf: &mut String, env: &mut TypeEnv, block: &Block) {
         let env = &mut env.clone();
-        let declarations = Analyzer::collect_declarations(&block.nodes, env).unwrap();
-        dbg!(&declarations);
-
-        env.extend(declarations);
+         Analyzer::collect_declarations(&block.nodes, env).unwrap();
 
         for node in &block.nodes {
             self.emit_node(buf, env, node);

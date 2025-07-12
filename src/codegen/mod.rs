@@ -1,14 +1,14 @@
 mod c;
 pub use c::C;
 
-use crate::BuildOpts;
+use crate::{analyzer::TypeEnv, BuildOpts};
 use miette::Result;
 use std::path::PathBuf;
 
 pub trait Emitter {
     type Input;
 
-    fn emit(&mut self, ast: &Self::Input) -> String;
+    fn emit(&mut self, ast: &Self::Input, env: &mut TypeEnv) -> String;
 }
 
 pub trait Compiler {

@@ -34,8 +34,6 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
         let mut tests = vec![];
         while let Some(node) = nodes.next() {
-            dbg!(&nodes, nodes.len());
-
             let md::Node::Title {
                 level: 1,
                 text: name,

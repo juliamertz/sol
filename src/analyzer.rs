@@ -44,12 +44,12 @@ impl From<&ast::Type> for Type {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
                 Self::list(unboxed)
             }
-            ast::Type::Struct { ident, fields } => todo!(),
             ast::Type::Fn {
                 args,
                 returns,
                 is_extern,
             } => todo!(),
+            ast::Type::Var(name) => Self::Var(name.clone())
         }
     }
 }
@@ -98,13 +98,9 @@ impl TypeEnv {
 pub struct Analyzer;
 
 impl Analyzer {
-    pub fn collect_declarations<'a>(
-        nodes: &'a [Node],
-        env: &mut TypeEnv,
-    ) -> Result<Vec<(&'a Ident, Type)>> {
-        Ok(nodes
-            .iter()
-            .filter_map(|node| match node {
+    pub fn collect_declarations<'a>(nodes: &'a [Node], env: &mut TypeEnv) -> Result<()> {
+        for node in nodes {
+            let def = match node {
                 Node::Stmnt(Stmnt::Let(binding)) => Some((
                     &binding.name,
                     match binding.ty {
@@ -143,8 +139,15 @@ impl Analyzer {
                 }
 
                 _ => None,
-            })
-            .collect())
+            };
+
+            let Some((name, ty)) = def else {
+                continue;
+            };
+
+            env.bind(name, ty);
+        }
+        Ok(())
     }
 
     pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Type> {
@@ -226,7 +229,6 @@ impl Analyzer {
         match stmnt {
             Stmnt::Let(binding) => {
                 let value_ty = Analyzer::check_expr(binding.val.as_ref().unwrap(), env)?;
-                dbg!(&value_ty);
 
                 match env.get_mut(&binding.name) {
                     Some(ty) if !ty.is_concrete() => {
@@ -271,11 +273,48 @@ impl Analyzer {
                 Ok(ty)
             }
 
-            Stmnt::StructDef(_) => todo!(),
+            Stmnt::StructDef(def) => Ok(Type::Struct {
+                ident: def.ident.clone(),
+                fields: def
+                    .fields
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.into()))
+                    .collect(),
+            }),
 
             Stmnt::Ret(_) => todo!(),
 
             Stmnt::Use(_) => todo!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::codegen::Emitter;
+
+    use super::TypeEnv;
+
+    #[test]
+    fn struct_def() {
+        let src = r#"
+            struct Point =
+                x : Int,
+                y : Int,
+            end
+
+            let my_point = Point{
+                x : 100,
+                y : 250,
+            }
+        "#;
+
+        let mut parser = crate::parser::Parser::new(src);
+        let ast = parser.parse().unwrap();
+
+        let mut generator = crate::codegen::C::default();
+        let mut env = TypeEnv::new();
+        let out = generator.emit(&ast, &mut env);
+        panic!("{:?}", env);
     }
 }

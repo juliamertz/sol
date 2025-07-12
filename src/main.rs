@@ -11,6 +11,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process;
 
+use analyzer::TypeEnv;
 use clap::Parser;
 use codegen::{Compiler, Emitter};
 use miette::{IntoDiagnostic, Result};
@@ -69,7 +70,8 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     };
 
     let mut emitter = codegen::C::default();
-    let out = emitter.emit(&nodes);
+    let mut env = TypeEnv::new();
+    let out = emitter.emit(&nodes, &mut env);
     emitter.build_exe(&out, "test", opts)
 }
 
