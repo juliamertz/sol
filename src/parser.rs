@@ -334,7 +334,7 @@ impl Parser {
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
-                self.consume(TokenKind::Semicolon)?;
+                // self.consume(TokenKind::Semicolon)?;
                 Stmnt::Ret(Ret { val: expr })
             }
             _ => panic!("TODO: {}", self.curr.kind),
@@ -461,8 +461,11 @@ impl Parser {
     }
 
     fn expr_list(&mut self) -> Result<Vec<Expr>> {
-        let head = self.expr(Prec::Lowest)?;
+        if self.curr.kind == TokenKind::RBracket {
+            return Ok(vec![]);
+        }
 
+        let head = self.expr(Prec::Lowest)?;
         let mut tail = vec![];
         tail.push(head);
 

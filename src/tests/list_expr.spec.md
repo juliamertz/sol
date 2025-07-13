@@ -35,3 +35,22 @@
     Expr(List((items: [ ])))
 ]
 ```
+
+# Push
+
+## Source
+
+```newlang
+[];;
+list_push(items, 20);
+```
+
+## Expected (AST)
+
+```ron
+[
+    Expr(List((
+        items: [],
+    ))),
+]
+```

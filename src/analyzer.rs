@@ -99,17 +99,29 @@ impl TypeEnv {
 pub struct Analyzer;
 
 impl Analyzer {
-    pub fn collect_declarations(nodes: &[Node], env: &mut TypeEnv) -> Result<()> {
+    /// put new declarations in the typeenv env
+    /// and return a list of items that should be pre-defined such as lists or strings
+    pub fn collect_declarations(nodes: &[Node], env: &mut TypeEnv) -> Result<Vec<(String, Type)>> {
+        // There must be a cleaner way to do this.
+        // TODO: cleanup
+        let mut predefine = vec![];
+
         for node in nodes {
             let def = match node {
-                Node::Stmnt(Stmnt::Let(binding)) => Some((
-                    &binding.name,
-                    match binding.ty {
+                Node::Stmnt(Stmnt::Let(binding)) => {
+                    let ty = match binding.ty {
                         Some(ref ty) => ty.into(),
                         // TODO: check binding type
                         None => Self::check_expr(binding.val.as_ref().unwrap(), env).unwrap(),
-                    },
-                )),
+                    };
+
+                    // TODO: this is a bit ugly
+                    if matches!(ty, Type::List(_)) {
+                        predefine.push((binding.name.clone(), ty.clone()))
+                    }
+
+                    Some((&binding.name, ty))
+                }
 
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
@@ -148,7 +160,7 @@ impl Analyzer {
 
             env.bind(name, ty);
         }
-        Ok(())
+        Ok(predefine)
     }
 
     pub fn _check_node(node: &Node, env: &mut TypeEnv) -> Result<Type> {

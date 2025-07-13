@@ -1,7 +1,7 @@
 mod c;
 pub use c::C;
 
-use crate::{analyzer::TypeEnv, BuildOpts};
+use crate::{BuildOpts, analyzer::TypeEnv};
 use miette::Result;
 use std::path::PathBuf;
 
