@@ -10,9 +10,6 @@ use std::path::PathBuf;
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
-const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/sol/src/codegen/c/include";
-const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
-
 #[derive(Default)]
 pub struct C {}
 
@@ -24,9 +21,8 @@ impl Emitter for C {
 
         Analyzer::collect_declarations(ast, env).unwrap();
 
-        for file in CORE_INCLUDES {
-            buf.push_str(&format!("#include \"{CORE_INCLUDE_PATH}/{file}\"\n"));
-        }
+        buf.push_str(include_str!("include/gc.h"));
+        buf.push_str(include_str!("include/list.h"));
 
         for node in ast {
             self.emit_node(&mut buf, env, node);
@@ -39,9 +35,7 @@ impl Emitter for C {
 impl C {
     // namespace prefix to be used for all identifiers
     fn prefix(&self, ident: &str) -> String {
-        // TODO: make sure where set up for isolation from other c code
-        format!("__newlang_{ident}")
-        // ident.to_string()
+        format!("__{prefix}_{ident}", prefix = env!("CARGO_PKG_NAME"))
     }
 
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
