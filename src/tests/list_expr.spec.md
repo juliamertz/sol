@@ -19,3 +19,19 @@
     ])))
 ]
 ```
+
+# Empty List expression
+
+## Source
+
+```newlang
+[];
+```
+
+## Expected (AST)
+
+```ron
+[
+    Expr(List((items: [ ])))
+]
+```

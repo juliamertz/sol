@@ -208,14 +208,15 @@ impl Parser {
             "Int" => Type::Int,
             "Bool" => Type::Bool,
             "Str" => Type::Str,
-            "List" => {
-                self.consume(TokenKind::LAngle)?;
-                let inner = self.ty()?;
-                self.consume(TokenKind::RAngle)?;
-                Type::List((Box::new(inner), None))
-            }
             _ => Type::Var(ident),
         };
+
+        if self.curr.kind == TokenKind::LBracket {
+            self.consume(TokenKind::LBracket)?;
+            self.consume(TokenKind::RBracket)?;
+            return Ok(Type::List((Box::new(ty), None)));
+        }
+
         Ok(ty)
     }
 
@@ -440,6 +441,8 @@ impl Parser {
                 break;
             }
 
+            dbg!(&self.curr, &self.next);
+
             match self.curr.kind {
                 kind if kind.is_operator() => {
                     lhs = self.infix_expr(lhs)?;
@@ -450,7 +453,7 @@ impl Parser {
                 TokenKind::LSquirly => {
                     lhs = self.struct_constructor(lhs)?;
                 }
-                _ => todo!("kind: {}", self.curr.kind),
+                _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),
             }
         }
 

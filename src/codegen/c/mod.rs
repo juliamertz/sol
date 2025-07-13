@@ -11,7 +11,9 @@ use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
 #[derive(Default)]
-pub struct C {}
+pub struct C {
+    push_front: Vec<Node>,
+}
 
 impl Emitter for C {
     type Input = Vec<Node>;

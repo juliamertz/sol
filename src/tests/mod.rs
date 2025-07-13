@@ -36,5 +36,6 @@ mod parser {
         list_expr,
         return_stmnt
         fn_stmnt,
+        list,
     ];
 }

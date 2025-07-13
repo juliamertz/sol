@@ -197,7 +197,7 @@ impl Analyzer {
                     }
                 }
 
-                Ok(expected_ty)
+                Ok(Type::list(expected_ty, None))
             }
 
             Expr::Ident(name) => env
@@ -237,6 +237,7 @@ impl Analyzer {
                     }
 
                     Some(known) => {
+                        // FIX: incorrect
                         if *known != value_ty {
                             return Err(AnalyzeError::TypeMismatch {
                                 lhs: known.clone(),
@@ -314,6 +315,6 @@ mod tests {
         let mut generator = crate::codegen::C::default();
         let mut env = TypeEnv::new();
         let out = generator.emit(&ast, &mut env);
-        panic!("{:?}", env);
+        // panic!("{:?}", env);
     }
 }
