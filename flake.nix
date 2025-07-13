@@ -50,21 +50,20 @@
         devShells.default = pkgs.mkShell {
           packages =
             self.packages.${system}.default.buildInputs
-            # ++ (with rust-bin; [
-            #   (minimal.override {
-            #     extensions = [
-            #       "clippy"
-            #       "rust-src"
-            #     ];
-            #   })
-            #
-            #   rustfmt
-            #   rust-analyzer
-            # ])
+            ++ (with rust-bin; [
+              (minimal.override {
+                extensions = [
+                  "clippy"
+                  "rust-src"
+                ];
+              })
+
+              rustfmt
+              rust-analyzer
+            ])
             ++ (with pkgs; [
               gcc
               clang-tools
-              rustup
             ]);
         };
       }

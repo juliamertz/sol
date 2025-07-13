@@ -6,6 +6,7 @@ use crate::ast::{self, Expr, Ident, Node, Stmnt};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    Any, // TODO: We should remove this, but for now we can use it as a crutch
     Int,
     Bool,
     Str,
@@ -42,14 +43,14 @@ impl From<&ast::Type> for Type {
             ast::Type::Str => Self::Str,
             ast::Type::List((ty, size)) => {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
-                Self::list(unboxed, size.clone())
+                Self::list(unboxed, *size)
             }
             ast::Type::Fn {
                 args,
                 returns,
                 is_extern,
             } => todo!(),
-            ast::Type::Var(name) => Self::Var(name.clone())
+            ast::Type::Var(name) => Self::Var(name.clone()),
         }
     }
 }
@@ -282,9 +283,7 @@ impl Analyzer {
                     .collect(),
             }),
 
-            Stmnt::Ret(_) => todo!(),
-
-            Stmnt::Use(_) => todo!(),
+            Stmnt::Use(_) | Stmnt::Ret(_) => Ok(Type::Any),
         }
     }
 }

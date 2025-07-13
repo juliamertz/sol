@@ -14,4 +14,4 @@ func main() -> Int
   printf("x: %d", point.x);
 end
 
--- vim:ft=newlang
+-- vim:ft=sol
