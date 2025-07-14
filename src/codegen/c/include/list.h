@@ -81,3 +81,9 @@ void list_extend(List *self, void *items, size_t len) {
         __auto_type temp = x; \
         list_push(list, &temp); \
     } while (0)
+
+#define list_get_deref(list, type, i) \
+    ({ \
+        type *temp = list_get(&list, i); \
+        *temp; \
+    })

@@ -212,33 +212,13 @@ impl C {
 
             Expr::Index(expr) => {
                 let ty = Analyzer::check_expr(&Expr::Index(expr.clone()), env).unwrap();
-                buf.push_str("({");
-                buf.push_str(&self.emit_type(env, ty));
-                buf.push(' ');
-                buf.push_str(&format!("*temp = list_get(&"));
+                buf.push_str("list_get_deref(");
                 self.emit_expr(buf, env, &expr.val);
                 buf.push(',');
+                buf.push_str(&self.emit_type(env, ty));
+                buf.push(',');
                 self.emit_expr(buf, env, &expr.idx);
-                buf.push_str(");");
-                buf.push_str("*temp;");
-                buf.push_str("})");
-
-                // self.emit_expr(
-                //     buf,
-                //     env,
-                //     &Expr::Call(CallExpr {
-                //         func: Box::new(Expr::RawIdent("list_get".into())),
-                //         args: vec![
-                //             Expr::GetAddr(Box::new(*expr.val.clone())),
-                //             *expr.idx.clone()
-                //         ],
-                //     }),
-                // );
-
-                // self.emit_expr(buf, env, &expr.val);
-                // buf.push('[');
-                // self.emit_expr(buf, env, &expr.idx);
-                // buf.push(']');
+                buf.push(')');
             }
         };
     }
