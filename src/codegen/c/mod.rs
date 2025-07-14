@@ -282,6 +282,9 @@ impl C {
                 buf.push_str(&strct.ident);
                 buf.push(';');
             }
+            Stmnt::Impl(_) => {
+                todo!()
+            }
         }
     }
 

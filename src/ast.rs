@@ -40,7 +40,8 @@ ast_impl! {
         Ret(Ret),
         Use(Use),
         Let(Let),
-        StructDef(StructDef)
+        StructDef(StructDef),
+        Impl(Impl),
     }
 
     pub enum Op {
@@ -125,6 +126,11 @@ ast_impl! {
     pub struct StructDef {
         pub ident: Ident,
         pub fields: Vec<(Ident, Type)>,
+    }
+
+    pub struct Impl {
+        pub ident: Ident,
+        pub body: Block,
     }
 
     pub struct StructConstructor {

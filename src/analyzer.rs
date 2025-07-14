@@ -305,7 +305,7 @@ impl Analyzer {
                     .collect(),
             }),
 
-            Stmnt::Use(_) | Stmnt::Ret(_) => Ok(Type::Any),
+            Stmnt::Use(_) | Stmnt::Ret(_) | Stmnt::Impl(_) => Ok(Type::Any),
         }
     }
 }
