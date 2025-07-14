@@ -4,7 +4,7 @@
 
 ```newlang
 func main() -> Int
-  return 0;
+  return 0
 end
 ```
 
@@ -13,14 +13,17 @@ end
 ```ron
 [
     Stmnt(Fn((
-    name: "main",
-    is_extern: false,
-    args: [],
-    return_ty: Int,
-    body: Some(
-        Block(
-            nodes: [Stmnt(Ret((val: IntLit(0))))],
+        is_extern: false,
+        name: "main",
+        args: [],
+        return_ty: Int,
+        body: Some((
+            nodes: [
+                Stmnt(Ret((
+                    val: IntLit(0),
+                ))),
+            ],
         )),
-    )))
+    ))),
 ]
 ```

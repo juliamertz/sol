@@ -4,8 +4,8 @@
 
 ```newlang
 struct Point =
-    x : Int,
-    y : Int,
+    x : Int
+    y : Int
 end
 ```
 
@@ -29,7 +29,7 @@ end
 
 ```newlang
 let point = Point{
-    x : 10,
+    x : 10
     y : 20
 };
 ```

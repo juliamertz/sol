@@ -7,6 +7,7 @@ use miette::SourceSpan;
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
 pub enum TokenKind {
     Eof,
+    Newline,
 
     // Literals
     Int,
@@ -182,7 +183,7 @@ impl Lexer {
 
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.curr() {
-            if ch.is_ascii_whitespace() {
+            if ch.is_ascii_whitespace() && ch != '\n' {
                 self.advance();
             } else {
                 break;
@@ -261,6 +262,7 @@ impl Lexer {
             ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
             '.' => Token::new(TokenKind::Dot, ".", self.pos),
             ',' => Token::new(TokenKind::Comma, ",", self.pos),
+            '\n' => Token::new(TokenKind::Newline, "\n", self.pos),
             ch if ch.is_ascii_digit() => {
                 let start = self.pos;
                 let text = self.read_while(|ch| ch.is_ascii_digit());

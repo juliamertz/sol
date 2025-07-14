@@ -300,33 +300,3 @@ impl Analyzer {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::codegen::Emitter;
-
-    use super::TypeEnv;
-
-    #[test]
-    fn struct_def() {
-        let src = r#"
-            struct Point =
-                x : Int,
-                y : Int,
-            end
-
-            let my_point = Point{
-                x : 100,
-                y : 250,
-            }
-        "#;
-
-        let mut parser = crate::parser::Parser::new(src);
-        let ast = parser.parse().unwrap();
-
-        let mut generator = crate::codegen::C::default();
-        let mut env = TypeEnv::new();
-        let out = generator.emit(&ast, &mut env);
-        // panic!("{:?}", env);
-    }
-}

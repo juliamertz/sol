@@ -131,6 +131,7 @@ impl Parser {
                 break;
             }
 
+            self.skip_whitespace();
             match self.node() {
                 Ok(node) => nodes.push(node),
                 Err(err) => {
@@ -143,16 +144,24 @@ impl Parser {
     }
 
     fn advance(&mut self) -> Option<Token> {
-        // TODO: whole lot of cloning going on
         let curr = self.next.clone();
-
         if let Some(next) = self.next.clone() {
             self.curr = next;
         }
-        // self.curr = self.next.clone();
+
         self.next = self.lex.read_token();
         self.tokens.push(self.next.clone()?);
         curr
+    }
+
+    fn accept(&mut self, expected: TokenKind) -> Option<Token> {
+        if self.curr.kind == expected {
+            let tok = self.curr.clone();
+            self.advance();
+            Some(tok)
+        } else {
+            None
+        }
     }
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token> {
@@ -163,6 +172,12 @@ impl Parser {
         let tok = self.curr.clone();
         self.advance();
         Ok(tok)
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.curr.kind == TokenKind::Newline {
+            self.advance();
+        }
     }
 
     pub fn node(&mut self) -> Result<Node> {
@@ -180,7 +195,7 @@ impl Parser {
             Node::Expr(self.expr(Prec::default())?)
         };
 
-        let _ = self.consume(TokenKind::Semicolon);
+        self.skip_whitespace();
 
         Ok(node)
     }
@@ -241,6 +256,7 @@ impl Parser {
 
         self.consume(TokenKind::Arrow)?;
         let return_ty = self.ty()?;
+        self.skip_whitespace();
 
         let body = if self.curr.kind.is_terminator() {
             None
@@ -289,13 +305,8 @@ impl Parser {
         let mut args = vec![];
 
         loop {
-            if self.curr.kind == TokenKind::Comma {
-                self.advance();
-            }
-
-            if self.curr.kind == TokenKind::Comma {
-                self.advance();
-            } else if self.curr.kind.is_terminator() {
+            self.skip_whitespace();
+            if self.curr.kind.is_terminator() {
                 break;
             }
 
@@ -309,15 +320,13 @@ impl Parser {
         let mut args = vec![];
 
         loop {
-            if self.curr.kind == TokenKind::Comma {
-                self.advance();
-            }
-
-            if self.curr.kind == TokenKind::Comma {
-                self.advance();
-            } else if self.curr.kind.is_terminator() {
+            dbg!(self.curr.kind);
+            self.skip_whitespace();
+            dbg!(self.curr.kind);
+            if self.curr.kind.is_terminator() {
                 break;
             }
+            dbg!(self.curr.kind);
 
             args.push(self.arg_value()?);
         }
@@ -334,11 +343,9 @@ impl Parser {
             TokenKind::Ret => {
                 self.advance();
                 let expr = self.expr(Prec::default())?;
-                // self.consume(TokenKind::Semicolon)?;
                 Stmnt::Ret(Ret { val: expr })
             }
             _ => panic!("TODO: {}", self.curr.kind),
-            // _ => unreachable!(),
         };
 
         Ok(stmnt)
@@ -367,9 +374,12 @@ impl Parser {
         self.consume(TokenKind::If)?;
         let condition = self.expr(Prec::Lowest)?;
         self.consume(TokenKind::Then)?;
+        self.accept(TokenKind::Newline);
+
         let consequence = self.block()?;
         let alternative = if self.curr.kind == TokenKind::Else {
             self.advance();
+            self.skip_whitespace();
             Some(self.block()?)
         } else {
             None
@@ -453,6 +463,7 @@ impl Parser {
                 TokenKind::LSquirly => {
                     lhs = self.struct_constructor(lhs)?;
                 }
+                TokenKind::Newline => return Ok(lhs),
                 _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),
             }
         }
@@ -492,6 +503,7 @@ impl Parser {
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
+        self.skip_whitespace();
         let fields = self.arg_types()?;
         self.consume(TokenKind::End)?;
         Ok(StructDef { ident, fields })
