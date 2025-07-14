@@ -234,7 +234,16 @@ impl Analyzer {
                 Ok(ty.clone())
             }
 
-            Expr::If(_) => unimplemented!(),
+            Expr::GetAddr(inner) => Ok(Type::Ptr(Box::new(Self::check_expr(inner, env)?))),
+
+            Expr::Index(expr) => {
+                let Type::List((inner_ty, _size)) = Self::check_expr(&expr.val, env)? else {
+                    todo!("index val not a list");
+                };
+                Ok(*inner_ty)
+            }
+
+            Expr::If(_) | Expr::RawIdent(_) => unimplemented!(),
         }
     }
 

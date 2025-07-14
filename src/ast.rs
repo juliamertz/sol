@@ -18,15 +18,21 @@ ast_impl! {
 
     pub enum Expr {
         Ident(Ident),
+        /// TODO: remove rawident, used for rawdogging c identifiers
+        RawIdent(Ident),
         IntLit(i64),
         StringLit(String),
         Block(Block),
         Infix(InfixExpr),
         Prefix(PrefixExpr),
         Call(CallExpr),
+        Index(IndexExpr),
         If(If),
         List(List),
         StructConstructor(StructConstructor),
+        // Should this be an expression?
+        // also i should think of a better name
+        GetAddr(Box<Expr>),
     }
 
     pub enum Stmnt {
@@ -97,6 +103,11 @@ ast_impl! {
     pub struct CallExpr {
         pub func: Box<Expr>,
         pub args: Vec<Expr>,
+    }
+
+    pub struct IndexExpr {
+        pub val: Box<Expr>,
+        pub idx: Box<Expr>,
     }
 
     pub struct Fn {

@@ -428,6 +428,17 @@ impl Parser {
         }))
     }
 
+    fn index_expr(&mut self, val: Expr) -> Result<Expr> {
+        self.consume(TokenKind::LBracket)?;
+        let idx = self.expr(Prec::default())?;
+        self.consume(TokenKind::RBracket)?;
+
+        Ok(Expr::Index(IndexExpr {
+            val: val.into(),
+            idx: idx.into(),
+        }))
+    }
+
     pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let text = self.curr.text.clone();
         let mut lhs = match self.curr.kind {
@@ -460,6 +471,9 @@ impl Parser {
                 }
                 TokenKind::LSquirly => {
                     lhs = self.struct_constructor(lhs)?;
+                }
+                TokenKind::LBracket => {
+                    lhs = self.index_expr(lhs)?;
                 }
                 TokenKind::Newline => return Ok(lhs),
                 _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),

@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 if n < 0 then
   return 0
 end
@@ -30,7 +30,7 @@ end
 
 ## Source
 
-```newlang
+```sol
 if n < 0 then
   return 0
 else

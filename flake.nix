@@ -41,7 +41,7 @@
               allowBuiltinFetchGit = true;
             };
 
-            meta.mainProgram = "newlang";
+            meta.mainProgram = "sol";
           };
 
           tree-sitter-grammar = pkgs.callPackage ./tree-sitter {};

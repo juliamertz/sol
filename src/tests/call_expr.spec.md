@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 fibonacci(n - 10)
 ```
 

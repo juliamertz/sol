@@ -24,5 +24,5 @@ in
   tree-sitter.buildGrammar {
     src = sourceDir;
     version = "0.1.0";
-    language = "newlang";
+    language = "sol";
   }

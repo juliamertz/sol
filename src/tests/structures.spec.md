@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 struct Point =
     x : Int
     y : Int
@@ -27,7 +27,7 @@ end
 
 ## Source
 
-```newlang
+```sol
 let point = Point{
     x : 10
     y : 20

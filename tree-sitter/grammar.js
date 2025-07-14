@@ -1,5 +1,5 @@
 module.exports = grammar({
-	name: "newlang",
+	name: "sol",
 	extras: ($) => [/\s/, $.comment],
 	rules: {
 		source_file: ($) => repeat($._statement),

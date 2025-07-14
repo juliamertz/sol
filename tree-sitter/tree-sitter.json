@@ -2,28 +2,28 @@
   "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
-      "name": "newlang",
-      "camelcase": "Newlang",
-      "title": "Newlang",
-      "scope": "source.newlang",
+      "name": "sol",
+      "camelcase": "sol",
+      "title": "sol",
+      "scope": "source.sol",
       "file-types": [
-        "newlang"
+        "sol"
       ],
-      "injection-regex": "^newlang$",
-      "class-name": "TreeSitterNewlang"
+      "injection-regex": "^sol$",
+      "class-name": "TreeSittersol"
     }
   ],
   "metadata": {
     "version": "0.1.0",
     "license": "MIT",
-    "description": "Newlang grammar for tree-sitter",
+    "description": "sol grammar for tree-sitter",
     "authors": [
       {
         "name": "Julia Mertz"
       }
     ],
     "links": {
-      "repository": "https://github.com/tree-sitter/tree-sitter-newlang"
+      "repository": "https://github.com/tree-sitter/tree-sitter-sol"
     }
   },
   "bindings": {
@@ -36,4 +36,3 @@
     "zig": false
   }
 }
-

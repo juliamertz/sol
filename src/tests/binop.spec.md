@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 10 + 40
 ```
 
@@ -22,7 +22,7 @@
 
 ## Source
 
-```newlang
+```sol
 200 - 100
 ```
 
@@ -42,7 +42,7 @@
 
 ## Source
 
-```newlang
+```sol
 200 * 100
 ```
 
@@ -62,7 +62,7 @@
 
 ## Source
 
-```newlang
+```sol
 200 == 100
 ```
 
@@ -82,7 +82,7 @@
 
 ## Source
 
-```newlang
+```sol
 200 and 100
 ```
 

@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 func main() -> Int
   return 0
 end

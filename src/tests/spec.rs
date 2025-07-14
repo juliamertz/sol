@@ -51,7 +51,7 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             );
 
             let Some(md::Node::CodeBlock {
-                kind: Some(Cow::Borrowed("newlang")),
+                kind: Some(Cow::Borrowed("sol")),
                 content: source_code,
             }) = nodes.next()
             else {

@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 return 0;
 ```
 

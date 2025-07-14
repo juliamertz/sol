@@ -2,7 +2,7 @@
 
 ## Source
 
-```newlang
+```sol
 [10, 20, 30, fourty, 50];
 ```
 
@@ -24,7 +24,7 @@
 
 ## Source
 
-```newlang
+```sol
 [];
 ```
 
@@ -40,7 +40,7 @@
 
 ## Source
 
-```newlang
+```sol
 [];;
 list_push(items, 20);
 ```
