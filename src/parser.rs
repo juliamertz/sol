@@ -154,6 +154,13 @@ impl Parser {
         curr
     }
 
+    fn expect(&mut self, expected: TokenKind) -> Result<Token> {
+        if self.curr.kind != expected {
+            return Err(ErrorKind::Expected(expected).into_error(self));
+        }
+        Ok(self.curr.clone())
+    }
+
     fn accept(&mut self, expected: TokenKind) -> Option<Token> {
         if self.curr.kind == expected {
             let tok = self.curr.clone();
@@ -165,11 +172,7 @@ impl Parser {
     }
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token> {
-        if self.curr.kind != expected {
-            return Err(ErrorKind::Expected(expected).into_error(self));
-        }
-
-        let tok = self.curr.clone();
+        let tok = self.expect(expected)?;
         self.advance();
         Ok(tok)
     }
@@ -258,7 +261,7 @@ impl Parser {
         let return_ty = self.ty()?;
         self.skip_whitespace();
 
-        let body = if self.curr.kind.is_terminator() {
+        let body = if is_extern || self.curr.kind.is_terminator() {
             None
         } else {
             let mut nodes = vec![];
@@ -320,13 +323,10 @@ impl Parser {
         let mut args = vec![];
 
         loop {
-            dbg!(self.curr.kind);
             self.skip_whitespace();
-            dbg!(self.curr.kind);
             if self.curr.kind.is_terminator() {
                 break;
             }
-            dbg!(self.curr.kind);
 
             args.push(self.arg_value()?);
         }
@@ -451,8 +451,6 @@ impl Parser {
                 break;
             }
 
-            dbg!(&self.curr, &self.next);
-
             match self.curr.kind {
                 kind if kind.is_operator() => {
                     lhs = self.infix_expr(lhs)?;
@@ -495,14 +493,14 @@ impl Parser {
     fn list(&mut self) -> Result<List> {
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;
-        self.consume(TokenKind::RBracket)?;
+        self.expect(TokenKind::RBracket)?;
         Ok(List { items })
     }
 
     fn struct_def(&mut self) -> Result<StructDef> {
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
-        self.consume(TokenKind::Assign)?;
+        self.expect(TokenKind::Assign)?;
         self.skip_whitespace();
         let fields = self.arg_types()?;
         self.consume(TokenKind::End)?;

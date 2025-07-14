@@ -11,11 +11,15 @@ use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
 #[derive(Default)]
+struct InsertMarker {
+    pos: Option<usize>,
+    emit: String,
+}
+
+#[derive(Default)]
 pub struct C {
-    /// Buffer length before node was emitted
-    node_start: usize,
-    /// Nodes that should be emitted before the current node.
-    push_before_node: Vec<Node>,
+    node_marker: InsertMarker,
+    block_marker: InsertMarker,
 }
 
 impl Emitter for C {
@@ -95,7 +99,8 @@ impl C {
     }
 
     fn emit_node(&mut self, buf: &mut String, env: &mut TypeEnv, node: &Node) {
-        self.node_start = buf.len() - 1;
+        self.node_marker.pos = Some(buf.len() - 1);
+
         match node {
             Node::Expr(expr) => {
                 self.emit_expr(buf, env, expr);
@@ -104,12 +109,8 @@ impl C {
             Node::Stmnt(stmnt) => self.emit_stmnt(buf, env, stmnt),
         }
 
-        if !self.push_before_node.is_empty() {
-            for node in self.push_before_node.clone().iter() {
-                let mut node_buf = String::new();
-                self.emit_node(&mut node_buf, env, node);
-                buf.insert_str(self.node_start, &node_buf);
-            }
+        if let Some(pos) = self.node_marker.pos {
+            buf.insert_str(pos, &self.node_marker.emit);
         }
     }
 
@@ -130,7 +131,6 @@ impl C {
     fn emit_block(&mut self, buf: &mut String, env: &mut TypeEnv, block: &Block) {
         let env = &mut env.clone();
         let pre_define = Analyzer::collect_declarations(&block.nodes, env).unwrap();
-        dbg!(&pre_define);
 
         for (ident, ty) in pre_define.into_iter() {
             if let analyzer::Type::List((inner, _size)) = ty {
