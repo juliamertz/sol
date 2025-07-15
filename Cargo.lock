@@ -233,6 +233,7 @@ dependencies = [
  "cfg-if",
  "miette-derive",
  "owo-colors",
+ "serde",
  "supports-color",
  "supports-hyperlinks",
  "supports-unicode",
@@ -413,9 +414,19 @@ dependencies = [
  "miette",
  "ron",
  "serde",
+ "solc-macros",
  "tempdir",
  "thiserror",
  "wyhash2",
+]
+
+[[package]]
+name = "solc-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

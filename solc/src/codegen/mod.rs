@@ -1,10 +1,7 @@
-mod js;
-pub use js::Js;
-mod c2;
-pub use c2::C;
+mod c;
+pub use c::C;
 
 use crate::BuildOpts;
-use crate::hir::TypeEnv;
 
 use miette::Result;
 use std::path::PathBuf;

@@ -1,6 +1,6 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, Analyzer, TypeEnv};
-use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, Node, Op, PrefixExpr, Stmnt};
+use crate::analyzer::{self, Analyzer, TypeInfo};
+use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, Node, NodeId, Op, PrefixExpr, Stmnt};
 // use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
 use crate::codegen::{Compiler, Emitter};
 
@@ -43,13 +43,11 @@ impl Default for C {
 impl Emitter for C {
     type Input = Vec<Node>;
 
-    fn emit(&mut self, ast: &Self::Input, env: &mut TypeEnv) -> String {
+    fn emit(&mut self, ast: &Self::Input) -> String {
         let mut buf = String::new();
+        let mut env = TypeInfo::new();
 
-        Analyzer::collect_declarations(ast, env).unwrap();
-
-        // buf.push_str(include_str!("include/gc.h"));
-        // buf.push_str(include_str!("include/list.h"));
+        Analyzer::collect_declarations(ast, &mut env).unwrap();
 
         let includes = [("gh.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
 
@@ -60,7 +58,7 @@ impl Emitter for C {
         }
 
         for node in ast {
-            self.emit_node(&mut buf, env, node);
+            self.emit_node(&mut buf, &mut env, node);
         }
 
         buf
@@ -89,19 +87,19 @@ impl C {
         buf.push_str(text);
     }
 
-    fn emit_binop_expr(&mut self, buf: &mut String, env: &mut TypeEnv, binop: &BinOp) {
+    fn emit_binop_expr(&mut self, buf: &mut String, env: &mut TypeInfo, binop: &BinOp) {
         self.emit_expr(buf, env, binop.lhs.as_ref());
         self.emit_op(buf, &binop.op);
         self.emit_expr(buf, env, binop.rhs.as_ref());
     }
 
-    fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeEnv, call_expr: &CallExpr) {
+    fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeInfo, call_expr: &CallExpr) {
         let name = match call_expr.func.as_ref() {
             Expr::Ident(ident) => ident,
             Expr::RawIdent(ident) => ident,
             _ => todo!("{call_expr:?}"),
         };
-        let declaration = env.get(name);
+        let declaration = env.get_def(name);
 
         if let Some(analyzer::Type::Fn {
             is_extern: true, ..
@@ -125,7 +123,7 @@ impl C {
         buf.push(')');
     }
 
-    fn emit_node(&mut self, buf: &mut String, env: &mut TypeEnv, node: &Node) {
+    fn emit_node(&mut self, buf: &mut String, env: &mut TypeInfo, node: &Node) {
         self.node_marker.pos = Some(buf.len());
 
         match node {
@@ -142,7 +140,7 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &mut TypeEnv, ty: impl Into<analyzer::Type>) -> String {
+    fn emit_type(&mut self, _env: &mut TypeInfo, ty: impl Into<analyzer::Type>) -> String {
         match ty.into() {
             analyzer::Type::Int => "int",
             analyzer::Type::Str => "char *",
@@ -156,7 +154,7 @@ impl C {
         .into()
     }
 
-    fn emit_block(&mut self, buf: &mut String, env: &mut TypeEnv, block: &Block) {
+    fn emit_block(&mut self, buf: &mut String, env: &mut TypeInfo, block: &Block) {
         let env = &mut env.clone();
         let pre_define = Analyzer::collect_declarations(&block.nodes, env).unwrap();
 
@@ -179,7 +177,7 @@ impl C {
         }
     }
 
-    fn emit_expr(&mut self, buf: &mut String, env: &mut TypeEnv, expr: &Expr) {
+    fn emit_expr(&mut self, buf: &mut String, env: &mut TypeInfo, expr: &Expr) {
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
             Expr::RawIdent(ident) => buf.push_str(ident),
@@ -222,7 +220,38 @@ impl C {
 
             Expr::Block(block) => self.emit_block(buf, env, block),
 
-            Expr::List(_) => unreachable!(),
+            Expr::List(list) => {
+                let ty = Analyzer::check_expr(expr, env).unwrap();
+                let tmp_name = "inner"; // TODO: implement some system to avoid naming conflicts
+                buf.push_str("({");
+                buf.push_str("List");
+                buf.push(' ');
+                buf.push_str(tmp_name);
+                buf.push('=');
+                buf.push_str("list_alloc");
+
+                for item in list.items.clone() {
+                    self.emit_expr(
+                        buf,
+                        env,
+                        &Expr::Call(CallExpr {
+                            id: NodeId::DUMMY,
+                            func: Box::new(Expr::RawIdent("list_push_rval".into())),
+                            params: vec![
+                                Expr::Ref(Box::new(Expr::Ident(tmp_name.to_string()))),
+                                item,
+                            ],
+                        }),
+                    );
+                    self.node_marker.emit.push_str(&buf);
+                    self.node_marker.emit.push(';');
+                }
+
+                buf.push_str(tmp_name);
+                buf.push(';');
+
+                buf.push_str("})");
+            }
 
             Expr::Ref(inner) => {
                 buf.push('&');
@@ -242,7 +271,7 @@ impl C {
         };
     }
 
-    fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeEnv, stmnt: &Stmnt) {
+    fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeInfo, stmnt: &Stmnt) {
         let ty = Analyzer::check_stmnt(stmnt, env).unwrap();
 
         match stmnt {
@@ -265,14 +294,14 @@ impl C {
                             &mut buf,
                             env,
                             &Expr::Call(CallExpr {
+                                id: NodeId::DUMMY, // TODO:
                                 func: Box::new(Expr::RawIdent("list_push_rval".into())),
                                 params: vec![
-                                    Expr::Ref(Box::new(Expr::Ident(binding.name.clone()))),
+                                    Expr::Ref(Box::new(Expr::Ident(binding.ident.clone()))),
                                     item,
                                 ],
                             }),
                         );
-                        // Box::new(Expr::RawIdent("list_push_rval".into()))
                         self.node_marker.emit.push_str(&buf);
                         self.node_marker.emit.push(';');
                     }
@@ -282,7 +311,7 @@ impl C {
 
                 buf.push_str(self.emit_type(env, ty.clone()).as_str());
                 buf.push(' ');
-                buf.push_str(&self.prefix(&binding.name));
+                buf.push_str(&self.prefix(&binding.ident));
                 buf.push('=');
                 self.emit_expr(buf, env, &binding.val);
                 buf.push(';');
@@ -307,7 +336,7 @@ impl C {
         }
     }
 
-    fn emit_fn(&mut self, buf: &mut String, env: &mut TypeEnv, func: &Fn) {
+    fn emit_fn(&mut self, buf: &mut String, env: &mut TypeInfo, func: &Fn) {
         if func.is_extern {
             return;
         }

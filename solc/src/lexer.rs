@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fmt::Display};
 
 use lazy_static::lazy_static;
-use miette::SourceSpan;
+
+pub type Span = miette::SourceSpan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
@@ -132,7 +133,7 @@ lazy_static! {
 pub struct Token {
     pub kind: TokenKind,
     pub text: String,
-    pub span: SourceSpan,
+    pub span: Span,
 }
 
 impl Display for TokenKind {
@@ -150,13 +151,17 @@ impl Token {
             span: (pos, text.len()).into(),
         }
     }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
 }
 
 #[derive(Debug)]
 pub struct Lexer {
     pub content: String,
     pub pos: usize,
-    pub eof: bool, // TODO: i don't like this hack
+    pub eof: bool,
 }
 
 impl Lexer {
@@ -247,6 +252,7 @@ impl Lexer {
                     Token::new(TokenKind::Sub, "-", self.pos)
                 }
             }
+            '!' => Token::new(TokenKind::Bang, "!", self.pos),
             '*' => Token::new(TokenKind::Asterisk, "*", self.pos),
             '/' => Token::new(TokenKind::Slash, "/", self.pos),
             '&' => Token::new(TokenKind::Ampersand, "&", self.pos),

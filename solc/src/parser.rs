@@ -29,7 +29,7 @@ impl ErrorKind {
 
         ParseError {
             kind: self,
-            bad_bit: span,
+            span,
             src: NamedSource::new("mysource", parser.lex.content.clone()),
         }
         .into()
@@ -44,7 +44,7 @@ pub struct ParseError {
     src: NamedSource<String>,
 
     #[label("This bit here 💩")]
-    bad_bit: SourceSpan,
+    span: SourceSpan,
 
     #[diagnostic(transparent)]
     kind: ErrorKind,
@@ -62,7 +62,7 @@ pub enum Prec {
     Prefix,  // -a, !a or &a
     Call,    // func()
     // Index, // list[0]
-    Chain,   // mod.field
+    Chain, // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -75,37 +75,59 @@ impl From<&Token> for Prec {
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
             TokenKind::Dot => Self::Chain,
-            TokenKind::Bang | TokenKind::Sub | TokenKind::Ampersand => Self::Prefix,
+            TokenKind::Bang | TokenKind::Ampersand => Self::Prefix,
             _ => Self::Lowest,
         }
     }
 }
 
-impl TryFrom<Token> for Op {
-    type Error = ErrorKind;
-
-    fn try_from(token: Token) -> std::result::Result<Self, Self::Error> {
-        match token.kind {
-            TokenKind::Add => Ok(Self::Add),
-            TokenKind::Sub => Ok(Self::Sub),
-            TokenKind::Eq => Ok(Self::Eq),
-            TokenKind::Asterisk => Ok(Self::Mul),
-            TokenKind::Slash => Ok(Self::Div),
-            TokenKind::LAngle => Ok(Self::Lt),
-            TokenKind::RAngle => Ok(Self::Gt),
-            TokenKind::And => Ok(Self::And),
-            TokenKind::Or => Ok(Self::Or),
-            TokenKind::Dot => Ok(Self::Chain),
-            _ => Err(ErrorKind::InvalidOperator { token }),
-        }
+impl Op {
+    fn try_from_token(token: Token, id: NodeId) -> Result<Op> {
+        let span = token.span;
+        let kind = match token.kind {
+            TokenKind::Add => OpKind::Add,
+            TokenKind::Sub => OpKind::Sub,
+            TokenKind::Eq => OpKind::Eq,
+            TokenKind::Asterisk => OpKind::Mul,
+            TokenKind::Slash => OpKind::Div,
+            TokenKind::LAngle => OpKind::Lt,
+            TokenKind::RAngle => OpKind::Gt,
+            TokenKind::And => OpKind::And,
+            TokenKind::Or => OpKind::Or,
+            TokenKind::Dot => OpKind::Chain,
+            _ => return Err(ErrorKind::InvalidOperator { token }.into()),
+        };
+        Ok(Op { id, span, kind })
     }
 }
 
+#[derive(Default)]
+struct Context {
+    id: u32,
+}
+
+impl Context {
+    fn next_id(&mut self) -> NodeId {
+        let id = self.id;
+        self.id += 1;
+        NodeId::new(id)
+    }
+}
+
+/// Take beginning of the first span and the end of the second span
+/// and return a new span covering this whole range
+fn enclosing_span(a: Span, b: Span) -> Span {
+    let offset = a.offset();
+    let len = b.offset() - a.offset() + b.len();
+    Span::from((offset, len))
+}
+
 pub struct Parser {
-    lex: Lexer,
+    pub lex: Lexer,
+    pub ctx: Context,
     pub tokens: Vec<Token>,
-    curr: Token,
-    next: Option<Token>,
+    pub curr: Token,
+    pub next: Option<Token>,
 }
 
 impl Parser {
@@ -115,8 +137,10 @@ impl Parser {
             .read_token()
             .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos));
         let next = lex.read_token();
+        let ctx = Context::default();
         Self {
             lex,
+            ctx,
             curr,
             next,
             tokens: vec![],
@@ -177,6 +201,10 @@ impl Parser {
         Ok(tok)
     }
 
+    fn at(&mut self, kind: TokenKind) -> bool {
+        self.curr.kind == kind
+    }
+
     fn skip_whitespace(&mut self) {
         while self.curr.kind == TokenKind::Newline {
             self.advance();
@@ -204,6 +232,7 @@ impl Parser {
     }
 
     fn block(&mut self) -> Result<Block> {
+        let span = self.curr.span;
         let mut nodes = vec![];
         loop {
             if self.curr.kind.is_terminator() {
@@ -212,33 +241,51 @@ impl Parser {
             nodes.push(self.node()?);
         }
 
-        Ok(Block { nodes })
+        let span = enclosing_span(span, self.curr.span);
+        let id = self.ctx.next_id();
+        Ok(Block { nodes, id, span })
     }
 
     fn ident(&mut self) -> Result<Ident> {
         let token = self.consume(TokenKind::Ident)?;
-        Ok(token.text.clone())
+        let id = self.ctx.next_id();
+        Ok(Ident {
+            id,
+            span: token.span,
+            inner: token.text,
+        })
     }
 
-    fn ty(&mut self) -> Result<TypeExpr> {
+    fn ty(&mut self) -> Result<Ty> {
+        let span = self.curr.span;
         let ident = self.ident()?;
-        let ty = match ident.as_str() {
-            "Int" => TypeExpr::Int,
-            "Bool" => TypeExpr::Bool,
-            "Str" => TypeExpr::Str,
-            _ => TypeExpr::Var(ident),
+        let kind = match ident.as_str() {
+            "Int" => TyKind::Int,
+            "Bool" => TyKind::Bool,
+            "Str" => TyKind::Str,
+            _ => TyKind::Var(ident),
         };
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, self.curr.span);
+        let mut ty = Ty { kind, id, span };
 
-        if self.curr.kind == TokenKind::LBracket {
+        if self.at(TokenKind::LBracket) {
             self.consume(TokenKind::LBracket)?;
             self.consume(TokenKind::RBracket)?;
-            return Ok(TypeExpr::List((Box::new(ty), None)));
+            let kind = TyKind::List {
+                inner: Box::new(ty),
+                size: None,
+            };
+            let id = self.ctx.next_id();
+            let span = enclosing_span(span, self.curr.span);
+            ty = Ty { kind, id, span }
         }
 
         Ok(ty)
     }
 
     fn r#fn(&mut self) -> Result<Fn> {
+        let span = self.curr.span;
         let is_extern = self.curr.kind == TokenKind::Extern;
         if is_extern {
             self.advance();
@@ -251,9 +298,12 @@ impl Parser {
             .map_err(|_| miette!("expected ident, got: {:?}", self.curr))?;
 
         self.consume(TokenKind::LParen)?;
-        let mut args = vec![];
+        let mut params = vec![];
         while self.curr.kind != TokenKind::RParen {
-            args.push(self.typed_param()?);
+            params.push(self.typed_param()?);
+            if self.curr.kind == TokenKind::Comma {
+                self.advance();
+            }
         }
         self.consume(TokenKind::RParen)?;
 
@@ -264,6 +314,7 @@ impl Parser {
         let body = if is_extern || self.curr.kind.is_terminator() {
             None
         } else {
+            let span = self.curr.span;
             let mut nodes = vec![];
             while self.curr.kind != TokenKind::End {
                 nodes.push(self.node()?);
@@ -271,26 +322,34 @@ impl Parser {
 
             self.consume(TokenKind::End)?;
 
-            Some(Block { nodes })
+            let id = self.ctx.next_id();
+            let span = enclosing_span(span, self.curr.span);
+            Some(Block { nodes, id, span })
         };
 
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, self.curr.span);
         Ok(Fn {
             is_extern,
-            name: ident,
-            params: args,
+            ident,
+            params,
             return_ty,
             body,
+            id,
+            span,
         })
     }
 
     fn r#use(&mut self) -> Result<Use> {
+        let span = self.curr.span;
         self.consume(TokenKind::Use)?;
-        Ok(Use {
-            ident: self.ident()?,
-        })
+        let ident = self.ident()?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, ident.span);
+        Ok(Use { ident, id, span })
     }
 
-    fn typed_param(&mut self) -> Result<(Ident, TypeExpr)> {
+    fn typed_param(&mut self) -> Result<(Ident, Ty)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
@@ -304,11 +363,11 @@ impl Parser {
         if self.curr.kind == TokenKind::Comma {
             self.advance();
         }
-    
+
         Ok((ident, expr))
     }
 
-    fn typed_params(&mut self) -> Result<Vec<(Ident, TypeExpr)>> {
+    fn typed_params(&mut self) -> Result<Vec<(Ident, Ty)>> {
         let mut args = vec![];
 
         loop {
@@ -332,10 +391,6 @@ impl Parser {
                 break;
             }
 
-            if self.curr.kind == TokenKind::Colon {
-                self.advance();
-            }
-
             args.push(self.value_param()?);
         }
 
@@ -349,9 +404,12 @@ impl Parser {
             TokenKind::Let => Stmnt::Let(self.r#let()?),
             TokenKind::Struct => Stmnt::StructDef(self.struct_def()?),
             TokenKind::Ret => {
+                let span = self.curr.span;
                 self.advance();
-                let expr = self.expr(Prec::default())?;
-                Stmnt::Ret(Ret { val: expr })
+                let val = self.expr(Prec::default())?;
+                let id = self.ctx.next_id();
+                let span = enclosing_span(span, self.curr.span);
+                Stmnt::Ret(Ret { val, id, span })
             }
             _ => panic!("TODO: {}", self.curr.kind),
         };
@@ -360,6 +418,7 @@ impl Parser {
     }
 
     fn r#let(&mut self) -> Result<Let> {
+        let span = self.curr.span;
         self.consume(TokenKind::Let)?;
         let ident = self.ident()?;
 
@@ -371,15 +430,20 @@ impl Parser {
 
         self.consume(TokenKind::Assign)?;
         let val = self.expr(Prec::Lowest)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, self.curr.span);
 
         Ok(Let {
-            name: ident,
+            ident,
             ty,
             val,
+            id,
+            span,
         })
     }
 
     fn r#if(&mut self) -> Result<If> {
+        let span = self.curr.span;
         self.consume(TokenKind::If)?;
         let condition = self.expr(Prec::Lowest)?;
         self.consume(TokenKind::Then)?;
@@ -393,20 +457,29 @@ impl Parser {
         } else {
             None
         };
+        let id = self.ctx.next_id();
+        let tok = self.consume(TokenKind::End)?;
+        let span = enclosing_span(span, tok.span());
 
-        // TODO: end?
         Ok(If {
             condition: Box::new(condition),
             consequence,
             alternative,
+            id,
+            span,
         })
     }
 
     fn prefix_expr(&mut self, op: Op) -> Result<Expr> {
         let rhs = self.expr(Prec::default())?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(op.span, rhs.span());
+
         Ok(Expr::Prefix(PrefixExpr {
             op,
             rhs: Box::new(rhs),
+            id,
+            span,
         }))
     }
 
@@ -414,56 +487,87 @@ impl Parser {
         if !self.curr.kind.is_operator() {
             panic!("invalid operator");
         }
-        let op: Op = self.curr.to_owned().try_into()?;
+        let token = self.curr.to_owned();
+        let id = self.ctx.next_id();
+        let op = Op::try_from_token(token, id)?;
         let prec = Prec::from(&self.curr);
         self.advance();
 
-        let rhs = self.expr(prec)?; // TODO: prec
+        let rhs = self.expr(prec)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(lhs.span(), self.curr.span);
 
         Ok(Expr::BinOp(BinOp {
             lhs: Box::new(lhs),
             op,
             rhs: Box::new(rhs),
+            id,
+            span,
         }))
     }
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LParen)?;
         let args = self.expr_list()?;
-        self.consume(TokenKind::RParen)?;
+        let tok = self.consume(TokenKind::RParen)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(expr.span(), tok.span());
 
         Ok(Expr::Call(CallExpr {
             func: Box::new(expr),
             params: args,
+            id,
+            span,
         }))
     }
 
-    fn index_expr(&mut self, val: Expr) -> Result<Expr> {
+    fn index_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LBracket)?;
         let idx = self.expr(Prec::default())?;
-        self.consume(TokenKind::RBracket)?;
+        let tok = self.consume(TokenKind::RBracket)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(expr.span(), tok.span());
 
         Ok(Expr::Index(IndexExpr {
-            val: val.into(),
+            expr: expr.into(),
             idx: idx.into(),
+            id,
+            span,
         }))
+    }
+
+    fn int_lit(&mut self) -> Result<Literal> {
+        let text = &self.curr.text;
+        let span = self.curr.span;
+        let kind = text
+            .parse()
+            .map(LiteralKind::Int)
+            .expect("unable to parse integer");
+        self.advance();
+        let id = self.ctx.next_id();
+        Ok(Literal { id, span, kind })
+    }
+
+    fn str_lit(&mut self) -> Result<Literal> {
+        let text = self.curr.text.clone();
+        let span = self.curr.span;
+        let kind = LiteralKind::Str(text);
+        self.advance();
+        let id = self.ctx.next_id();
+        Ok(Literal { id, span, kind })
     }
 
     pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
-        let text = self.curr.text.clone();
         let mut lhs = match self.curr.kind {
-            TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
-            TokenKind::Ident => Expr::Ident(text),
-            TokenKind::String => Expr::StrLit(text),
+            TokenKind::Int => Expr::Literal(self.int_lit()?),
+            TokenKind::String => Expr::Literal(self.str_lit()?),
+            TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
-
             _ => panic!("{:?}", ErrorKind::Todo(self.curr.clone()).into_error(self)),
         };
 
-        self.advance();
-
-        if self.curr.kind == TokenKind::Eof {
+        if self.at(TokenKind::Eof) {
             return Ok(lhs);
         }
 
@@ -480,7 +584,12 @@ impl Parser {
                     lhs = self.call_expr(lhs)?;
                 }
                 TokenKind::LSquirly => {
-                    lhs = self.struct_constructor(lhs)?;
+                    match lhs {
+                        Expr::Ident(ident) => {
+                            lhs = self.struct_constructor(ident)?;
+                        }
+                        _ => todo!(),
+                    };
                 }
                 TokenKind::LBracket => {
                     lhs = self.index_expr(lhs)?;
@@ -515,32 +624,44 @@ impl Parser {
     }
 
     fn list(&mut self) -> Result<List> {
+        let span = self.curr.span;
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;
-        self.expect(TokenKind::RBracket)?;
-        Ok(List { items })
+        let tok = self.consume(TokenKind::RBracket)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, tok.span());
+        Ok(List { items, id, span })
     }
 
     fn struct_def(&mut self) -> Result<StructDef> {
+        let span = self.curr.span;
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
         self.skip_whitespace();
         let fields = self.typed_params()?;
-        self.consume(TokenKind::End)?;
-        Ok(StructDef { ident, fields })
+        let tok = self.consume(TokenKind::End)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(span, tok.span());
+        Ok(StructDef {
+            ident,
+            fields,
+            id,
+            span,
+        })
     }
 
-    fn struct_constructor(&mut self, lhs: Expr) -> Result<Expr> {
-        // TODO: helper function to make extracting ident from expr easier
-
-        let Expr::Ident(ident) = lhs else {
-            return Err(ErrorKind::Expected(TokenKind::Ident).into_error(self));
-        };
-
+    fn struct_constructor(&mut self, ident: Ident) -> Result<Expr> {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.value_params()?;
-        self.consume(TokenKind::RSquirly)?;
-        Ok(Expr::Constructor(Constructor { name: ident, fields }))
+        let tok = self.consume(TokenKind::RSquirly)?;
+        let id = self.ctx.next_id();
+        let span = enclosing_span(ident.span, tok.span());
+        Ok(Expr::Constructor(Constructor {
+            ident,
+            fields,
+            id,
+            span,
+        }))
     }
 }

@@ -1,35 +1,18 @@
+#include <stdint.h>
 #include <stdio.h>
-#include <stdbool.h>
+#include <unistd.h>
+
+#include </Users/julia/projects/2025/sol/src/codegen/c/include/gc.h>
+#include </Users/julia/projects/2025/sol/src/codegen/c/include/list.h>
 
 int main() {
-  // if else expressions in c
-  
-  // when if else is found to have a return type other than unit (equivalent to void):
-  int val = ({
-    int tmp;
-    if (true) {
-      // the last node should always be an expression when not returning unit!
-      // that way we can assign it to our tmp return variable
-      tmp = 20;
-    }
-    else {
-      tmp = 10;
-    }
-    tmp; 
+  List list = ({
+    List l=list_alloc(sizeof( uint8_t), 10);
+    uint8_t item = 25;
+    list_push(&l, &item);
+    l;
   });
-
-  printf("val: %d\n", val);
-
-  // when it solves to unit:
-  ({
-  if (true) {
-      printf("yes!\n");
-  }
-  else {
-      printf("no :(\n");
-  }
-  });
-
-
+  uint8_t first = *(uint8_t*)list_get(&list, 0);
+  printf("item: %d", first);
   return 0;
 }

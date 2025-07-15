@@ -1,16 +1,6 @@
-[package]
-name = "sol"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
+members = ["solc", "solc-macros"]
 
-[dependencies]
-clap = { version = "4.5.39", features = ["derive"] }
-lazy_static = "1.5.0"
-miette = { version = "7.6.0", features = ["fancy"] }
-tempdir = "0.3.7"
-thiserror = "2.0.12"
-wyhash2 = "0.2.1"
-
-[dev-dependencies]
-ron = "0.10.1"
-serde = { version = "1.0.219", features = ["derive"] }
+[workspace.dependencies]
+solc-macros = { path = "solc-macros" }
