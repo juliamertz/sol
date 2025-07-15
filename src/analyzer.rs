@@ -178,7 +178,7 @@ impl Analyzer {
                 todo!("check block expressions")
             }
 
-            Expr::StringLit(_) => Ok(Type::Str),
+            Expr::StrLit(_) => Ok(Type::Str),
 
             Expr::Prefix(prefix_expr) => {
                 todo!();
@@ -222,7 +222,7 @@ impl Analyzer {
                 _ => todo!(),
             },
 
-            Expr::StructConstructor(constructor) => {
+            Expr::Constructor(constructor) => {
                 // TODO: get type from type-env
                 // let a= Checked::Known(Type::Struct { ident: constructor.ident, fields: () })
 
@@ -234,7 +234,7 @@ impl Analyzer {
                 Ok(ty.clone())
             }
 
-            Expr::GetAddr(inner) => Ok(Type::Ptr(Box::new(Self::check_expr(inner, env)?))),
+            Expr::Ref(inner) => Ok(Type::Ptr(Box::new(Self::check_expr(inner, env)?))),
 
             Expr::Index(expr) => {
                 let Type::List((inner_ty, _size)) = Self::check_expr(&expr.val, env)? else {

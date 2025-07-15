@@ -1,6 +1,7 @@
 mod analyzer;
 mod ast;
 mod codegen;
+mod hir;
 mod lexer;
 mod parser;
 
@@ -76,6 +77,11 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
+    let mut builder = hir::HirBuilder::default();
+    let as_hir = builder.lower(ast::Node::Expr(ast::Expr::StrLit("Hello!".into())));
+    dbg!(&as_hir);
+    std::process::exit(0);
+
     let opts = Cli::parse();
 
     match opts.command {
@@ -88,6 +94,7 @@ fn main() -> Result<()> {
             let metadata = std::fs::metadata(&bin_path).into_diagnostic()?;
             println!("{} bytes written to {bin_path:?}", metadata.size());
         }
+
         Command::Run { filepath, opts } => {
             let bin_path = build(&filepath, &opts)?;
             let _out = process::Command::new(&bin_path)

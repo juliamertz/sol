@@ -444,7 +444,7 @@ impl Parser {
         let mut lhs = match self.curr.kind {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
-            TokenKind::String => Expr::StringLit(text),
+            TokenKind::String => Expr::StrLit(text),
             TokenKind::If => Expr::If(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
 
@@ -531,6 +531,6 @@ impl Parser {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.arg_values()?;
         self.consume(TokenKind::RSquirly)?;
-        Ok(Expr::StructConstructor(StructConstructor { ident, fields }))
+        Ok(Expr::Constructor(Constructor { ident, fields }))
     }
 }

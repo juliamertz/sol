@@ -21,7 +21,7 @@ ast_impl! {
         /// TODO: remove rawident, used for rawdogging c identifiers
         RawIdent(Ident),
         IntLit(i64),
-        StringLit(String),
+        StrLit(String),
         Block(Block),
         Infix(InfixExpr),
         Prefix(PrefixExpr),
@@ -29,10 +29,8 @@ ast_impl! {
         Index(IndexExpr),
         If(If),
         List(List),
-        StructConstructor(StructConstructor),
-        // Should this be an expression?
-        // also i should think of a better name
-        GetAddr(Box<Expr>),
+        Constructor(Constructor),
+        Ref(Box<Expr>),
     }
 
     pub enum Stmnt {
@@ -133,7 +131,7 @@ ast_impl! {
         pub body: Block,
     }
 
-    pub struct StructConstructor {
+    pub struct Constructor {
         pub ident: Ident,
         pub fields: Vec<(Ident, Expr)>,
     }

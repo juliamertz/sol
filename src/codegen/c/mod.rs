@@ -165,7 +165,7 @@ impl C {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
             Expr::RawIdent(ident) => buf.push_str(ident),
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
-            Expr::StringLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
+            Expr::StrLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
             Expr::Prefix(prefix_expr) => todo!("prefix expr"),
             Expr::Infix(infix_expr) => self.emit_infix_expr(buf, env, infix_expr),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
@@ -186,7 +186,7 @@ impl C {
                 }
             }
 
-            Expr::StructConstructor(constructor) => {
+            Expr::Constructor(constructor) => {
                 buf.push('(');
                 buf.push_str(&constructor.ident);
                 buf.push(')');
@@ -205,7 +205,7 @@ impl C {
 
             Expr::List(_) => unreachable!(),
 
-            Expr::GetAddr(inner) => {
+            Expr::Ref(inner) => {
                 buf.push('&');
                 self.emit_expr(buf, env, inner);
             }
@@ -248,7 +248,7 @@ impl C {
                             &Expr::Call(CallExpr {
                                 func: Box::new(Expr::RawIdent("list_push_rval".into())),
                                 args: vec![
-                                    Expr::GetAddr(Box::new(Expr::Ident(binding.name.clone()))),
+                                    Expr::Ref(Box::new(Expr::Ident(binding.name.clone()))),
                                     item,
                                 ],
                             }),
