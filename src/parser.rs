@@ -253,7 +253,7 @@ impl Parser {
         self.consume(TokenKind::LParen)?;
         let mut args = vec![];
         while self.curr.kind != TokenKind::RParen {
-            args.push(self.arg_type()?);
+            args.push(self.typed_param()?);
         }
         self.consume(TokenKind::RParen)?;
 
@@ -290,21 +290,25 @@ impl Parser {
         })
     }
 
-    fn arg_type(&mut self) -> Result<(Ident, TypeExpr)> {
+    fn typed_param(&mut self) -> Result<(Ident, TypeExpr)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
         Ok((ident, ty))
     }
 
-    fn arg_value(&mut self) -> Result<(Ident, Expr)> {
+    fn value_param(&mut self) -> Result<(Ident, Expr)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let expr = self.expr(Prec::Lowest)?;
+        if self.curr.kind == TokenKind::Comma {
+            self.advance();
+        }
+    
         Ok((ident, expr))
     }
 
-    fn arg_types(&mut self) -> Result<Vec<(Ident, TypeExpr)>> {
+    fn typed_params(&mut self) -> Result<Vec<(Ident, TypeExpr)>> {
         let mut args = vec![];
 
         loop {
@@ -313,13 +317,13 @@ impl Parser {
                 break;
             }
 
-            args.push(self.arg_type()?);
+            args.push(self.typed_param()?);
         }
 
         Ok(args)
     }
 
-    fn arg_values(&mut self) -> Result<Vec<(Ident, Expr)>> {
+    fn value_params(&mut self) -> Result<Vec<(Ident, Expr)>> {
         let mut args = vec![];
 
         loop {
@@ -328,7 +332,11 @@ impl Parser {
                 break;
             }
 
-            args.push(self.arg_value()?);
+            if self.curr.kind == TokenKind::Colon {
+                self.advance();
+            }
+
+            args.push(self.value_param()?);
         }
 
         Ok(args)
@@ -516,9 +524,9 @@ impl Parser {
     fn struct_def(&mut self) -> Result<StructDef> {
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
-        self.expect(TokenKind::Assign)?;
+        self.consume(TokenKind::Assign)?;
         self.skip_whitespace();
-        let fields = self.arg_types()?;
+        let fields = self.typed_params()?;
         self.consume(TokenKind::End)?;
         Ok(StructDef { ident, fields })
     }
@@ -531,11 +539,8 @@ impl Parser {
         };
 
         self.consume(TokenKind::LSquirly)?;
-        let fields = self.arg_values()?;
+        let fields = self.value_params()?;
         self.consume(TokenKind::RSquirly)?;
-        Ok(Expr::Constructor(Constructor {
-            name: ident,
-            fields,
-        }))
+        Ok(Expr::Constructor(Constructor { name: ident, fields }))
     }
 }

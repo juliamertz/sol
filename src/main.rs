@@ -60,9 +60,6 @@ enum Command {
     DumpAst {
         filepath: PathBuf,
     },
-    DumpHir {
-        filepath: PathBuf,
-    },
 }
 
 fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
@@ -121,18 +118,6 @@ fn main() -> Result<()> {
             let mut parser = parser::Parser::new(content);
             let ast = parser.parse()?;
             dbg!(ast);
-        }
-        Command::DumpHir { filepath } => {
-            let content = std::fs::read_to_string(filepath).unwrap();
-            let mut parser = parser::Parser::new(content);
-            let ast = parser.parse()?;
-
-            let mut builder = hir::HirBuilder::default();
-            let mut env = hir::TypeEnv::default();
-            for node in ast {
-                let as_hir = builder.lower_node(node, &mut env);
-                dbg!(&as_hir);
-            }
         }
     }
 

@@ -11,10 +11,16 @@ mod parser {
         ($($name:ident $(,)?)*) => {
             $(
                 #[test]
-                fn $name() {
+                fn $name() -> ::std::result::Result<(), Box<dyn ::std::error::Error>> {
                     let raw_spec = include_str!(concat!("./", stringify!($name), ".spec.md"));
                     let filepath = format!("./src/tests/{}.spec.md", stringify!($name));
-                    let spec: Spec<Vec<Node>> = raw_spec.into_spec(filepath);
+                    let spec: Spec<Vec<Node>> = match raw_spec.into_spec(&filepath) {
+                        Ok(spec) => spec,
+                        Err(err) => {
+                            println!("failed to parse {filepath}, error: {err:?}");
+                            return Err(err);
+                        }
+                    };
                     for test in spec.tests {
                         assert_eq!(
                             test.expected,
@@ -23,6 +29,7 @@ mod parser {
                             test.name
                         )
                     }
+                    Ok(())
                 }
             )*
         };

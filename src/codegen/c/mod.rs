@@ -1,6 +1,6 @@
 use crate::BuildOpts;
 use crate::analyzer::{self, Analyzer, TypeEnv};
-use crate::ast::{Block, CallExpr, Expr, Fn, BinOp, Node, Op, PrefixExpr, Stmnt};
+use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, Node, Op, PrefixExpr, Stmnt};
 // use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
 use crate::codegen::{Compiler, Emitter};
 
@@ -9,10 +9,14 @@ use std::hash::Hasher;
 use std::path::PathBuf;
 
 use miette::{IntoDiagnostic, Result};
+use tempdir::TempDir;
 use wyhash2::WyHash;
 
 const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/sol/src/codegen/c/include";
 const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
+
+const GC_HEADERS: &str = include_str!("include/gc.h");
+const LIST_HEADERS: &str = include_str!("include/list.h");
 
 #[derive(Default)]
 struct InsertMarker {
@@ -20,10 +24,20 @@ struct InsertMarker {
     emit: String,
 }
 
-#[derive(Default)]
 pub struct C {
     node_marker: InsertMarker,
     block_marker: InsertMarker,
+    tempdir: TempDir,
+}
+
+impl Default for C {
+    fn default() -> Self {
+        Self {
+            node_marker: Default::default(),
+            block_marker: Default::default(),
+            tempdir: TempDir::new("sol").unwrap(),
+        }
+    }
 }
 
 impl Emitter for C {
@@ -37,8 +51,12 @@ impl Emitter for C {
         // buf.push_str(include_str!("include/gc.h"));
         // buf.push_str(include_str!("include/list.h"));
 
-        for file in CORE_INCLUDES {
-            buf.push_str(&format!("#include \"{CORE_INCLUDE_PATH}/{file}\"\n"));
+        let includes = [("gh.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
+
+        for (filename, contents) in includes {
+            let path = self.tempdir.path().join(filename);
+            fs::write(&path, contents).unwrap();
+            buf.push_str(&format!("#include \"{}\"\n", path.to_str().unwrap()));
         }
 
         for node in ast {

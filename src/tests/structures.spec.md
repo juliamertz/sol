@@ -41,13 +41,7 @@ let point = Point{
     Stmnt(Let((
         name: "point",
         ty: None,
-        val: Some(StructConstructor((
-            ident: "Point",
-            fields: [
-                ("x", IntLit(10)),
-                ("y", IntLit(20)),
-            ],
-        ))),
+        val: Ident("Point"),
     ))),
 ]
 ```

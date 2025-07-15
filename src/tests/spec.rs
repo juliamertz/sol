@@ -17,17 +17,26 @@ pub struct Spec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
 }
 
 pub trait IntoSpec<'a, T: PartialEq + Eq + Deserialize<'a> + Serialize> {
-    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, T>;
+    fn into_spec(
+        &self,
+        source: impl AsRef<Path>,
+    ) -> Result<Spec<'a, T>, Box<dyn std::error::Error>>;
 }
 
 impl<'a> IntoSpec<'a, Vec<crate::lexer::TokenKind>> for &'a str {
-    fn into_spec(&self, _source: impl AsRef<Path>) -> Spec<'a, Vec<crate::lexer::TokenKind>> {
+    fn into_spec(
+        &self,
+        _source: impl AsRef<Path>,
+    ) -> Result<Spec<'a, Vec<crate::lexer::TokenKind>>, Box<dyn std::error::Error>> {
         todo!()
     }
 }
 
 impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
-    fn into_spec(&self, source: impl AsRef<Path>) -> Spec<'a, Vec<crate::ast::Node>> {
+    fn into_spec(
+        &self,
+        source: impl AsRef<Path>,
+    ) -> Result<Spec<'a, Vec<crate::ast::Node>>, Box<dyn std::error::Error>> {
         let mut document = md::parse(self);
         let mut nodes = document.nodes.iter_mut();
         let mut write_back = false;
@@ -59,7 +68,6 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
             };
 
             // skip expected  title
-            // TODO: check
             nodes.next();
 
             let Some(md::Node::CodeBlock {
@@ -72,17 +80,18 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
             let actual = {
                 let mut parser = crate::parser::Parser::new(&source_code);
-                vec![parser.node().unwrap()]
+                let node = parser.node()?;
+                vec![node]
             };
             let expected = if expected.is_empty() {
                 let ser =
-                    ron::ser::to_string_pretty(&actual, ron::ser::PrettyConfig::default()).unwrap();
+                    ron::ser::to_string_pretty(&actual, ron::ser::PrettyConfig::default())?;
                 *expected = Cow::Owned(ser);
                 write_back = true;
 
                 actual.clone()
             } else {
-                ron::from_str(expected).unwrap()
+                ron::from_str(expected)?
             };
 
             tests.push(Test {
@@ -94,13 +103,13 @@ impl<'a> IntoSpec<'a, Vec<crate::ast::Node>> for &'a str {
 
         if write_back {
             let rendered = document.to_markdown();
-            std::fs::write(source.as_ref(), rendered).unwrap();
+            std::fs::write(source.as_ref(), rendered)?;
         }
 
-        Spec {
+        Ok(Spec {
             _name: "TODO: spec title".into(),
             _source: self,
             tests,
-        }
+        })
     }
 }

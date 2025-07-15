@@ -7,6 +7,7 @@ edition = "2024"
 clap = { version = "4.5.39", features = ["derive"] }
 lazy_static = "1.5.0"
 miette = { version = "7.6.0", features = ["fancy"] }
+tempdir = "0.3.7"
 thiserror = "2.0.12"
 wyhash2 = "0.2.1"
 
