@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use miette::{Context, Diagnostic, IntoDiagnostic, Result, SourceSpan};
+use miette::{Context, Diagnostic, IntoDiagnostic, Result, SourceSpan, miette};
 use thiserror::Error;
 
 use crate::ast;
@@ -65,8 +65,8 @@ pub enum TypeError {
     #[error("Type mismatch between {0:?} and {1:?}")]
     TypeMismatch(Type, Type),
 
-    #[error("No such variable: '{name}'")]
-    UndefinedVariable { name: String },
+    #[error("No such variable: '{0}'")]
+    UndefinedVariable(String),
 }
 
 #[derive(Debug, Clone)]
@@ -83,10 +83,10 @@ type SymbolId = u32;
 
 #[derive(Debug, Clone)]
 struct Symbol {
+    id: SymbolId,
     kind: SymbolKind,
     name: String,
     ty: Type,
-    id: SymbolId,
 }
 
 type Level = u32;
@@ -179,6 +179,12 @@ pub enum Stmnt {
     },
 }
 
+#[derive(Debug, Default, Clone)]
+struct TypeEnv {
+    types: HashMap<String, SymbolId>,
+    variables: HashMap<String, SymbolId>,
+}
+
 #[derive(Default)]
 pub struct HirBuilder {
     symbols: Vec<Symbol>,
@@ -196,14 +202,19 @@ impl HirBuilder {
         unsafe { self.symbols.get_unchecked(id) }
     }
 
-    fn infer(&self, node: &ast::Node) -> Result<Type> {
+    // might be nice if we can just assert that a symbol must exist.
+    fn get_symbol(&self, id: SymbolId) -> Option<&Symbol> {
+        self.symbols.get(id as usize)
+    }
+
+    fn infer(&self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
-            ast::Node::Expr(expr) => self.infer_expr(expr),
-            ast::Node::Stmnt(stmnt) => self.infer_stmnt(stmnt),
+            ast::Node::Expr(expr) => self.infer_expr(expr, env),
+            ast::Node::Stmnt(stmnt) => self.infer_stmnt(stmnt, env),
         }
     }
 
-    fn infer_expr(&self, expr: &ast::Expr) -> Result<Type> {
+    fn infer_expr(&self, expr: &ast::Expr, env: &mut TypeEnv) -> Result<Type> {
         match expr {
             ast::Expr::IntLit(_) => Ok(Type::Int),
             ast::Expr::StrLit(_) => Ok(Type::Str),
@@ -217,10 +228,12 @@ impl HirBuilder {
             }
 
             ast::Expr::Infix(infix_expr) => {
-                let lhs = self.infer_expr(&infix_expr.lhs)?;
-                let rhs = self.infer_expr(&infix_expr.rhs)?;
+                let lhs = self.infer_expr(&infix_expr.lhs, env)?;
+                let rhs = self.infer_expr(&infix_expr.rhs, env)?;
                 if lhs != rhs {
-                    return Err(TypeError::TypeMismatch(lhs, rhs).into());
+                    return Err(TypeError::TypeMismatch(lhs, rhs))
+                        .into_diagnostic()
+                        .wrap_err("infix expression type mismatch");
                 }
                 Ok(lhs)
             }
@@ -229,11 +242,11 @@ impl HirBuilder {
                 let mut items = list.items.iter();
                 let expected_ty = items
                     .next()
-                    .map(|item| self.infer_expr(item))
+                    .map(|item| self.infer_expr(item, env))
                     .unwrap_or(Ok(Type::Any))?; // TODO: how do we handle inferring empty lists?
 
                 for item in items {
-                    let ty = self.infer_expr(item)?;
+                    let ty = self.infer_expr(item, env)?;
                     if ty != expected_ty {
                         return Err(TypeError::TypeMismatch(ty, expected_ty))
                             .into_diagnostic()
@@ -244,31 +257,31 @@ impl HirBuilder {
                 Ok(Type::list(expected_ty, None)) // TODO: fixed size lists
             }
 
-            // ast::Expr::Ident(name) => env
-            //     .get(name)
-            //     .cloned()
-            //     .ok_or_else(|| AnalyzeError::UndefinedVariable { name: name.clone() }.into()),
+            ast::Expr::Ident(name) => env
+                .variables
+                .get(name)
+                .map(|id| self.get_symbol(*id))
+                .flatten()
+                .ok_or(TypeError::UndefinedVariable(name.clone()).into())
+                .map(|sym| sym.ty.clone()),
 
-            ast::Expr::Call(call_expr) => match self.infer_expr(&call_expr.func)? {
+            ast::Expr::Constructor(constructor) => env
+                .types
+                .get(&constructor.ident)
+                .map(|id| self.get_symbol(*id))
+                .flatten()
+                .ok_or(TypeError::UndefinedVariable(constructor.ident.clone()).into())
+                .map(|sym| sym.ty.clone()),
+
+            ast::Expr::Call(call_expr) => match self.infer_expr(&call_expr.func, env)? {
                 Type::Fn { returns, .. } => Ok(*returns),
                 _ => todo!(),
             },
 
-            // ast::Expr::Constructor(constructor) => {
-            //     // TODO: get type from type-env
-            //     // let a= Checked::Known(Type::Struct { ident: constructor.ident, fields: () })
-
-            //     let Some(ty) = env.get(&constructor.ident) else {
-            //         todo!("nice error message when struct does not exist {constructor:?}")
-            //     };
-
-            //     // TODO: i don't like having to clone here
-            //     Ok(ty.clone())
-            // }
-            ast::Expr::Ref(inner) => Ok(Type::ptr(self.infer_expr(inner)?)),
+            ast::Expr::Ref(inner) => Ok(Type::ptr(self.infer_expr(inner, env)?)),
 
             ast::Expr::Index(expr) => {
-                let Type::List((inner_ty, _size)) = self.infer_expr(&expr.val)? else {
+                let Type::List((inner_ty, _size)) = self.infer_expr(&expr.val, env)? else {
                     todo!("index val not a list");
                 };
                 Ok(*inner_ty)
@@ -279,9 +292,62 @@ impl HirBuilder {
         }
     }
 
-    fn infer_stmnt(&self, stmnt: &ast::Stmnt) -> Result<Type> {
+    fn infer_stmnt(&self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
-            _ => todo!(),
+            ast::Stmnt::Let(binding) => {
+                let value_ty = self.infer_expr(binding.val.as_ref().unwrap())?;
+
+                match env.get_mut(&binding.name) {
+                    Some(ty) if !ty.is_concrete() => {
+                        *ty = value_ty;
+                    }
+
+                    Some(known) => {
+                        // FIX: incorrect
+                        if *known != value_ty {
+                            return Err(TypeError::TypeMismatch(known.clone(), value_ty).into());
+                        }
+                    }
+
+                    _ => todo!(),
+                }
+
+                let Some(ref expr) = binding.val else {
+                    return Ok(Type::Var(binding.name.clone()));
+                };
+                // TODO: use type instead of inferring and then check it
+
+                let ty = Self::check_expr(expr, env).unwrap();
+                env.bind(&binding.name, ty.clone());
+                Ok(ty)
+            }
+
+            ast::Stmnt::Fn(binding) => {
+                let mut args: Vec<Type> = vec![];
+                for (_, ty) in binding.args.iter() {
+                    args.push((ty).into());
+                }
+
+                let ty = Type::Fn {
+                    args,
+                    is_extern: binding.is_extern,
+                    returns: Box::new((&binding.return_ty).into()),
+                };
+
+                Ok(ty)
+            }
+
+            ast::Stmnt::StructDef(def) => Ok(Type::Struct {
+                ident: def.ident.clone(),
+                fields: def
+                    .fields
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.into()))
+                    .collect(),
+            }),
+
+            // Stmnt::Use(_) | Stmnt::Ret(_) | Stmnt::Impl(_) => Ok(Type::Any),
+            _ => Ok(Type::Any),
         }
     }
 
