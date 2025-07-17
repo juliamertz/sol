@@ -62,7 +62,7 @@ impl From<&ast::Type> for Type {
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TypeError {
-    #[error("Type mismatch between {0:?} and {1:?}")]
+    #[error("Type mismatch expected: {0:?}, got: {1:?}")]
     TypeMismatch(Type, Type),
 
     #[error("No such variable: '{0}'")]
@@ -248,7 +248,7 @@ impl HirBuilder {
                 for item in items {
                     let ty = self.infer_expr(item, env)?;
                     if ty != expected_ty {
-                        return Err(TypeError::TypeMismatch(ty, expected_ty))
+                        return Err(TypeError::TypeMismatch(expected_ty, ty))
                             .into_diagnostic()
                             .wrap_err("List type mismatch");
                     }
@@ -295,7 +295,7 @@ impl HirBuilder {
     fn infer_stmnt(&self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             ast::Stmnt::Let(binding) => {
-                let value_ty = self.infer_expr(binding.val.as_ref().unwrap())?;
+                let value_ty = self.infer_expr(binding.val.as_ref().unwrap(), env)?;
 
                 match env.get_mut(&binding.name) {
                     Some(ty) if !ty.is_concrete() => {
@@ -317,7 +317,7 @@ impl HirBuilder {
                 };
                 // TODO: use type instead of inferring and then check it
 
-                let ty = Self::check_expr(expr, env).unwrap();
+                let ty = self.infer_expr(expr, env).unwrap();
                 env.bind(&binding.name, ty.clone());
                 Ok(ty)
             }
