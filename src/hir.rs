@@ -207,7 +207,7 @@ impl HirBuilder {
         self.symbols.get(id as usize)
     }
 
-    fn infer(&mut self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
+    fn infer(&self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
             ast::Node::Expr(expr) => self.infer_expr(expr, env),
             ast::Node::Stmnt(stmnt) => self.infer_stmnt(stmnt, env),
@@ -220,7 +220,17 @@ impl HirBuilder {
             ast::Expr::StrLit(_) => Ok(Type::Str),
 
             ast::Expr::Block(block) => {
-                todo!("check block expressions")
+                let a = block
+                    .nodes
+                    .iter()
+                    .filter_map(|node| match node {
+                        ast::Node::Stmnt(ast::Stmnt::Ret(ast::Ret { val })) => {
+                            self.infer_expr(val, env).ok()
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                todo!()
             }
 
             ast::Expr::Prefix(prefix_expr) => {
@@ -292,50 +302,14 @@ impl HirBuilder {
         }
     }
 
-    fn infer_stmnt(&mut self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
+    fn infer_stmnt(&self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
-            ast::Stmnt::Let(binding) => {
-                let ty = binding
-                    .ty
-                    .as_ref()
-                    .map(Type::from)
-                    .map(Ok)
-                    .unwrap_or(self.infer_expr(&binding.val, env))?;
-
-                let symbol = self.new_symbol(&binding.name, ty, SymbolKind::Var);
-
-                // let mut sym = env
-                //     .variables
-                //     .get_mut(&binding.name)
-                //     .map(|id| self.get_symbol(*id))
-                //     .flatten()
-                //     .unwrap_or(self.new_symbol(&binding.name, SymbolKind::Var));
-
-                // If a symbol is already defined for this let binding we might want to error?
-                // match symbol {
-                //     Some(sym) if !sym.ty.is_concrete() => {
-                //         sym.ty = value_ty;
-                //     }
-                //     Some(sym) => {
-                //         // FIX: incorrect
-                //         if sym.ty != value_ty {
-                //             return Err(TypeError::TypeMismatch(sym.ty.clone(), value_ty).into());
-                //         }
-                //     }
-                //     _ => todo!(),
-                // }
-
-                // let Some(ref expr) = binding.val else {
-                //     return Ok(Type::Var(binding.name.clone()));
-                // };
-                // TODO: use type instead of inferring and then check it
-
-                // let sym = self.new_symbol(&binding.name, SymbolKind::Var);
-                // let ty = self.infer_expr(expr, env).unwrap();
-                // env.variables.insert(binding.name.clone(), sym.id);
-                // Ok(ty)
-                todo!()
-            }
+            ast::Stmnt::Let(binding) => binding
+                .ty
+                .as_ref()
+                .map(Type::from)
+                .map(Ok)
+                .unwrap_or(self.infer_expr(&binding.val, env)),
 
             ast::Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];

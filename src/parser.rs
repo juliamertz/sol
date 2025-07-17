@@ -362,7 +362,8 @@ impl Parser {
         }
 
         self.consume(TokenKind::Assign)?;
-        let val = Some(self.expr(Prec::Lowest)?);
+        let val = self.expr(Prec::Lowest)?;
+
         Ok(Let {
             name: ident,
             ty,
