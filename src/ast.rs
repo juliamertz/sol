@@ -81,7 +81,7 @@ ast_impl! {
     pub struct Let {
         pub name: Ident,
         pub ty: Option<Type>,
-        pub val: Option<Expr>,
+        pub val: Expr,
     }
 
     pub struct Ret {

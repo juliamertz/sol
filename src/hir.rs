@@ -191,13 +191,13 @@ pub struct HirBuilder {
 }
 
 impl HirBuilder {
-    fn new_symbol(&mut self, name: impl ToString, kind: SymbolKind) -> &Symbol {
+    fn new_symbol(&mut self, name: impl ToString, ty: Type, kind: SymbolKind) -> &Symbol {
         let id = self.symbols.len();
         self.symbols.push(Symbol {
             id: id.try_into().unwrap(),
             kind,
             name: name.to_string(),
-            ty: Type::Any,
+            ty,
         });
         unsafe { self.symbols.get_unchecked(id) }
     }
@@ -207,7 +207,7 @@ impl HirBuilder {
         self.symbols.get(id as usize)
     }
 
-    fn infer(&self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
+    fn infer(&mut self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
             ast::Node::Expr(expr) => self.infer_expr(expr, env),
             ast::Node::Stmnt(stmnt) => self.infer_stmnt(stmnt, env),
@@ -292,34 +292,49 @@ impl HirBuilder {
         }
     }
 
-    fn infer_stmnt(&self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
+    fn infer_stmnt(&mut self, stmnt: &ast::Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             ast::Stmnt::Let(binding) => {
-                let value_ty = self.infer_expr(binding.val.as_ref().unwrap(), env)?;
+                let ty = binding
+                    .ty
+                    .as_ref()
+                    .map(Type::from)
+                    .map(Ok)
+                    .unwrap_or(self.infer_expr(&binding.val, env))?;
 
-                match env.get_mut(&binding.name) {
-                    Some(ty) if !ty.is_concrete() => {
-                        *ty = value_ty;
-                    }
+                let symbol = self.new_symbol(&binding.name, ty, SymbolKind::Var);
 
-                    Some(known) => {
-                        // FIX: incorrect
-                        if *known != value_ty {
-                            return Err(TypeError::TypeMismatch(known.clone(), value_ty).into());
-                        }
-                    }
+                // let mut sym = env
+                //     .variables
+                //     .get_mut(&binding.name)
+                //     .map(|id| self.get_symbol(*id))
+                //     .flatten()
+                //     .unwrap_or(self.new_symbol(&binding.name, SymbolKind::Var));
 
-                    _ => todo!(),
-                }
+                // If a symbol is already defined for this let binding we might want to error?
+                // match symbol {
+                //     Some(sym) if !sym.ty.is_concrete() => {
+                //         sym.ty = value_ty;
+                //     }
+                //     Some(sym) => {
+                //         // FIX: incorrect
+                //         if sym.ty != value_ty {
+                //             return Err(TypeError::TypeMismatch(sym.ty.clone(), value_ty).into());
+                //         }
+                //     }
+                //     _ => todo!(),
+                // }
 
-                let Some(ref expr) = binding.val else {
-                    return Ok(Type::Var(binding.name.clone()));
-                };
+                // let Some(ref expr) = binding.val else {
+                //     return Ok(Type::Var(binding.name.clone()));
+                // };
                 // TODO: use type instead of inferring and then check it
 
-                let ty = self.infer_expr(expr, env).unwrap();
-                env.bind(&binding.name, ty.clone());
-                Ok(ty)
+                // let sym = self.new_symbol(&binding.name, SymbolKind::Var);
+                // let ty = self.infer_expr(expr, env).unwrap();
+                // env.variables.insert(binding.name.clone(), sym.id);
+                // Ok(ty)
+                todo!()
             }
 
             ast::Stmnt::Fn(binding) => {
