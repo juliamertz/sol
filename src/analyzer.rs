@@ -112,7 +112,7 @@ impl Analyzer {
                     let ty = match binding.ty {
                         Some(ref ty) => ty.into(),
                         // TODO: check binding type
-                        None => Self::check_expr(binding.val.as_ref().unwrap(), env).unwrap(),
+                        None => Self::check_expr(&binding.val, env).unwrap(),
                     };
 
                     // TODO: this is a bit ugly
@@ -250,7 +250,7 @@ impl Analyzer {
     pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv) -> Result<Type> {
         match stmnt {
             Stmnt::Let(binding) => {
-                let value_ty = Analyzer::check_expr(binding.val.as_ref().unwrap(), env)?;
+                let value_ty = Analyzer::check_expr(&binding.val, env)?;
 
                 match env.get_mut(&binding.name) {
                     Some(ty) if !ty.is_concrete() => {
@@ -271,12 +271,12 @@ impl Analyzer {
                     _ => todo!(),
                 }
 
-                let Some(ref expr) = binding.val else {
-                    return Ok(Type::Var(binding.name.clone()));
-                };
+                // let Some(ref expr) = binding.val else {
+                //     return Ok(Type::Var(binding.name.clone()));
+                // };
                 // TODO: use type instead of inferring and then check it
 
-                let ty = Self::check_expr(expr, env).unwrap();
+                let ty = Self::check_expr(&binding.val, env).unwrap();
                 env.bind(&binding.name, ty.clone());
                 Ok(ty)
             }

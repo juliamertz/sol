@@ -57,6 +57,12 @@ enum Command {
         #[clap(flatten)]
         opts: BuildOpts,
     },
+    DumpAst {
+        filepath: PathBuf,
+    },
+    DumpHir {
+        filepath: PathBuf,
+    },
 }
 
 fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
@@ -77,11 +83,6 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
-    let mut builder = hir::HirBuilder::default();
-    let as_hir = builder.lower(ast::Node::Expr(ast::Expr::StrLit("Hello!".into())));
-    dbg!(&as_hir);
-    std::process::exit(0);
-
     let opts = Cli::parse();
 
     match opts.command {
@@ -105,6 +106,19 @@ fn main() -> Result<()> {
             if opts.cleanup {
                 std::fs::remove_file(bin_path).into_diagnostic()?;
             }
+        }
+        Command::DumpAst { filepath } => {
+            let content = std::fs::read_to_string(filepath).unwrap();
+            let mut parser = parser::Parser::new(content);
+            let ast = parser.parse()?;
+            println!("{ast:?}");
+        }
+        Command::DumpHir { filepath } => {
+            todo!()
+            // let mut builder = hir::HirBuilder::default();
+            // let as_hir = builder.lower(ast::Node::Expr(ast::Expr::StrLit("Hello!".into())));
+            // dbg!(&as_hir);
+            // std::process::exit(0);
         }
     }
 

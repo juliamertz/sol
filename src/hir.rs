@@ -1,7 +1,7 @@
 // a high level IR that closely maps to the AST
 // but with type annotations and other useful information
 
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use miette::{Context, Diagnostic, IntoDiagnostic, Result, SourceSpan, miette};
 use thiserror::Error;
@@ -73,7 +73,7 @@ pub enum TypeError {
     UndefinedType(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
     Var,
     Fn,
@@ -260,9 +260,7 @@ impl HirBuilder {
                 Ok(first.clone())
             }
 
-            ast::Expr::Prefix(prefix_expr) => {
-                todo!();
-            }
+            ast::Expr::Prefix(prefix_expr) => self.infer_expr(&prefix_expr.rhs, env),
 
             ast::Expr::Infix(infix_expr) => {
                 let lhs = self.infer_expr(&infix_expr.lhs, env)?;
@@ -377,14 +375,40 @@ impl HirBuilder {
                     .collect(),
             },
             ast::Expr::Call(call_expr) => {
-                // let fn_ty = self
-                //     .get_var(call_expr.func, env)
-                todo!()
+                let ast::Expr::Ident(ident) = *call_expr.func else {
+                    panic!("todo: non ident func / method");
+                };
+
+                let sym = self.get_var(ident, env)?;
+                if sym.kind != SymbolKind::Fn {
+                    panic!("call var must be a fn");
+                }
+
+                Expr::Call {
+                    id: sym.id,
+                    params: vec![], // TODO:
+                    ty: sym.ty.clone(),
+                }
             }
-            ast::Expr::Constructor(constructor) => todo!(),
-            ast::Expr::Ident(_) => todo!(),
-            ast::Expr::RawIdent(_) => todo!(),
+            ast::Expr::Ident(ident) => {
+                let sym = self.get_var(ident, env)?;
+                Expr::Var {
+                    id: sym.id,
+                    ty: sym.ty.clone(),
+                }
+            }
+            ast::Expr::Constructor(constructor) => {
+                let sym = self.get_var(&constructor.name, env)?;
+                if sym.kind != SymbolKind::Struct {
+                    panic!("call var must be a struct (or enum in the future)");
+                }
+                Expr::Constructor {
+                    id: sym.id,
+                    fields: vec![], // TODO:
+                }
+            }
             ast::Expr::Infix(infix_expr) => todo!(),
+            ast::Expr::RawIdent(_) => todo!(),
             ast::Expr::Prefix(prefix_expr) => todo!(),
             ast::Expr::Index(index_expr) => todo!(),
             ast::Expr::If(_) => todo!(),

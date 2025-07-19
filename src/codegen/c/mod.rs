@@ -239,7 +239,7 @@ impl C {
             }
             Stmnt::Let(binding) => {
                 // TODO: pull out into seperate function
-                if let Expr::List(list) = binding.val.as_ref().unwrap() {
+                if let Expr::List(list) = &binding.val {
                     for item in list.items.clone() {
                         let mut buf = String::new();
                         self.emit_expr(
@@ -265,7 +265,7 @@ impl C {
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.name));
                 buf.push('=');
-                self.emit_expr(buf, env, binding.val.as_ref().unwrap());
+                self.emit_expr(buf, env, &binding.val);
                 buf.push(';');
             }
             Stmnt::StructDef(strct) => {
