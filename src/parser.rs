@@ -425,7 +425,7 @@ impl Parser {
 
         Ok(Expr::Call(CallExpr {
             func: Box::new(expr),
-            args,
+            params: args,
         }))
     }
 

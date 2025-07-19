@@ -101,7 +101,7 @@ ast_impl! {
 
     pub struct CallExpr {
         pub func: Box<Expr>,
-        pub args: Vec<Expr>,
+        pub params: Vec<Expr>,
     }
 
     pub struct IndexExpr {

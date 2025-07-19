@@ -1,4 +1,4 @@
-use miette::{Context, Diagnostic, IntoDiagnostic, Result, SourceSpan, miette};
+use miette::{Context, Diagnostic, IntoDiagnostic, Report, Result, SourceSpan, miette};
 use std::{collections::HashMap, vec};
 use thiserror::Error;
 
@@ -61,14 +61,20 @@ impl From<&ast::Type> for Type {
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TypeError {
-    #[error("Type mismatch expected: {0:?}, got: {1:?}")]
+    #[error("type mismatch, expected: {0:?}, got: {1:?}")]
     TypeMismatch(Type, Type),
 
-    #[error("No such variable: '{0}'")]
+    #[error("no such variable: '{0}'")]
     UndefinedVariable(String),
 
-    #[error("No such type: '{0}'")]
+    #[error("no such type: '{0}'")]
     UndefinedType(String),
+
+    #[error("ambigous type")]
+    AmbigiousType,
+
+    #[error("not a function")]
+    NotAFunction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +135,7 @@ pub enum Expr {
     },
     Call {
         id: SymbolId,
-        params: Vec<SymbolId>,
+        params: Vec<Expr>,
         ty: Type,
     },
     Index {
@@ -239,9 +245,10 @@ impl HirBuilder {
             .collect();
 
         let first = return_types.first().unwrap_or(&Type::Unit);
-
         if !return_types.iter().all(|ty| ty == first) {
-            panic!("todo: ambigious block return type");
+            return Err(TypeError::AmbigiousType)
+                .into_diagnostic()
+                .wrap_err("multiple return types found in block");
         }
 
         Ok(first.clone())
@@ -382,6 +389,20 @@ impl HirBuilder {
         })
     }
 
+    pub fn lower_expr_list(
+        &mut self,
+        exprs: Vec<ast::Expr>,
+        env: &mut TypeEnv,
+    ) -> Result<Vec<Expr>> {
+        exprs
+            .into_iter()
+            .map(|param| self.lower_expr(param, env))
+            .try_fold(vec![], |mut acc, res| {
+                acc.push(res?);
+                Ok(acc)
+            })
+    }
+
     pub fn lower_expr(&mut self, expr: ast::Expr, env: &mut TypeEnv) -> Result<Expr> {
         let ty = self.infer_expr(&expr, env)?;
 
@@ -404,16 +425,17 @@ impl HirBuilder {
                     panic!("todo: non ident func / method");
                 };
 
-                dbg!("resolving func var", &env);
                 let sym = self.get_var(ident, env)?;
                 if sym.kind != SymbolKind::Fn {
-                    panic!("call var must be a fn");
+                    return Err(TypeError::NotAFunction)
+                        .into_diagnostic()
+                        .wrap_err("tried to call a variable which is not a function");
                 }
 
                 Expr::Call {
                     id: sym.id,
-                    params: vec![], // TODO:
                     ty: sym.ty.clone(),
+                    params: self.lower_expr_list(call_expr.params, env)?,
                 }
             }
 
@@ -430,9 +452,14 @@ impl HirBuilder {
                 if sym.kind != SymbolKind::Struct {
                     panic!("call var must be a struct (or enum in the future)");
                 }
+
                 Expr::Constructor {
                     id: sym.id,
-                    fields: vec![], // TODO:
+                    fields: constructor
+                        .fields
+                        .into_iter()
+                        .map(|(name, val)| (name, self.lower_expr(val, env).unwrap()))
+                        .collect(),
                 }
             }
 

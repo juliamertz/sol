@@ -96,7 +96,7 @@ impl C {
         buf.push('(');
 
         let mut args = String::new();
-        for arg in call_expr.args.iter() {
+        for arg in call_expr.params.iter() {
             self.emit_expr(&mut args, env, arg);
             args.push(',');
         }
@@ -247,7 +247,7 @@ impl C {
                             env,
                             &Expr::Call(CallExpr {
                                 func: Box::new(Expr::RawIdent("list_push_rval".into())),
-                                args: vec![
+                                params: vec![
                                     Expr::Ref(Box::new(Expr::Ident(binding.name.clone()))),
                                     item,
                                 ],
