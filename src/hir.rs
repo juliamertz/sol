@@ -226,31 +226,33 @@ impl HirBuilder {
         }
     }
 
+    fn infer_block(&self, block: &ast::Block, env: &mut TypeEnv) -> Result<Type> {
+        let return_types: Vec<Type> = block
+            .nodes
+            .iter()
+            .filter_map(|node| match node {
+                ast::Node::Stmnt(ast::Stmnt::Ret(ast::Ret { val })) => {
+                    self.infer_expr(val, env).ok()
+                }
+                _ => None,
+            })
+            .collect();
+
+        let first = return_types.first().unwrap_or(&Type::Unit);
+
+        if !return_types.iter().all(|ty| ty == first) {
+            panic!("todo: ambigious block return type");
+        }
+
+        Ok(first.clone())
+    }
+
     fn infer_expr(&self, expr: &ast::Expr, env: &mut TypeEnv) -> Result<Type> {
         match expr {
             ast::Expr::IntLit(_) => Ok(Type::Int),
             ast::Expr::StrLit(_) => Ok(Type::Str),
 
-            ast::Expr::Block(block) => {
-                let return_types: Vec<Type> = block
-                    .nodes
-                    .iter()
-                    .filter_map(|node| match node {
-                        ast::Node::Stmnt(ast::Stmnt::Ret(ast::Ret { val })) => {
-                            self.infer_expr(val, env).ok()
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                let first = return_types.first().unwrap_or(&Type::Unit);
-
-                if !return_types.iter().all(|ty| ty == first) {
-                    panic!("todo: ambigious block return type");
-                }
-
-                Ok(first.clone())
-            }
+            ast::Expr::Block(block) => self.infer_block(block, env),
 
             ast::Expr::Prefix(prefix_expr) => self.infer_expr(&prefix_expr.rhs, env),
 
@@ -309,10 +311,10 @@ impl HirBuilder {
                     panic!("condition is not a bool");
                 };
 
-                let return_ty = self.infer_expr(&if_else.consequence.clone().expr(), env)?;
+                let return_ty = self.infer_block(&if_else.consequence, env)?;
 
                 if let Some(ref alternative) = if_else.alternative {
-                    let other_ty = self.infer_expr(&alternative.clone().expr(), env)?;
+                    let other_ty = self.infer_block(alternative, env)?;
                     if other_ty != return_ty {
                         panic!("at the disco");
                     }
