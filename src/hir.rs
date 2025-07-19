@@ -1,16 +1,14 @@
-// a high level IR that closely maps to the AST
-// but with type annotations and other useful information
-
-use std::{collections::HashMap, vec};
-
 use miette::{Context, Diagnostic, IntoDiagnostic, Result, SourceSpan, miette};
+use std::{collections::HashMap, vec};
 use thiserror::Error;
 
 use crate::ast;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    Any, // TODO: We should remove this, but for now we can use it as a crutch
+    // TODO: We should remove this, but for now we can use it as a crutch
+    // Or we move to Unkown and directly parse into this ast
+    Any,
     Unit,
     Int,
     Bool,
@@ -18,7 +16,7 @@ pub enum Type {
     List((Box<Type>, Option<usize>)),
     Ptr(Box<Type>),
     Fn {
-        is_extern: bool,
+        is_extern: bool, // TODO: i don't think it makes sense to store this info in the type.
         args: Vec<Type>,
         returns: Box<Type>,
     },
@@ -145,6 +143,7 @@ pub enum Expr {
         alternative: Option<Vec<Node>>,
         ty: Type,
     },
+    List(Vec<Expr>),
     Constructor {
         id: SymbolId,
         fields: Vec<(String, Expr)>,
@@ -157,15 +156,13 @@ pub enum Expr {
 pub enum Stmnt {
     Let {
         id: SymbolId,
-        val: Option<Expr>,
-        ty: Type,
+        val: Expr,
     },
     Fn {
         id: SymbolId,
         r#extern: bool,
         params: Vec<SymbolId>,
         body: Vec<Node>,
-        ty: Type,
     },
     Ret {
         implicit: bool,
@@ -174,17 +171,15 @@ pub enum Stmnt {
     },
     Use {
         path: Vec<String>,
-        // ty: Type,
     },
     Struct {
         id: SymbolId,
-        ty: Type,
         impls: Scope,
     },
 }
 
 #[derive(Debug, Default, Clone)]
-struct TypeEnv {
+pub struct TypeEnv {
     types: HashMap<String, SymbolId>,
     variables: HashMap<String, SymbolId>,
 }
@@ -206,7 +201,6 @@ impl HirBuilder {
         unsafe { self.symbols.get_unchecked(id) }
     }
 
-    // might be nice if we can just assert that a symbol must exist.
     fn get_symbol(&self, id: SymbolId) -> Option<&Symbol> {
         self.symbols.get(id as usize)
     }
@@ -214,16 +208,14 @@ impl HirBuilder {
     fn get_var(&self, name: impl AsRef<str>, env: &TypeEnv) -> Result<&Symbol> {
         env.variables
             .get(name.as_ref())
-            .map(|id| self.get_symbol(*id))
-            .flatten()
+            .and_then(|id| self.get_symbol(*id))
             .ok_or(TypeError::UndefinedVariable(name.as_ref().to_string()).into())
     }
 
     fn get_type(&self, name: impl AsRef<str>, env: &TypeEnv) -> Result<&Symbol> {
         env.types
             .get(name.as_ref())
-            .map(|id| self.get_symbol(*id))
-            .flatten()
+            .and_then(|id| self.get_symbol(*id))
             .ok_or(TypeError::UndefinedType(name.as_ref().to_string()).into())
     }
 
@@ -312,8 +304,25 @@ impl HirBuilder {
                 Ok(*inner_ty)
             }
 
-            // ast::Expr::If(_) | ast::Expr::RawIdent(_) => unimplemented!(),
-            _ => todo!(),
+            ast::Expr::IfElse(if_else) => {
+                let Type::Bool = self.infer_expr(&if_else.condition, env)? else {
+                    panic!("condition is not a bool");
+                };
+
+                let return_ty = self.infer_expr(&if_else.consequence.clone().expr(), env)?;
+
+                if let Some(ref alternative) = if_else.alternative {
+                    let other_ty = self.infer_expr(&alternative.clone().expr(), env)?;
+                    if other_ty != return_ty {
+                        panic!("at the disco");
+                    }
+                }
+
+                Ok(return_ty)
+            }
+
+            // | ast::Expr::RawIdent(_) => unimplemented!(),
+            _ => todo!("impl {expr:?}"),
         }
     }
 
@@ -328,7 +337,7 @@ impl HirBuilder {
 
             ast::Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];
-                for (_, ty) in binding.args.iter() {
+                for (_, ty) in binding.params.iter() {
                     args.push((ty).into());
                 }
 
@@ -354,7 +363,17 @@ impl HirBuilder {
         }
     }
 
-    pub fn lower(&mut self, node: ast::Node, env: &mut TypeEnv) -> Result<Node> {
+    pub fn lower(&mut self, nodes: Vec<ast::Node>, env: &mut TypeEnv) -> Result<Vec<Node>> {
+        nodes
+            .into_iter()
+            .map(|node| self.lower_node(node, env))
+            .try_fold(vec![], |mut acc, res| {
+                acc.push(res?);
+                Ok(acc)
+            })
+    }
+
+    pub fn lower_node(&mut self, node: ast::Node, env: &mut TypeEnv) -> Result<Node> {
         Ok(match node {
             ast::Node::Expr(expr) => Node::Expr(self.lower_expr(expr, env)?),
             ast::Node::Stmnt(stmnt) => Node::Stmnt(self.lower_stmnt(stmnt, env)?),
@@ -362,23 +381,28 @@ impl HirBuilder {
     }
 
     pub fn lower_expr(&mut self, expr: ast::Expr, env: &mut TypeEnv) -> Result<Expr> {
+        let ty = self.infer_expr(&expr, env)?;
+
         Ok(match expr {
             ast::Expr::IntLit(val) => Expr::IntLit(val),
             ast::Expr::StrLit(val) => Expr::StrLit(val),
+
             ast::Expr::Block(ref block) => Expr::Block {
                 ty: self.infer_expr(&expr, env)?,
                 nodes: block
                     .nodes
                     .clone()
                     .into_iter()
-                    .map(|node| self.lower(node, env).unwrap())
+                    .map(|node| self.lower_node(node, env).unwrap())
                     .collect(),
             },
+
             ast::Expr::Call(call_expr) => {
                 let ast::Expr::Ident(ident) = *call_expr.func else {
                     panic!("todo: non ident func / method");
                 };
 
+                dbg!("resolving func var", &env);
                 let sym = self.get_var(ident, env)?;
                 if sym.kind != SymbolKind::Fn {
                     panic!("call var must be a fn");
@@ -390,6 +414,7 @@ impl HirBuilder {
                     ty: sym.ty.clone(),
                 }
             }
+
             ast::Expr::Ident(ident) => {
                 let sym = self.get_var(ident, env)?;
                 Expr::Var {
@@ -397,6 +422,7 @@ impl HirBuilder {
                     ty: sym.ty.clone(),
                 }
             }
+
             ast::Expr::Constructor(constructor) => {
                 let sym = self.get_var(&constructor.name, env)?;
                 if sym.kind != SymbolKind::Struct {
@@ -407,24 +433,84 @@ impl HirBuilder {
                     fields: vec![], // TODO:
                 }
             }
+
             ast::Expr::Infix(infix_expr) => todo!(),
+
             ast::Expr::RawIdent(_) => todo!(),
+
             ast::Expr::Prefix(prefix_expr) => todo!(),
+
             ast::Expr::Index(index_expr) => todo!(),
-            ast::Expr::If(_) => todo!(),
-            ast::Expr::List(list) => todo!(),
+
+            ast::Expr::IfElse(if_else) => Expr::IfElse {
+                condition: self.lower_expr(*if_else.condition, env)?.into(),
+                consequence: self.lower(if_else.consequence.nodes, env)?,
+                alternative: None, // TODO: else
+                ty,
+            },
+
+            ast::Expr::List(list) => {
+                let mut items = vec![];
+                for expr in list.items {
+                    items.push(self.lower_expr(expr, env)?);
+                }
+
+                Expr::List(items)
+            }
+
             ast::Expr::Ref(expr) => todo!(),
         })
     }
 
-    pub fn lower_stmnt(&self, stmnt: ast::Stmnt, env: &mut TypeEnv) -> Result<Stmnt> {
-        match stmnt {
-            ast::Stmnt::Fn(_) => todo!(),
+    pub fn lower_stmnt(&mut self, stmnt: ast::Stmnt, env: &mut TypeEnv) -> Result<Stmnt> {
+        let ty = self.infer_stmnt(&stmnt, env)?;
+        let stmnt = match stmnt {
+            ast::Stmnt::Fn(func) => {
+                let sym = self.new_symbol(func.name.clone(), ty, SymbolKind::Fn);
+                let func_id = sym.id;
+                let func_ty = sym.ty.clone();
+
+                env.variables.insert(func.name, func_id);
+
+                let mut params = vec![];
+                for (name, ref ty) in func.params {
+                    let sym = self.new_symbol(name, ty.into(), SymbolKind::Var);
+                    params.push(sym.id);
+                }
+
+                let mut body = vec![];
+                if !func.is_extern {
+                    for node in func.body.expect("function to have a body!").nodes {
+                        let node = self.lower_node(node, env)?;
+                        body.push(node);
+                    }
+                }
+
+                Stmnt::Fn {
+                    id: func_id,
+                    r#extern: func.is_extern,
+                    params,
+                    body,
+                }
+            }
+
+            ast::Stmnt::Let(binding) => {
+                let sym = self.new_symbol(binding.name.clone(), ty.clone(), SymbolKind::Var);
+                env.variables.insert(binding.name, sym.id);
+                Stmnt::Let {
+                    id: sym.id,
+                    val: self.lower_expr(binding.val, env)?,
+                }
+            }
+
             ast::Stmnt::Ret(ret) => todo!(),
-            ast::Stmnt::Use(_) => todo!(),
-            ast::Stmnt::Let(_) => todo!(),
+            ast::Stmnt::Use(import) => Stmnt::Use {
+                path: vec![import.ident], // TODO: proper paths
+            },
             ast::Stmnt::StructDef(struct_def) => todo!(),
             ast::Stmnt::Impl(_) => todo!(),
-        }
+        };
+
+        Ok(stmnt)
     }
 }

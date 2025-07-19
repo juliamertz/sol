@@ -125,7 +125,7 @@ impl Analyzer {
 
                 Node::Stmnt(Stmnt::Fn(binding)) => {
                     let mut args = vec![];
-                    for (_, ty) in binding.args.iter() {
+                    for (_, ty) in binding.params.iter() {
                         args.push(ty.into());
                     }
 
@@ -243,7 +243,7 @@ impl Analyzer {
                 Ok(*inner_ty)
             }
 
-            Expr::If(_) | Expr::RawIdent(_) => unimplemented!(),
+            Expr::IfElse(_) | Expr::RawIdent(_) => unimplemented!(),
         }
     }
 
@@ -283,7 +283,7 @@ impl Analyzer {
 
             Stmnt::Fn(binding) => {
                 let mut args: Vec<Type> = vec![];
-                for (_, ty) in binding.args.iter() {
+                for (_, ty) in binding.params.iter() {
                     args.push((ty).into());
                 }
 

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
 
-const CORE_INCLUDE_PATH: &str = "/Users/julia/projects/2025/sol/src/codegen/c/include";
+const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/sol/src/codegen/c/include";
 const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
 
 #[derive(Default)]
@@ -169,7 +169,7 @@ impl C {
             Expr::Prefix(prefix_expr) => todo!("prefix expr"),
             Expr::Infix(infix_expr) => self.emit_infix_expr(buf, env, infix_expr),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
-            Expr::If(r#if) => {
+            Expr::IfElse(r#if) => {
                 buf.push_str("if(");
                 self.emit_expr(buf, env, &r#if.condition);
                 buf.push_str("){");
@@ -302,7 +302,7 @@ impl C {
         }
         buf.push('(');
         buf.push_str(
-            func.args
+            func.params
                 .iter()
                 .map(|(ident, ty)| format!("{} {}", self.emit_type(env, ty), self.prefix(ident)))
                 .collect::<Vec<_>>()

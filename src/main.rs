@@ -111,14 +111,19 @@ fn main() -> Result<()> {
             let content = std::fs::read_to_string(filepath).unwrap();
             let mut parser = parser::Parser::new(content);
             let ast = parser.parse()?;
-            println!("{ast:?}");
+            dbg!(ast);
         }
         Command::DumpHir { filepath } => {
-            todo!()
-            // let mut builder = hir::HirBuilder::default();
-            // let as_hir = builder.lower(ast::Node::Expr(ast::Expr::StrLit("Hello!".into())));
-            // dbg!(&as_hir);
-            // std::process::exit(0);
+            let content = std::fs::read_to_string(filepath).unwrap();
+            let mut parser = parser::Parser::new(content);
+            let ast = parser.parse()?;
+
+            let mut builder = hir::HirBuilder::default();
+            let mut env = hir::TypeEnv::default();
+            for node in ast {
+                let as_hir = builder.lower_node(node, &mut env);
+                dbg!(&as_hir);
+            }
         }
     }
 

@@ -277,7 +277,7 @@ impl Parser {
         Ok(Fn {
             is_extern,
             name: ident,
-            args,
+            params: args,
             return_ty,
             body,
         })
@@ -446,7 +446,7 @@ impl Parser {
             TokenKind::Int => Expr::IntLit(text.parse().unwrap()),
             TokenKind::Ident => Expr::Ident(text),
             TokenKind::String => Expr::StrLit(text),
-            TokenKind::If => Expr::If(self.r#if()?),
+            TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
 
             _ => panic!("{:?}", ErrorKind::Todo(self.curr.clone()).into_error(self)),

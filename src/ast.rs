@@ -27,7 +27,7 @@ ast_impl! {
         Prefix(PrefixExpr),
         Call(CallExpr),
         Index(IndexExpr),
-        If(If),
+        IfElse(If),
         List(List),
         Constructor(Constructor),
         Ref(Box<Expr>),
@@ -112,7 +112,7 @@ ast_impl! {
     pub struct Fn {
         pub is_extern: bool,
         pub name: Ident,
-        pub args: Vec<(Ident, Type)>,
+        pub params: Vec<(Ident, Type)>,
         pub return_ty: Type,
         pub body: Option<Block>,
     }
@@ -134,5 +134,11 @@ ast_impl! {
     pub struct Constructor {
         pub name: Ident,
         pub fields: Vec<(Ident, Expr)>,
+    }
+}
+
+impl Block {
+    pub fn expr(self) -> Expr {
+        Expr::Block(self)
     }
 }
