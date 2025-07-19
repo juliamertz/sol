@@ -188,7 +188,7 @@ impl C {
 
             Expr::Constructor(constructor) => {
                 buf.push('(');
-                buf.push_str(&constructor.ident);
+                buf.push_str(&constructor.name);
                 buf.push(')');
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {

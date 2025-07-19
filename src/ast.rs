@@ -132,7 +132,7 @@ ast_impl! {
     }
 
     pub struct Constructor {
-        pub ident: Ident,
+        pub name: Ident,
         pub fields: Vec<(Ident, Expr)>,
     }
 }

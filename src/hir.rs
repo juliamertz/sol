@@ -11,6 +11,7 @@ use crate::ast;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Any, // TODO: We should remove this, but for now we can use it as a crutch
+    Unit,
     Int,
     Bool,
     Str,
@@ -67,6 +68,9 @@ pub enum TypeError {
 
     #[error("No such variable: '{0}'")]
     UndefinedVariable(String),
+
+    #[error("No such type: '{0}'")]
+    UndefinedType(String),
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +211,22 @@ impl HirBuilder {
         self.symbols.get(id as usize)
     }
 
+    fn get_var(&self, name: impl AsRef<str>, env: &TypeEnv) -> Result<&Symbol> {
+        env.variables
+            .get(name.as_ref())
+            .map(|id| self.get_symbol(*id))
+            .flatten()
+            .ok_or(TypeError::UndefinedVariable(name.as_ref().to_string()).into())
+    }
+
+    fn get_type(&self, name: impl AsRef<str>, env: &TypeEnv) -> Result<&Symbol> {
+        env.types
+            .get(name.as_ref())
+            .map(|id| self.get_symbol(*id))
+            .flatten()
+            .ok_or(TypeError::UndefinedType(name.as_ref().to_string()).into())
+    }
+
     fn infer(&self, node: &ast::Node, env: &mut TypeEnv) -> Result<Type> {
         match node {
             ast::Node::Expr(expr) => self.infer_expr(expr, env),
@@ -220,7 +240,7 @@ impl HirBuilder {
             ast::Expr::StrLit(_) => Ok(Type::Str),
 
             ast::Expr::Block(block) => {
-                let a = block
+                let return_types: Vec<Type> = block
                     .nodes
                     .iter()
                     .filter_map(|node| match node {
@@ -229,8 +249,15 @@ impl HirBuilder {
                         }
                         _ => None,
                     })
-                    .collect::<Vec<_>>();
-                todo!()
+                    .collect();
+
+                let first = return_types.first().unwrap_or(&Type::Unit);
+
+                if !return_types.iter().all(|ty| ty == first) {
+                    panic!("todo: ambigious block return type");
+                }
+
+                Ok(first.clone())
             }
 
             ast::Expr::Prefix(prefix_expr) => {
@@ -267,20 +294,10 @@ impl HirBuilder {
                 Ok(Type::list(expected_ty, None)) // TODO: fixed size lists
             }
 
-            ast::Expr::Ident(name) => env
-                .variables
-                .get(name)
-                .map(|id| self.get_symbol(*id))
-                .flatten()
-                .ok_or(TypeError::UndefinedVariable(name.clone()).into())
-                .map(|sym| sym.ty.clone()),
+            ast::Expr::Ident(name) => self.get_var(name, env).map(|sym| sym.ty.clone()),
 
-            ast::Expr::Constructor(constructor) => env
-                .types
-                .get(&constructor.ident)
-                .map(|id| self.get_symbol(*id))
-                .flatten()
-                .ok_or(TypeError::UndefinedVariable(constructor.ident.clone()).into())
+            ast::Expr::Constructor(constructor) => self
+                .get_type(&constructor.name, env)
                 .map(|sym| sym.ty.clone()),
 
             ast::Expr::Call(call_expr) => match self.infer_expr(&call_expr.func, env)? {
@@ -335,33 +352,55 @@ impl HirBuilder {
                     .collect(),
             }),
 
-            // Stmnt::Use(_) | Stmnt::Ret(_) | Stmnt::Impl(_) => Ok(Type::Any),
             _ => Ok(Type::Any),
         }
     }
 
-    pub fn lower(&mut self, node: ast::Node) -> Node {
-        match node {
-            ast::Node::Expr(expr) => Node::Expr(self.lower_expr(expr)),
-            ast::Node::Stmnt(stmnt) => Node::Stmnt(self.lower_stmnt(stmnt)),
-        }
+    pub fn lower(&mut self, node: ast::Node, env: &mut TypeEnv) -> Result<Node> {
+        Ok(match node {
+            ast::Node::Expr(expr) => Node::Expr(self.lower_expr(expr, env)?),
+            ast::Node::Stmnt(stmnt) => Node::Stmnt(self.lower_stmnt(stmnt, env)?),
+        })
     }
 
-    pub fn lower_expr(&mut self, expr: ast::Expr) -> Expr {
-        match expr {
+    pub fn lower_expr(&mut self, expr: ast::Expr, env: &mut TypeEnv) -> Result<Expr> {
+        Ok(match expr {
             ast::Expr::IntLit(val) => Expr::IntLit(val),
             ast::Expr::StrLit(val) => Expr::StrLit(val),
-            ast::Expr::Block(block) => {
+            ast::Expr::Block(ref block) => Expr::Block {
+                ty: self.infer_expr(&expr, env)?,
+                nodes: block
+                    .nodes
+                    .clone()
+                    .into_iter()
+                    .map(|node| self.lower(node, env).unwrap())
+                    .collect(),
+            },
+            ast::Expr::Call(call_expr) => {
+                // let fn_ty = self
+                //     .get_var(call_expr.func, env)
                 todo!()
             }
-            // ast::Expr::
-            _ => todo!(),
-        }
+            ast::Expr::Constructor(constructor) => todo!(),
+            ast::Expr::Ident(_) => todo!(),
+            ast::Expr::RawIdent(_) => todo!(),
+            ast::Expr::Infix(infix_expr) => todo!(),
+            ast::Expr::Prefix(prefix_expr) => todo!(),
+            ast::Expr::Index(index_expr) => todo!(),
+            ast::Expr::If(_) => todo!(),
+            ast::Expr::List(list) => todo!(),
+            ast::Expr::Ref(expr) => todo!(),
+        })
     }
 
-    pub fn lower_stmnt(&self, stmnt: ast::Stmnt) -> Stmnt {
+    pub fn lower_stmnt(&self, stmnt: ast::Stmnt, env: &mut TypeEnv) -> Result<Stmnt> {
         match stmnt {
-            _ => todo!(),
+            ast::Stmnt::Fn(_) => todo!(),
+            ast::Stmnt::Ret(ret) => todo!(),
+            ast::Stmnt::Use(_) => todo!(),
+            ast::Stmnt::Let(_) => todo!(),
+            ast::Stmnt::StructDef(struct_def) => todo!(),
+            ast::Stmnt::Impl(_) => todo!(),
         }
     }
 }

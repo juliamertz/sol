@@ -532,6 +532,6 @@ impl Parser {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.arg_values()?;
         self.consume(TokenKind::RSquirly)?;
-        Ok(Expr::Constructor(Constructor { ident, fields }))
+        Ok(Expr::Constructor(Constructor { name: ident, fields }))
     }
 }

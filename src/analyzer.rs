@@ -226,7 +226,7 @@ impl Analyzer {
                 // TODO: get type from type-env
                 // let a= Checked::Known(Type::Struct { ident: constructor.ident, fields: () })
 
-                let Some(ty) = env.get(&constructor.ident) else {
+                let Some(ty) = env.get(&constructor.name) else {
                     todo!("nice error message when struct does not exist {constructor:?}")
                 };
 
