@@ -42,19 +42,19 @@ impl Type {
     }
 }
 
-impl From<&ast::Type> for Type {
-    fn from(value: &ast::Type) -> Self {
+impl From<&ast::TypeExpr> for Type {
+    fn from(value: &ast::TypeExpr) -> Self {
         match value {
-            ast::Type::Int => Self::Int,
-            ast::Type::Bool => Self::Bool,
-            ast::Type::Str => Self::Str,
-            ast::Type::List((ty, size)) => Self::list(Type::from(&(**ty)), *size),
-            ast::Type::Fn {
+            ast::TypeExpr::Int => Self::Int,
+            ast::TypeExpr::Bool => Self::Bool,
+            ast::TypeExpr::Str => Self::Str,
+            ast::TypeExpr::List((ty, size)) => Self::list(Type::from(&(**ty)), *size),
+            ast::TypeExpr::Fn {
                 args,
                 returns,
                 is_extern,
             } => todo!(),
-            ast::Type::Var(name) => Self::Var(name.clone()),
+            ast::TypeExpr::Var(name) => Self::Var(name.clone()),
         }
     }
 }
@@ -99,9 +99,9 @@ struct Symbol {
 
 type Level = u32;
 
-#[derive(Debug, Clone, Default)]
-pub struct Scope {
-    bindings: HashMap<String, SymbolId>,
+#[derive(Debug, Clone)]
+pub struct Module {
+
 }
 
 #[derive(Debug, Clone)]
@@ -180,7 +180,7 @@ pub enum Stmnt {
     },
     Struct {
         id: SymbolId,
-        impls: Scope,
+        impls: Vec<SymbolId>,
     },
 }
 
@@ -263,13 +263,13 @@ impl HirBuilder {
 
             ast::Expr::Prefix(prefix_expr) => self.infer_expr(&prefix_expr.rhs, env),
 
-            ast::Expr::Infix(infix_expr) => {
-                let lhs = self.infer_expr(&infix_expr.lhs, env)?;
-                let rhs = self.infer_expr(&infix_expr.rhs, env)?;
+            ast::Expr::BinOp(binop) => {
+                let lhs = self.infer_expr(&binop.lhs, env)?;
+                let rhs = self.infer_expr(&binop.rhs, env)?;
                 if lhs != rhs {
                     return Err(TypeError::TypeMismatch(lhs, rhs))
                         .into_diagnostic()
-                        .wrap_err("infix expression type mismatch");
+                        .wrap_err("binop type mismatch");
                 }
                 Ok(lhs)
             }
@@ -450,7 +450,7 @@ impl HirBuilder {
             ast::Expr::Constructor(constructor) => {
                 let sym = self.get_var(&constructor.name, env)?;
                 if sym.kind != SymbolKind::Struct {
-                    panic!("call var must be a struct (or enum in the future)");
+                    panic!("constructor must be a struct");
                 }
 
                 Expr::Constructor {
@@ -463,7 +463,10 @@ impl HirBuilder {
                 }
             }
 
-            ast::Expr::Infix(infix_expr) => todo!(),
+            ast::Expr::BinOp(binop) => {
+                todo!()
+                // Expr::BinOp { lhs: (), op: (), rhs: (), ty: () }
+            },
 
             ast::Expr::RawIdent(_) => todo!(),
 
@@ -497,7 +500,6 @@ impl HirBuilder {
             ast::Stmnt::Fn(func) => {
                 let sym = self.new_symbol(func.name.clone(), ty, SymbolKind::Fn);
                 let func_id = sym.id;
-                let func_ty = sym.ty.clone();
 
                 env.variables.insert(func.name, func_id);
 

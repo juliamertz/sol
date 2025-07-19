@@ -13,7 +13,7 @@ end
 ```ron
 [
     Expr(If((
-        condition: Infix((
+        condition: BinOp((
             lhs: Ident("n"),
             op: Lt,
             rhs: IntLit(0),
@@ -43,7 +43,7 @@ end
 ```ron
 [
     Expr(If((
-        condition: Infix((
+        condition: BinOp((
             lhs: Ident("n"),
             op: Lt,
             rhs: IntLit(0),

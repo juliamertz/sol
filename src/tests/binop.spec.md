@@ -10,7 +10,7 @@
 
 ```ron
 [
-    Expr(Infix((
+    Expr(BinOp((
         lhs: IntLit(10),
         op: Add,
         rhs: IntLit(40),
@@ -30,7 +30,7 @@
 
 ```ron
 [
-    Expr(Infix((
+    Expr(BinOp((
         lhs: IntLit(200),
         op: Sub,
         rhs: IntLit(100),
@@ -50,7 +50,7 @@
 
 ```ron
 [
-    Expr(Infix((
+    Expr(BinOp((
         lhs: IntLit(200),
         op: Mul,
         rhs: IntLit(100),
@@ -70,7 +70,7 @@
 
 ```ron
 [
-    Expr(Infix((
+    Expr(BinOp((
         lhs: IntLit(200),
         op: Eq,
         rhs: IntLit(100),
@@ -90,7 +90,7 @@
 
 ```ron
 [
-    Expr(Infix((
+    Expr(BinOp((
         lhs: IntLit(200),
         op: And,
         rhs: IntLit(100),

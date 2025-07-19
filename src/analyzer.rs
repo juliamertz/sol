@@ -35,22 +35,22 @@ impl Type {
     }
 }
 
-impl From<&ast::Type> for Type {
-    fn from(value: &ast::Type) -> Self {
+impl From<&ast::TypeExpr> for Type {
+    fn from(value: &ast::TypeExpr) -> Self {
         match value {
-            ast::Type::Int => Self::Int,
-            ast::Type::Bool => Self::Bool,
-            ast::Type::Str => Self::Str,
-            ast::Type::List((ty, size)) => {
+            ast::TypeExpr::Int => Self::Int,
+            ast::TypeExpr::Bool => Self::Bool,
+            ast::TypeExpr::Str => Self::Str,
+            ast::TypeExpr::List((ty, size)) => {
                 let unboxed = Type::from(&(**ty)); // damn this is ugly
                 Self::list(unboxed, *size)
             }
-            ast::Type::Fn {
+            ast::TypeExpr::Fn {
                 args,
                 returns,
                 is_extern,
             } => todo!(),
-            ast::Type::Var(name) => Self::Var(name.clone()),
+            ast::TypeExpr::Var(name) => Self::Var(name.clone()),
         }
     }
 }
@@ -184,9 +184,9 @@ impl Analyzer {
                 todo!();
             }
 
-            Expr::Infix(infix_expr) => {
-                let lhs = Self::check_expr(&infix_expr.lhs, env)?;
-                let rhs = Self::check_expr(&infix_expr.rhs, env)?;
+            Expr::BinOp(binop) => {
+                let lhs = Self::check_expr(&binop.lhs, env)?;
+                let rhs = Self::check_expr(&binop.rhs, env)?;
                 if lhs != rhs {
                     return Err(AnalyzeError::TypeMismatch { lhs, rhs }.into());
                 }

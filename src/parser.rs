@@ -220,19 +220,19 @@ impl Parser {
         Ok(token.text.clone())
     }
 
-    fn ty(&mut self) -> Result<Type> {
+    fn ty(&mut self) -> Result<TypeExpr> {
         let ident = self.ident()?;
         let ty = match ident.as_str() {
-            "Int" => Type::Int,
-            "Bool" => Type::Bool,
-            "Str" => Type::Str,
-            _ => Type::Var(ident),
+            "Int" => TypeExpr::Int,
+            "Bool" => TypeExpr::Bool,
+            "Str" => TypeExpr::Str,
+            _ => TypeExpr::Var(ident),
         };
 
         if self.curr.kind == TokenKind::LBracket {
             self.consume(TokenKind::LBracket)?;
             self.consume(TokenKind::RBracket)?;
-            return Ok(Type::List((Box::new(ty), None)));
+            return Ok(TypeExpr::List((Box::new(ty), None)));
         }
 
         Ok(ty)
@@ -290,7 +290,7 @@ impl Parser {
         })
     }
 
-    fn arg_type(&mut self) -> Result<(Ident, Type)> {
+    fn arg_type(&mut self) -> Result<(Ident, TypeExpr)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
@@ -304,7 +304,7 @@ impl Parser {
         Ok((ident, expr))
     }
 
-    fn arg_types(&mut self) -> Result<Vec<(Ident, Type)>> {
+    fn arg_types(&mut self) -> Result<Vec<(Ident, TypeExpr)>> {
         let mut args = vec![];
 
         loop {
@@ -402,7 +402,7 @@ impl Parser {
         }))
     }
 
-    fn infix_expr(&mut self, lhs: Expr) -> Result<Expr> {
+    fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
         if !self.curr.kind.is_operator() {
             panic!("invalid operator");
         }
@@ -411,7 +411,7 @@ impl Parser {
 
         let rhs = self.expr(Prec::default())?; // TODO: prec
 
-        Ok(Expr::Infix(InfixExpr {
+        Ok(Expr::BinOp(BinOp {
             lhs: Box::new(lhs),
             op,
             rhs: Box::new(rhs),
@@ -465,7 +465,7 @@ impl Parser {
 
             match self.curr.kind {
                 kind if kind.is_operator() => {
-                    lhs = self.infix_expr(lhs)?;
+                    lhs = self.binop_expr(lhs)?;
                 }
                 TokenKind::LParen => {
                     lhs = self.call_expr(lhs)?;

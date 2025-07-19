@@ -1,6 +1,7 @@
 use crate::BuildOpts;
 use crate::analyzer::{self, Analyzer, TypeEnv};
-use crate::ast::{Block, CallExpr, Expr, Fn, InfixExpr, Node, Op, PrefixExpr, Stmnt};
+use crate::ast::{Block, CallExpr, Expr, Fn, BinOp, Node, Op, PrefixExpr, Stmnt};
+// use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
 use crate::codegen::{Compiler, Emitter};
 
 use std::fs;
@@ -70,10 +71,10 @@ impl C {
         buf.push_str(text);
     }
 
-    fn emit_infix_expr(&mut self, buf: &mut String, env: &mut TypeEnv, infix_expr: &InfixExpr) {
-        self.emit_expr(buf, env, infix_expr.lhs.as_ref());
-        self.emit_op(buf, &infix_expr.op);
-        self.emit_expr(buf, env, infix_expr.rhs.as_ref());
+    fn emit_binop_expr(&mut self, buf: &mut String, env: &mut TypeEnv, binop: &BinOp) {
+        self.emit_expr(buf, env, binop.lhs.as_ref());
+        self.emit_op(buf, &binop.op);
+        self.emit_expr(buf, env, binop.rhs.as_ref());
     }
 
     fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeEnv, call_expr: &CallExpr) {
@@ -167,7 +168,7 @@ impl C {
             Expr::IntLit(val) => buf.push_str(&val.to_string()),
             Expr::StrLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
             Expr::Prefix(prefix_expr) => todo!("prefix expr"),
-            Expr::Infix(infix_expr) => self.emit_infix_expr(buf, env, infix_expr),
+            Expr::BinOp(binop) => self.emit_binop_expr(buf, env, binop),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
             Expr::IfElse(r#if) => {
                 buf.push_str("if(");

@@ -23,7 +23,7 @@ ast_impl! {
         IntLit(i64),
         StrLit(String),
         Block(Block),
-        Infix(InfixExpr),
+        BinOp(BinOp),
         Prefix(PrefixExpr),
         Call(CallExpr),
         Index(IndexExpr),
@@ -55,12 +55,12 @@ ast_impl! {
         Chain, // TODO: think of better name
     }
 
-    pub enum Type {
+    pub enum TypeExpr {
         Int,
         Bool,
         Str,
-        List((Box<Type>, Option<usize>)),
-        Fn { args: Vec<Type>, returns: Box<Type>, is_extern: bool },
+        List((Box<TypeExpr>, Option<usize>)),
+        Fn { args: Vec<TypeExpr>, returns: Box<TypeExpr>, is_extern: bool },
         Var(Ident),
     }
 
@@ -80,7 +80,7 @@ ast_impl! {
 
     pub struct Let {
         pub name: Ident,
-        pub ty: Option<Type>,
+        pub ty: Option<TypeExpr>,
         pub val: Expr,
     }
 
@@ -93,7 +93,7 @@ ast_impl! {
         pub rhs: Box<Expr>,
     }
 
-    pub struct InfixExpr {
+    pub struct BinOp {
         pub lhs: Box<Expr>,
         pub op: Op,
         pub rhs: Box<Expr>,
@@ -112,8 +112,8 @@ ast_impl! {
     pub struct Fn {
         pub is_extern: bool,
         pub name: Ident,
-        pub params: Vec<(Ident, Type)>,
-        pub return_ty: Type,
+        pub params: Vec<(Ident, TypeExpr)>,
+        pub return_ty: TypeExpr,
         pub body: Option<Block>,
     }
 
@@ -123,7 +123,7 @@ ast_impl! {
 
     pub struct StructDef {
         pub ident: Ident,
-        pub fields: Vec<(Ident, Type)>,
+        pub fields: Vec<(Ident, TypeExpr)>,
     }
 
     pub struct Impl {
