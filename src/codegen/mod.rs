@@ -1,7 +1,7 @@
 mod js;
 pub use js::Js;
-// mod c;
-// pub use c::C;
+mod c2;
+pub use c2::C;
 
 use crate::BuildOpts;
 use crate::hir::TypeEnv;
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub trait Emitter {
     type Input;
 
-    fn emit(&mut self, ast: &Self::Input, env: &mut TypeEnv) -> String;
+    fn emit(&mut self, ast: &Self::Input) -> String;
 }
 
 pub trait Compiler {

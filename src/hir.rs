@@ -171,6 +171,7 @@ pub enum Stmnt {
         r#extern: bool,
         params: Vec<SymbolId>,
         body: Vec<Node>,
+        returns: Type,
     },
     Ret {
         implicit: bool,
@@ -546,6 +547,9 @@ impl HirBuilder {
         let stmnt = match stmnt {
             ast::Stmnt::Fn(func) => {
                 let sym = self.new_symbol(func.name.clone(), ty, SymbolKind::Fn);
+                let Type::Fn { returns, .. } = sym.ty.clone() else {
+                    panic!("not a function!?!?!?!?!?!?");
+                };
                 let func_id = sym.id;
 
                 env.variables.insert(func.name, func_id);
@@ -571,6 +575,7 @@ impl HirBuilder {
                     r#extern: func.is_extern,
                     params,
                     body,
+                    returns: *returns,
                 }
             }
 

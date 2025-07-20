@@ -1,11 +1,11 @@
 use crate::ast::Op;
 use crate::codegen::Emitter;
-use crate::hir::{Expr, Module, Node, Stmnt, TypeEnv};
+use crate::hir::{Expr, Module, Node, Stmnt, Type, TypeEnv};
 
 #[derive(Default)]
-pub struct Js;
+pub struct C;
 
-impl Emitter for Js {
+impl Emitter for C {
     type Input = Module;
 
     fn emit(&mut self, module: &Self::Input) -> String {
@@ -18,8 +18,6 @@ impl Emitter for Js {
             }
         }
 
-        buf.push_str("main()");
-
         buf
     }
 }
@@ -29,11 +27,12 @@ fn emit_node(module: &Module, buf: &mut String, node: &Node) {
         Node::Expr(expr) => emit_expr(module, buf, expr),
         Node::Stmnt(stmnt) => emit_stmnt(module, buf, stmnt),
     }
+    buf.push(';');
 }
 
 fn emit_op(buf: &mut String, op: &Op) {
     buf.push_str(match op {
-        Op::Eq => "===",
+        Op::Eq => "==",
         Op::Add => "+",
         Op::Sub => "-",
         Op::Mul => "*",
@@ -46,6 +45,20 @@ fn emit_op(buf: &mut String, op: &Op) {
     });
 }
 
+fn emit_type(buf: &mut String, ty: &Type) {
+    buf.push_str(match ty {
+        Type::Int => "int",
+        Type::Str => "char *",
+        Type::Bool => "bool",
+        Type::List(_) => "List",
+        Type::Struct { ident, .. } => ident,
+        Type::Var(name) => name,
+        Type::Ptr(_ty) => todo!(),
+        Type::Fn { .. } | Type::Any => todo!(),
+        Type::Unit => todo!(),
+    })
+}
+
 fn emit_expr_list(module: &Module, buf: &mut String, exprs: &[Expr]) {
     for (idx, expr) in exprs.iter().enumerate() {
         emit_expr(module, buf, expr);
@@ -54,6 +67,16 @@ fn emit_expr_list(module: &Module, buf: &mut String, exprs: &[Expr]) {
         }
     }
 }
+
+// fn emit_block(module: &Module, buf: &mut String, nodes: &[Node]) {
+//     for node in nodes.iter() {
+//         match node {
+//             Node::Expr(expr) => {
+//             },
+//             _ => emit_node(module, buf, node),
+//         }
+//     }
+// }
 
 fn emit_expr(module: &Module, buf: &mut String, expr: &Expr) {
     match expr {
@@ -99,16 +122,24 @@ fn emit_expr(module: &Module, buf: &mut String, expr: &Expr) {
             condition,
             consequence,
             alternative,
-            ..
+            ty,
         } => {
-            // TODO: support inline if (as expression)
-            // maybe we can use ternaries for this
+            buf.push_str("({");
+
+            if ty != &Type::Unit {
+                emit_type(buf, ty);
+                buf.push(' ');
+                buf.push_str("tmpvar");
+                buf.push(';');
+            }
+
             buf.push_str("if");
             buf.push('(');
             emit_expr(module, buf, condition);
             buf.push(')');
             buf.push('{');
             for node in consequence.iter() {
+                // TODO: assign last node expr to tmpvar
                 emit_node(module, buf, node);
             }
             buf.push('}');
@@ -116,10 +147,18 @@ fn emit_expr(module: &Module, buf: &mut String, expr: &Expr) {
                 buf.push_str("else");
                 buf.push('{');
                 for node in alternative.iter() {
+                    // TODO: assign last node expr to tmpvar
                     emit_node(module, buf, node);
                 }
                 buf.push('}');
             }
+
+            if ty != &Type::Unit {
+                buf.push_str("tmpvar");
+                buf.push(';');
+            }
+
+            buf.push_str("})");
         }
         Expr::List(exprs) => {
             buf.push('[');
@@ -155,22 +194,27 @@ fn emit_stmnt(module: &Module, buf: &mut String, stmnt: &Stmnt) {
             r#extern,
             params,
             body,
-            ..
+            returns,
         } => {
             if *r#extern {
                 return;
             }
-            buf.push_str("function");
+            emit_type(buf, returns);
             buf.push(' ');
             let sym = module.symbols.get(*id as usize).expect("valid symbol");
             buf.push_str(&sym.name);
             buf.push('(');
-            for param_id in params.iter() {
+            for (idx, param_id) in params.iter().enumerate() {
                 let sym = module
                     .symbols
                     .get(*param_id as usize)
                     .expect("valid symbol");
+                emit_type(buf, &sym.ty);
+                buf.push(' ');
                 buf.push_str(&sym.name);
+                if idx != params.len() - 1 {
+                    buf.push(',');
+                }
             }
             buf.push(')');
             buf.push('{');
@@ -196,6 +240,6 @@ fn emit_stmnt(module: &Module, buf: &mut String, stmnt: &Stmnt) {
             // TODO: class impl
             buf.push('}');
         }
-        Stmnt::Use { path } => {}
+        Stmnt::Use { path } => buf.push_str(&format!("#include <{}.h>\n", path.join(""))),
     }
 }
