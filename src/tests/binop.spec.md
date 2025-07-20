@@ -97,3 +97,31 @@
     ))),
 ]
 ```
+
+# Nested
+
+## Source
+
+```sol
+n == 0 or n == 1
+```
+
+## Expected (AST)
+
+```ron
+[
+    Expr(BinOp((
+        lhs: BinOp((
+            lhs: Ident("n"),
+            op: Eq,
+            rhs: IntLit(0),
+        )),
+        op: Or,
+        rhs: BinOp((
+            lhs: Ident("n"),
+            op: Eq,
+            rhs: IntLit(1),
+        )),
+    ))),
+]
+```

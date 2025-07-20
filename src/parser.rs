@@ -54,15 +54,15 @@ pub struct ParseError {
 pub enum Prec {
     #[default]
     Lowest,
-    Sum,     // +
+    AndOr,   // && or || - lower precedence than equality
     Eq,      // ==
     Cmp,     // > or <
+    Sum,     // +
     Product, // *
-    AndOr,
-    Prefix, // -a, !a or &a
-    Call,   // func()
+    Prefix,  // -a, !a or &a
+    Call,    // func()
     // Index, // list[0]
-    Chain, // mod.field
+    Chain,   // mod.field
 }
 
 impl From<&Token> for Prec {
@@ -407,9 +407,10 @@ impl Parser {
             panic!("invalid operator");
         }
         let op: Op = self.curr.to_owned().try_into()?;
+        let prec = Prec::from(&self.curr);
         self.advance();
 
-        let rhs = self.expr(Prec::default())?; // TODO: prec
+        let rhs = self.expr(prec)?; // TODO: prec
 
         Ok(Expr::BinOp(BinOp {
             lhs: Box::new(lhs),
@@ -458,7 +459,7 @@ impl Parser {
             return Ok(lhs);
         }
 
-        while prec <= Prec::from(&self.curr) {
+        while prec < Prec::from(&self.curr) {
             if self.curr.kind.is_terminator() {
                 break;
             }
@@ -532,6 +533,9 @@ impl Parser {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.arg_values()?;
         self.consume(TokenKind::RSquirly)?;
-        Ok(Expr::Constructor(Constructor { name: ident, fields }))
+        Ok(Expr::Constructor(Constructor {
+            name: ident,
+            fields,
+        }))
     }
 }
