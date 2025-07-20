@@ -15,7 +15,7 @@ end
     Stmnt(Fn((
         is_extern: false,
         name: "main",
-        args: [],
+        params: [],
         return_ty: Int,
         body: Some((
             nodes: [

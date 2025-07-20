@@ -12,7 +12,7 @@ fibonacci(n - 10)
 [
     Expr(Call((
         func: Ident("fibonacci"),
-        args: [BinOp ((
+        params: [BinOp ((
             lhs: Ident("n"),
             op: Sub,
             rhs: IntLit(10),

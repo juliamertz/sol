@@ -12,7 +12,7 @@ end
 
 ```ron
 [
-    Expr(If((
+    Expr(IfElse((
         condition: BinOp((
             lhs: Ident("n"),
             op: Lt,
@@ -42,7 +42,7 @@ end
 
 ```ron
 [
-    Expr(If((
+    Expr(IfElse((
         condition: BinOp((
             lhs: Ident("n"),
             op: Lt,
