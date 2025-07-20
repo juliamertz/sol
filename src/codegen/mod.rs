@@ -1,7 +1,11 @@
-mod c;
-pub use c::C;
+mod js;
+pub use js::Js;
+// mod c;
+// pub use c::C;
 
-use crate::{BuildOpts, analyzer::TypeEnv};
+use crate::BuildOpts;
+use crate::hir::TypeEnv;
+
 use miette::Result;
 use std::path::PathBuf;
 

@@ -76,10 +76,17 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
         }
     };
 
-    let mut emitter = codegen::C::default();
-    let mut env = TypeEnv::new();
-    let out = emitter.emit(&nodes, &mut env);
-    emitter.build_exe(&out, "test", opts)
+    let mut builder = crate::hir::HirBuilder::default();
+    let mut env = crate::hir::TypeEnv::default();
+    let hir = builder.lower(nodes, &mut env)?;
+
+    // let mut emitter = codegen::C::default();
+    // let mut env = TypeEnv::new();
+
+    // let out = codegen::Js.emit(&hir, &mut env);
+    // println!("{out}");
+    // emitter.build_exe(&out, "test", opts)
+    todo!();
 }
 
 fn main() -> Result<()> {

@@ -2,7 +2,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic, Report, Result, SourceSpan, mi
 use std::{collections::HashMap, vec};
 use thiserror::Error;
 
-use crate::ast;
+use crate::ast::{self, Op};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -90,18 +90,20 @@ pub enum SymbolKind {
 type SymbolId = u32;
 
 #[derive(Debug, Clone)]
-struct Symbol {
-    id: SymbolId,
-    kind: SymbolKind,
-    name: String,
-    ty: Type,
+pub struct Symbol {
+    pub id: SymbolId,
+    pub kind: SymbolKind,
+    pub name: String,
+    pub ty: Type,
 }
 
 type Level = u32;
 
 #[derive(Debug, Clone)]
 pub struct Module {
-
+    pub env: TypeEnv,
+    pub symbols: Vec<Symbol>,
+    pub nodes: Vec<Node>,
 }
 
 #[derive(Debug, Clone)]
@@ -266,12 +268,43 @@ impl HirBuilder {
             ast::Expr::BinOp(binop) => {
                 let lhs = self.infer_expr(&binop.lhs, env)?;
                 let rhs = self.infer_expr(&binop.rhs, env)?;
-                if lhs != rhs {
-                    return Err(TypeError::TypeMismatch(lhs, rhs))
-                        .into_diagnostic()
-                        .wrap_err("binop type mismatch");
+                // if lhs != rhs {
+                //     dbg!(&lhs, &binop.op, &rhs);
+                //     return Err(TypeError::TypeMismatch(lhs, rhs))
+                //         .into_diagnostic()
+                //         .wrap_err("binop type mismatch");
+                // }
+
+                // TODO: these errors should use the correct side
+                match binop.op {
+                    Op::Eq => {
+                        if lhs != rhs {
+                            Err(TypeError::TypeMismatch(Type::Bool, lhs))
+                                .into_diagnostic()
+                                .wrap_err("in eq op")
+                        } else {
+                            Ok(Type::Bool)
+                        }
+                    }
+
+                    Op::And | Op::Or => match (&lhs, &rhs) {
+                        (Type::Bool, Type::Bool) => Ok(Type::Bool),
+                        _ => Err(TypeError::TypeMismatch(Type::Bool, lhs))
+                            .into_diagnostic()
+                            .wrap_err("Non bool value in and | or op"),
+                    },
+
+                    Op::Add | Op::Sub | Op::Mul | Op::Div => Ok(lhs),
+
+                    Op::Lt | Op::Gt => match (&lhs, &rhs) {
+                        (Type::Int, Type::Int) => Ok(Type::Bool),
+                        _ => Err(TypeError::TypeMismatch(Type::Int, lhs))
+                            .into_diagnostic()
+                            .wrap_err("Non integer value in lt or gt op"),
+                    },
+
+                    Op::Chain => todo!(),
                 }
-                Ok(lhs)
             }
 
             ast::Expr::List(list) => {
@@ -307,9 +340,10 @@ impl HirBuilder {
             ast::Expr::Ref(inner) => Ok(Type::ptr(self.infer_expr(inner, env)?)),
 
             ast::Expr::Index(expr) => {
-                let Type::List((inner_ty, _size)) = self.infer_expr(&expr.val, env)? else {
+                let Type::List((inner_ty, _)) = self.infer_expr(&expr.val, env)? else {
                     todo!("index val not a list");
                 };
+
                 Ok(*inner_ty)
             }
 
@@ -372,7 +406,25 @@ impl HirBuilder {
         }
     }
 
-    pub fn lower(&mut self, nodes: Vec<ast::Node>, env: &mut TypeEnv) -> Result<Vec<Node>> {
+    pub fn lower(&mut self, ast: Vec<ast::Node>, env: &mut TypeEnv) -> Result<Module> {
+        dbg!(&env);
+        let nodes = self.lower_nodes(ast, env);
+        dbg!(&env);
+        Ok(Module {
+            env: env.clone(),
+            symbols: self.symbols.clone(),
+            nodes: nodes?,
+        })
+    }
+
+    pub fn lower_node(&mut self, node: ast::Node, env: &mut TypeEnv) -> Result<Node> {
+        match node {
+            ast::Node::Expr(expr) => Ok(Node::Expr(self.lower_expr(expr, env)?)),
+            ast::Node::Stmnt(stmnt) => Ok(Node::Stmnt(self.lower_stmnt(stmnt, env)?)),
+        }
+    }
+
+    pub fn lower_nodes(&mut self, nodes: Vec<ast::Node>, env: &mut TypeEnv) -> Result<Vec<Node>> {
         nodes
             .into_iter()
             .map(|node| self.lower_node(node, env))
@@ -380,13 +432,6 @@ impl HirBuilder {
                 acc.push(res?);
                 Ok(acc)
             })
-    }
-
-    pub fn lower_node(&mut self, node: ast::Node, env: &mut TypeEnv) -> Result<Node> {
-        Ok(match node {
-            ast::Node::Expr(expr) => Node::Expr(self.lower_expr(expr, env)?),
-            ast::Node::Stmnt(stmnt) => Node::Stmnt(self.lower_stmnt(stmnt, env)?),
-        })
     }
 
     pub fn lower_expr_list(
@@ -466,7 +511,7 @@ impl HirBuilder {
             ast::Expr::BinOp(binop) => {
                 todo!()
                 // Expr::BinOp { lhs: (), op: (), rhs: (), ty: () }
-            },
+            }
 
             ast::Expr::RawIdent(_) => todo!(),
 
@@ -476,7 +521,7 @@ impl HirBuilder {
 
             ast::Expr::IfElse(if_else) => Expr::IfElse {
                 condition: self.lower_expr(*if_else.condition, env)?.into(),
-                consequence: self.lower(if_else.consequence.nodes, env)?,
+                consequence: self.lower_nodes(if_else.consequence.nodes, env)?,
                 alternative: None, // TODO: else
                 ty,
             },
@@ -502,17 +547,19 @@ impl HirBuilder {
                 let func_id = sym.id;
 
                 env.variables.insert(func.name, func_id);
+                let mut func_env = env.clone();
 
                 let mut params = vec![];
                 for (name, ref ty) in func.params {
-                    let sym = self.new_symbol(name, ty.into(), SymbolKind::Var);
+                    let sym = self.new_symbol(name.clone(), ty.into(), SymbolKind::Var);
                     params.push(sym.id);
+                    func_env.variables.insert(name, sym.id);
                 }
 
                 let mut body = vec![];
                 if !func.is_extern {
                     for node in func.body.expect("function to have a body!").nodes {
-                        let node = self.lower_node(node, env)?;
+                        let node = self.lower_node(node, &mut func_env)?;
                         body.push(node);
                     }
                 }
