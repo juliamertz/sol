@@ -56,7 +56,11 @@ fn emit_expr_list(module: &Module, buf: &mut String, exprs: &[Expr]) {
 fn emit_expr(module: &Module, buf: &mut String, expr: &Expr) {
     match expr {
         Expr::IntLit(int) => buf.push_str(&int.to_string()),
-        Expr::StrLit(str) => buf.push_str(str),
+        Expr::StrLit(str) => {
+            buf.push('"');
+            buf.push_str(str);
+            buf.push('"');
+        }
         Expr::Var { id, .. } => {
             let sym = module.symbols.get(*id as usize).expect("valid symbol");
             buf.push_str(&sym.name);
@@ -150,6 +154,9 @@ fn emit_stmnt(module: &Module, buf: &mut String, stmnt: &Stmnt) {
             params,
             body,
         } => {
+            if *r#extern {
+                return;
+            }
             buf.push_str("function");
             buf.push(' ');
             let sym = module.symbols.get(*id as usize).expect("valid symbol");
@@ -186,6 +193,6 @@ fn emit_stmnt(module: &Module, buf: &mut String, stmnt: &Stmnt) {
             // TODO: class impl
             buf.push('}');
         }
-        Stmnt::Use { path } => todo!(),
+        Stmnt::Use { path } => {}
     }
 }

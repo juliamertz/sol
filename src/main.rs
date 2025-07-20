@@ -83,10 +83,10 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     // let mut emitter = codegen::C::default();
     // let mut env = TypeEnv::new();
 
-    // let out = codegen::Js.emit(&hir, &mut env);
-    // println!("{out}");
-    // emitter.build_exe(&out, "test", opts)
-    todo!();
+    let out = codegen::Js.emit(&hir, &mut env);
+    let outpath = PathBuf::from("./out/source.js") ;
+    std::fs::write(&outpath, out).unwrap();
+    Ok(outpath)
 }
 
 fn main() -> Result<()> {

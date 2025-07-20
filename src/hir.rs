@@ -508,10 +508,12 @@ impl HirBuilder {
                 }
             }
 
-            ast::Expr::BinOp(binop) => {
-                todo!()
-                // Expr::BinOp { lhs: (), op: (), rhs: (), ty: () }
-            }
+            ast::Expr::BinOp(binop) => Expr::BinOp {
+                lhs: self.lower_expr(*binop.lhs, env)?.into(),
+                op: binop.op,
+                rhs: self.lower_expr(*binop.rhs, env)?.into(),
+                ty,
+            },
 
             ast::Expr::RawIdent(_) => todo!(),
 
@@ -581,7 +583,11 @@ impl HirBuilder {
                 }
             }
 
-            ast::Stmnt::Ret(ret) => todo!(),
+            ast::Stmnt::Ret(ret) => Stmnt::Ret {
+                implicit: false,
+                val: self.lower_expr(ret.val, env)?.into(),
+                ty,
+            },
             ast::Stmnt::Use(import) => Stmnt::Use {
                 path: vec![import.ident], // TODO: proper paths
             },
