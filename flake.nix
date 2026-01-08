@@ -26,7 +26,7 @@
           rustc = rust-bin.minimal;
         };
 
-        manifest = lib.importTOML ./Cargo.toml;
+        manifest = lib.importTOML ./solc/Cargo.toml;
       in {
         packages = {
           default = rustPlatform.buildRustPackage rec {

@@ -284,7 +284,7 @@ impl Parser {
         Ok(ty)
     }
 
-    fn r#fn(&mut self) -> Result<Fn> {
+    fn func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
         let is_extern = self.curr.kind == TokenKind::Extern;
         if is_extern {
@@ -399,13 +399,13 @@ impl Parser {
 
     fn stmnt(&mut self) -> Result<Stmnt> {
         let stmnt = match self.curr.kind {
-            TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.r#fn()?),
+            TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.func()?),
             TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
             TokenKind::Struct => Stmnt::StructDef(self.struct_def()?),
             TokenKind::Ret => {
                 let span = self.curr.span;
-                self.advance();
+                self.consume(TokenKind::Ret)?;
                 let val = self.expr(Prec::default())?;
                 let id = self.ctx.next_id();
                 let span = enclosing_span(span, self.curr.span);
@@ -508,7 +508,11 @@ impl Parser {
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LParen)?;
-        let args = self.expr_list()?;
+        let args = if self.at(TokenKind::RParen) {
+            vec![]
+        } else {
+            self.expr_list()?
+        };
         let tok = self.consume(TokenKind::RParen)?;
         let id = self.ctx.next_id();
         let span = enclosing_span(expr.span(), tok.span());
@@ -570,6 +574,7 @@ impl Parser {
         if self.at(TokenKind::Eof) {
             return Ok(lhs);
         }
+
 
         while prec < Prec::from(&self.curr) {
             if self.curr.kind.is_terminator() {

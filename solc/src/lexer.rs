@@ -82,7 +82,6 @@ impl TokenKind {
                 | TokenKind::Comma
                 | TokenKind::RBracket
                 | TokenKind::RParen
-                | TokenKind::RAngle
                 | TokenKind::RSquirly
                 | TokenKind::Then
                 | TokenKind::Else

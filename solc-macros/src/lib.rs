@@ -26,7 +26,7 @@ pub fn derive_id(input: TokenStream) -> TokenStream {
 
     quote! {
         impl #impl_generics #name #ty_generics #where_clause {
-            pub const DUMMY: #ty = #ty::MAX;
+            pub const DUMMY: Self = Self(#ty::MAX);
 
             pub fn new(id: #ty) -> Self {
                 Self(id)

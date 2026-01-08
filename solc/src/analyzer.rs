@@ -1,13 +1,15 @@
+use std::collections::HashMap;
+
 use miette::Diagnostic;
-use solc_macros::Id;
-use std::{collections::HashMap, hash::Hash};
+use thiserror::Error;
 
 use crate::ast::{
     BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Let, List, Literal,
     LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
+use solc_macros::Id;
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum TypeError {
     #[error("variable not found in scope: {0}")]
     NotFound(Ident),
@@ -148,7 +150,18 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let scope = &mut scope.child();
             check_nodes(&block.nodes, env, scope)?;
 
-            todo!()
+            if let Some(last_node) = block.nodes.last() {
+                let return_ty = match last_node {
+                    Node::Expr(expr) => env.type_of(&expr.id()).unwrap().clone(),
+                    Node::Stmnt(Stmnt::Ret(Ret { val, .. })) => {
+                        env.type_of(&val.id()).unwrap().clone()
+                    }
+                    _ => Type::None,
+                };
+                Ok(return_ty)
+            } else {
+                Ok(Type::None)
+            }
         }
 
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
@@ -158,9 +171,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             match op.kind {
                 OpKind::Eq | OpKind::Lt | OpKind::Gt => {
                     if lhs != rhs {
-                        return Err(TypeError::TypeMismatch { lhs, rhs });
+                        Err(TypeError::TypeMismatch { lhs, rhs })
                     } else {
-                        return Ok(Type::Bool);
+                        Ok(Type::Bool)
                     }
                 }
 
@@ -172,7 +185,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                         todo!()
                     }
 
-                    return Ok(Type::Bool);
+                    Ok(Type::Bool)
                 }
 
                 _ => match (lhs, rhs) {
@@ -193,7 +206,20 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             }
         }
 
-        Expr::Call(CallExpr { func, params, .. }) => todo!("infer call expr"),
+        Expr::Call(CallExpr { func, params, .. }) => {
+            let Type::Fn {
+                is_extern,
+                params,
+                returns,
+            } = infer(func, env, scope)?
+            else {
+                todo!("cannot call a non fn var");
+            };
+
+            // TODO: check validity of params
+
+            Ok(returns.as_ref().to_owned())
+        }
 
         Expr::Index(IndexExpr { expr, .. }) => {
             if let Type::List((ty, _)) = infer(expr, env, scope)? {
@@ -234,9 +260,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 });
             }
 
-            env.set_type(*id, consequence_ty);
-
-            Ok(todo!())
+            Ok(consequence_ty)
         }
 
         Expr::List(List { items, .. }) => {
@@ -255,7 +279,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Ref(expr) => Ok(Type::Ptr(infer(expr, env, scope)?.into())),
 
-        Expr::RawIdent(ident) => todo!("infer raw ident"),
+        Expr::RawIdent(_ident) => todo!("infer raw ident"),
     }?;
 
     env.set_type(expr.id(), ty.clone());
@@ -276,7 +300,9 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             scope.set_var(ident, def_id);
         }
 
-        Stmnt::Ret(Ret { val, .. }) => todo!("check return statement"),
+        Stmnt::Ret(Ret { val, .. }) => {
+            infer(val, env, scope)?;
+        }
 
         Stmnt::Use(Use { ident, .. }) => {}
 

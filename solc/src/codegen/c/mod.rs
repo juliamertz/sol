@@ -1,9 +1,12 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, Analyzer, TypeInfo};
-use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, Node, NodeId, Op, PrefixExpr, Stmnt};
+use crate::analyzer::{self, Scope, Type, TypeEnv, infer};
+use crate::ast::{
+    BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr, Stmnt,
+};
 // use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
-use crate::codegen::{Compiler, Emitter};
+use crate::codegen::{Compiler, Emitter, quote};
 
+use std::borrow::Cow;
 use std::fs;
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -43,11 +46,8 @@ impl Default for C {
 impl Emitter for C {
     type Input = Vec<Node>;
 
-    fn emit(&mut self, ast: &Self::Input) -> String {
+    fn emit(&mut self, env: TypeEnv, ast: &Self::Input) -> String {
         let mut buf = String::new();
-        let mut env = TypeInfo::new();
-
-        Analyzer::collect_declarations(ast, &mut env).unwrap();
 
         let includes = [("gh.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
 
@@ -58,7 +58,7 @@ impl Emitter for C {
         }
 
         for node in ast {
-            self.emit_node(&mut buf, &mut env, node);
+            self.emit_node(&mut buf, &env, node);
         }
 
         buf
@@ -66,64 +66,53 @@ impl Emitter for C {
 }
 
 impl C {
-    // namespace prefix to be used for all identifiers
-    fn prefix(&self, ident: &str) -> String {
-        format!("__{prefix}_{ident}", prefix = env!("CARGO_PKG_NAME"))
+    // namespace prefix to be used for identifiers
+    fn prefix(&self, ident: impl AsRef<str>) -> String {
+        format!(
+            "__{prefix}_{ident}",
+            prefix = env!("CARGO_PKG_NAME"),
+            ident = ident.as_ref()
+        )
     }
 
     fn emit_op(&mut self, buf: &mut String, op: &Op) {
-        let text = match op {
-            Op::Eq => "==",
-            Op::Add => "+",
-            Op::Sub => "-",
-            Op::Mul => "*",
-            Op::Div => "/",
-            Op::Lt => "<",
-            Op::Gt => ">",
-            Op::And => "&&",
-            Op::Or => "||",
-            Op::Chain => ".",
+        let text = match op.kind {
+            OpKind::Eq => "==",
+            OpKind::Add => "+",
+            OpKind::Sub => "-",
+            OpKind::Mul => "*",
+            OpKind::Div => "/",
+            OpKind::Lt => "<",
+            OpKind::Gt => ">",
+            OpKind::And => "&&",
+            OpKind::Or => "||",
+            OpKind::Chain => ".",
         };
         buf.push_str(text);
     }
 
-    fn emit_binop_expr(&mut self, buf: &mut String, env: &mut TypeInfo, binop: &BinOp) {
+    fn emit_binop_expr(&mut self, buf: &mut String, env: &TypeEnv, binop: &BinOp) {
         self.emit_expr(buf, env, binop.lhs.as_ref());
         self.emit_op(buf, &binop.op);
         self.emit_expr(buf, env, binop.rhs.as_ref());
     }
 
-    fn emit_call_expr(&mut self, buf: &mut String, env: &mut TypeInfo, call_expr: &CallExpr) {
-        let name = match call_expr.func.as_ref() {
-            Expr::Ident(ident) => ident,
-            Expr::RawIdent(ident) => ident,
-            _ => todo!("{call_expr:?}"),
-        };
-        let declaration = env.get_def(name);
-
-        if let Some(analyzer::Type::Fn {
-            is_extern: true, ..
-        }) = declaration
-        {
-            buf.push_str(name);
-        } else {
-            self.emit_expr(buf, env, &call_expr.func);
-        }
+    fn emit_call_expr(&mut self, buf: &mut String, env: &TypeEnv, call_expr: &CallExpr) {
+        self.emit_expr(buf, env, &call_expr.func);
 
         buf.push('(');
 
-        let mut args = String::new();
-        for arg in call_expr.params.iter() {
-            self.emit_expr(&mut args, env, arg);
-            args.push(',');
+        for (idx, arg) in call_expr.params.iter().enumerate() {
+            self.emit_expr(buf, env, arg);
+            if idx != call_expr.params.len() - 1 {
+                buf.push(',');
+            }
         }
 
-        // TODO: this is hacky, maybe we're better of returning a string from each emit fn
-        buf.push_str(args.strip_suffix(",").unwrap_or(&args));
         buf.push(')');
     }
 
-    fn emit_node(&mut self, buf: &mut String, env: &mut TypeInfo, node: &Node) {
+    fn emit_node(&mut self, buf: &mut String, env: &TypeEnv, node: &Node) {
         self.node_marker.pos = Some(buf.len());
 
         match node {
@@ -140,49 +129,50 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &mut TypeInfo, ty: impl Into<analyzer::Type>) -> String {
+    fn emit_type(&mut self, _env: &TypeEnv, ty: impl Into<Type>) -> String {
         match ty.into() {
-            analyzer::Type::Int => "int",
-            analyzer::Type::Str => "char *",
-            analyzer::Type::Bool => "bool",
-            analyzer::Type::List(_) => "List",
-            analyzer::Type::Struct { ref ident, .. } => ident,
-            analyzer::Type::Var(ref name) => name,
-            analyzer::Type::Ptr(_ty) => todo!(),
-            analyzer::Type::Fn { .. } | analyzer::Type::Any => todo!(),
+            Type::Int => "int",
+            Type::Str => "char *",
+            Type::Bool => "bool",
+            Type::List(_) => "List",
+            Type::Struct { ref ident, .. } => ident.as_ref(),
+            Type::Var(ref name) => name.as_ref(),
+            Type::Ptr(_ty) => todo!(),
+            Type::Fn { .. } | Type::None => todo!(),
         }
         .into()
     }
 
-    fn emit_block(&mut self, buf: &mut String, env: &mut TypeInfo, block: &Block) {
+    fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
         let env = &mut env.clone();
-        let pre_define = Analyzer::collect_declarations(&block.nodes, env).unwrap();
 
-        // TODO: refactor this into block_marker
-        for (ident, ty) in pre_define.into_iter() {
-            if let analyzer::Type::List((inner, _size)) = ty {
-                buf.push_str(
-                    format!(
-                        "List {ident}=list_alloc(sizeof({ty}), 64);",
-                        ident = self.prefix(&ident),
-                        ty = self.emit_type(env, *inner)
-                    )
-                    .as_str(),
-                );
-            }
-        }
+        // for (ident, ty) in pre_define.into_iter() {
+        //     if let analyzer::Type::List((inner, _size)) = ty {
+        //         buf.push_str(
+        //             format!(
+        //                 "List {ident}=list_alloc(sizeof({ty}), 64);",
+        //                 ident = self.prefix(&ident),
+        //                 ty = self.emit_type(env, *inner)
+        //             )
+        //             .as_str(),
+        //         );
+        //     }
+        // }
 
         for node in &block.nodes {
             self.emit_node(buf, env, node);
         }
     }
 
-    fn emit_expr(&mut self, buf: &mut String, env: &mut TypeInfo, expr: &Expr) {
+    fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
+        let ty = env.type_of(&expr.id()).unwrap();
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
-            Expr::RawIdent(ident) => buf.push_str(ident),
-            Expr::IntLit(val) => buf.push_str(&val.to_string()),
-            Expr::StrLit(val) => buf.push_str(format!("\"{val}\"").as_str()),
+            Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
+            Expr::Literal(literal) => match &literal.kind {
+                LiteralKind::Str(str) => buf.push_str(&quote(str)),
+                LiteralKind::Int(int) => buf.push_str(&int.to_string()),
+            },
             Expr::Prefix(prefix_expr) => todo!("prefix expr"),
             Expr::BinOp(binop) => self.emit_binop_expr(buf, env, binop),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
@@ -205,7 +195,7 @@ impl C {
 
             Expr::Constructor(constructor) => {
                 buf.push('(');
-                buf.push_str(&constructor.name);
+                buf.push_str(&constructor.ident.as_ref());
                 buf.push(')');
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {
@@ -221,7 +211,6 @@ impl C {
             Expr::Block(block) => self.emit_block(buf, env, block),
 
             Expr::List(list) => {
-                let ty = Analyzer::check_expr(expr, env).unwrap();
                 let tmp_name = "inner"; // TODO: implement some system to avoid naming conflicts
                 buf.push_str("({");
                 buf.push_str("List");
@@ -236,9 +225,10 @@ impl C {
                         env,
                         &Expr::Call(CallExpr {
                             id: NodeId::DUMMY,
-                            func: Box::new(Expr::RawIdent("list_push_rval".into())),
+                            span: (0, 0).into(),
+                            func: Box::new(Expr::RawIdent("list_push_rval".to_string())),
                             params: vec![
-                                Expr::Ref(Box::new(Expr::Ident(tmp_name.to_string()))),
+                                Expr::Ref(Box::new(Expr::RawIdent(tmp_name.to_string()))),
                                 item,
                             ],
                         }),
@@ -259,11 +249,10 @@ impl C {
             }
 
             Expr::Index(expr) => {
-                let ty = Analyzer::check_expr(&Expr::Index(expr.clone()), env).unwrap();
                 buf.push_str("list_get_deref(");
-                self.emit_expr(buf, env, &expr.val);
+                self.emit_expr(buf, env, &expr.expr);
                 buf.push(',');
-                buf.push_str(&self.emit_type(env, ty));
+                buf.push_str(&self.emit_type(env, ty.to_owned()));
                 buf.push(',');
                 self.emit_expr(buf, env, &expr.idx);
                 buf.push(')');
@@ -271,9 +260,7 @@ impl C {
         };
     }
 
-    fn emit_stmnt(&mut self, buf: &mut String, env: &mut TypeInfo, stmnt: &Stmnt) {
-        let ty = Analyzer::check_stmnt(stmnt, env).unwrap();
-
+    fn emit_stmnt(&mut self, buf: &mut String, env: &TypeEnv, stmnt: &Stmnt) {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
@@ -286,6 +273,8 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
+                let ty = env.type_of(&binding.val.id()).unwrap();
+
                 // TODO: pull out into seperate function
                 if let Expr::List(list) = &binding.val {
                     for item in list.items.clone() {
@@ -294,7 +283,8 @@ impl C {
                             &mut buf,
                             env,
                             &Expr::Call(CallExpr {
-                                id: NodeId::DUMMY, // TODO:
+                                id: NodeId::DUMMY,
+                                span: (0, 0).into(),
                                 func: Box::new(Expr::RawIdent("list_push_rval".into())),
                                 params: vec![
                                     Expr::Ref(Box::new(Expr::Ident(binding.ident.clone()))),
@@ -318,7 +308,7 @@ impl C {
             }
             Stmnt::StructDef(strct) => {
                 buf.push_str("typedef struct ");
-                buf.push_str(&strct.ident);
+                buf.push_str(strct.ident.as_ref());
                 buf.push('{');
                 for (ident, ty) in strct.fields.iter() {
                     buf.push_str(&self.emit_type(env, ty));
@@ -327,7 +317,7 @@ impl C {
                     buf.push(';');
                 }
                 buf.push('}');
-                buf.push_str(&strct.ident);
+                buf.push_str(strct.ident.as_ref());
                 buf.push(';');
             }
             Stmnt::Impl(_) => {
@@ -336,17 +326,17 @@ impl C {
         }
     }
 
-    fn emit_fn(&mut self, buf: &mut String, env: &mut TypeInfo, func: &Fn) {
+    fn emit_fn(&mut self, buf: &mut String, env: &TypeEnv, func: &Fn) {
         if func.is_extern {
             return;
         }
 
         buf.push_str(&self.emit_type(env, &func.return_ty));
         buf.push(' ');
-        if &func.name != "main" {
-            buf.push_str(&self.prefix(&func.name));
+        if func.ident.as_ref() != "main" {
+            buf.push_str(&self.prefix(func.ident.as_ref()));
         } else {
-            buf.push_str(&func.name);
+            buf.push_str(func.ident.as_ref());
         }
         buf.push('(');
         buf.push_str(
@@ -361,9 +351,8 @@ impl C {
         buf.push('{');
 
         if let Some(ref body) = func.body {
-            let env = &mut env.clone();
             self.emit_block(buf, env, body);
-            if &func.name == "main"
+            if func.ident.as_ref() == "main"
                 && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
             {
                 buf.push_str("return 0;");
@@ -423,4 +412,7 @@ impl Compiler for C {
 
         Ok(out_path)
     }
+
+    // fn format<'a>(&self, source: &'a str) -> Cow<'a, str> {
+    // }
 }

@@ -228,7 +228,7 @@ pub enum Expr {
     Ref(Box<Expr>),
     /// Used for inserting identifiers that will not be mangled in the final output
     /// For internal use during codegen or when using extern symbols
-    RawIdent(Ident),
+    RawIdent(String),
 }
 
 impl Expr {
@@ -262,7 +262,7 @@ impl Expr {
             Expr::List(list) => list.id,
             Expr::Constructor(constructor) => constructor.id,
             Expr::Ref(r#ref) => r#ref.id(),
-            Expr::RawIdent(ident) => ident.id,
+            Expr::RawIdent(_) => NodeId::DUMMY,
         }
     }
 }
