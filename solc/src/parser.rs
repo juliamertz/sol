@@ -259,7 +259,7 @@ impl Parser {
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
         let ident = self.ident()?;
-        let kind = match ident.as_str() {
+        let kind = match ident.as_ref() {
             "Int" => TyKind::Int,
             "Bool" => TyKind::Bool,
             "Str" => TyKind::Str,

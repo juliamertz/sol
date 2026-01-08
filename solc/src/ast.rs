@@ -15,15 +15,15 @@ pub struct Ident {
     pub inner: String,
 }
 
-impl Ident {
-    pub fn as_str(&self) -> &str {
+impl AsRef<str> for Ident {
+    fn as_ref(&self) -> &str {
         &self.inner
     }
 }
 
 impl Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        f.write_str(&self.inner)
     }
 }
 
@@ -91,7 +91,7 @@ pub enum TyKind {
         size: Option<usize>,
     },
     Fn {
-        args: Vec<Ty>,
+        params: Vec<Ty>,
         returns: Box<Ty>,
         is_extern: bool,
     },
@@ -252,10 +252,10 @@ impl Expr {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Stmnt {
-    Fn(Fn),
+    Let(Let),
     Ret(Ret),
     Use(Use),
-    Let(Let),
+    Fn(Fn),
     StructDef(StructDef),
     Impl(Impl),
 }
