@@ -3,10 +3,12 @@ mod lexer;
 mod parser;
 mod analyzer;
 
-use std::path::{Path, PathBuf};
+use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}};
 
 use clap::Parser;
-use miette::Result;
+use miette::{IntoDiagnostic, Result};
+
+use crate::analyzer::{check_nodes, Scope, TypeEnv};
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -32,16 +34,12 @@ struct BuildOpts {
 
 #[derive(clap::Subcommand)]
 enum Command {
-    // Build {
-    //     filepath: PathBuf,
-    //
-    //     // TODO: implement
-    //     #[arg(short, long)]
-    //     skip_codegen: bool,
-    //
-    //     #[clap(flatten)]
-    //     opts: BuildOpts,
-    // },
+    Build {
+        filepath: PathBuf,
+
+        #[clap(flatten)]
+        opts: BuildOpts,
+    },
     // Run {
     //     filepath: PathBuf,
     //
@@ -81,15 +79,24 @@ fn main() -> Result<()> {
     let opts = Cli::parse();
 
     match opts.command {
-        // Command::Build {
-        //     filepath,
-        //     skip_codegen,
-        //     opts,
-        // } => {
-        //     let bin_path = build(&filepath, &opts)?;
-        //     let metadata = std::fs::metadata(&bin_path).into_diagnostic()?;
-        //     println!("{} bytes written to {bin_path:?}", metadata.size());
-        // }
+        Command::Build {
+            filepath,
+            opts,
+        } => {
+            let content = std::fs::read_to_string(&filepath).into_diagnostic()?;
+            let mut parser = parser::Parser::new(content);
+            let mut env = TypeEnv::default();
+            let mut scope = Scope::default();
+            let ast = parser.parse()?;
+
+            check_nodes(&ast, &mut env, &mut scope);
+
+            dbg!(&env);
+
+            // let bin_path = build(&filepath, &opts)?;
+            // let metadata = std::fs::metadata(&bin_path).into_diagnostic()?;
+            // println!("{} bytes written to {bin_path:?}", metadata.size());
+        }
 
         // Command::Run { filepath, opts } => {
         //     let bin_path = build(&filepath, &opts)?;

@@ -442,7 +442,7 @@ impl Parser {
         })
     }
 
-    fn r#if(&mut self) -> Result<If> {
+    fn r#if(&mut self) -> Result<IfElse> {
         let span = self.curr.span;
         self.consume(TokenKind::If)?;
         let condition = self.expr(Prec::Lowest)?;
@@ -461,7 +461,7 @@ impl Parser {
         let tok = self.consume(TokenKind::End)?;
         let span = enclosing_span(span, tok.span());
 
-        Ok(If {
+        Ok(IfElse {
             condition: Box::new(condition),
             consequence,
             alternative,

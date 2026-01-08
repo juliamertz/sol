@@ -1,18 +1,20 @@
-// use miette::{Diagnostic, Result};
+use miette::Diagnostic;
 use solc_macros::Id;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, Impl, IndexExpr, Let, List, Literal,
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Let, List, Literal,
     LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum TypeError {
     #[error("variable not found in scope: {0}")]
     NotFound(Ident),
     #[error("type mismatch: {lhs:?} {rhs:?}")]
     TypeMismatch { lhs: Type, rhs: Type },
+    #[error("invalid type, expected: {expected:?}, got: {actual:?}")]
+    InvalidType { expected: Type, actual: Type },
 }
 
 pub type Result<T, E = TypeError> = core::result::Result<T, E>;
@@ -69,6 +71,7 @@ impl From<&TyKind> for Type {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct Scope<'a> {
     parent: Option<&'a Scope<'a>>,
     variables: HashMap<String, DefId>,
@@ -86,8 +89,16 @@ impl Scope<'_> {
                 .and_then(|parent| parent.get_var(ident))
         })
     }
+
+    pub fn child(&self) -> Scope<'_> {
+        Scope {
+            parent: Some(self),
+            variables: Default::default(),
+        }
+    }
 }
 
+#[derive(Debug, Default)]
 pub struct TypeEnv {
     def_idx: u32,
     pub nodes: HashMap<NodeId, Type>,
@@ -116,7 +127,7 @@ impl TypeEnv {
 }
 
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Type> {
-    match expr {
+    let ty = match expr {
         Expr::Ident(ident) => {
             let name = ident.inner.as_str();
             let def = scope
@@ -133,7 +144,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             LiteralKind::Int(_) => Ok(Type::Int),
         },
 
-        Expr::Block(block) => todo!(),
+        Expr::Block(block) => {
+            let scope = &mut scope.child();
+            check_nodes(&block.nodes, env, scope)?;
+
+            todo!()
+        }
 
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
             let lhs = infer(lhs.as_ref(), env, scope)?;
@@ -187,7 +203,41 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             }
         }
 
-        Expr::IfElse(_) => todo!("infer if else"),
+        Expr::IfElse(IfElse {
+            id,
+            condition,
+            consequence,
+            alternative,
+            ..
+        }) => {
+            let condition_ty = infer(&condition, env, scope)?;
+            if condition_ty != Type::Bool {
+                return Err(TypeError::InvalidType {
+                    expected: Type::Bool,
+                    actual: condition_ty,
+                });
+            }
+
+            let block_scope = &mut scope.child();
+            let consequence_ty = infer(&Expr::Block(consequence.to_owned()), env, block_scope)?;
+            let alternative_ty = alternative
+                .clone()
+                .map(|alternative| infer(&Expr::Block(alternative), env, block_scope))
+                .transpose()?;
+
+            if let Some(alternative_ty) = alternative_ty
+                && alternative_ty != consequence_ty
+            {
+                return Err(TypeError::TypeMismatch {
+                    lhs: consequence_ty,
+                    rhs: alternative_ty,
+                });
+            }
+
+            env.set_type(*id, consequence_ty);
+
+            Ok(todo!())
+        }
 
         Expr::List(List { items, .. }) => {
             todo!()
@@ -197,14 +247,20 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let def_id = scope
                 .get_var(ident)
                 .ok_or(TypeError::NotFound(ident.to_owned()))?;
-            let ty = env.get_definition(def_id).expect("constructor type to be defined");
+            let ty = env
+                .get_definition(def_id)
+                .expect("constructor type to be defined");
             Ok(ty.to_owned())
         }
 
-        Expr::Ref(expr) => infer(expr, env, scope),
+        Expr::Ref(expr) => Ok(Type::Ptr(infer(expr, env, scope)?.into())),
 
         Expr::RawIdent(ident) => todo!("infer raw ident"),
-    }
+    }?;
+
+    env.set_type(expr.id(), ty.clone());
+
+    Ok(ty)
 }
 
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
@@ -222,7 +278,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 
         Stmnt::Ret(Ret { val, .. }) => todo!("check return statement"),
 
-        Stmnt::Use(Use { ident, .. }) => todo!("check use statement"),
+        Stmnt::Use(Use { ident, .. }) => {}
 
         Stmnt::Fn(Fn {
             is_extern,
@@ -239,7 +295,15 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             };
             let def_id = env.define(ty);
             scope.set_var(ident, def_id);
-            // TODO: check function body
+
+            if let Some(body) = body
+                && !is_extern
+            {
+                // FIX: no need for this clone
+                let block = Expr::Block(body.to_owned());
+                let ty = infer(&block, env, scope)?;
+                dbg!(&ty);
+            }
         }
 
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {
@@ -257,5 +321,24 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         Stmnt::Impl(Impl { ident, body, .. }) => todo!("check impl block"),
     }
 
+    Ok(())
+}
+
+pub fn check_node(node: &Node, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    match node {
+        Node::Expr(expr) => {
+            let ty = infer(expr, env, scope)?;
+            dbg!(&expr);
+            env.set_type(expr.id(), ty);
+            Ok(())
+        }
+        Node::Stmnt(stmnt) => check_stmnt(stmnt, env, scope),
+    }
+}
+
+pub fn check_nodes(nodes: &[Node], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    for node in nodes {
+        check_node(node, env, scope)?;
+    }
     Ok(())
 }

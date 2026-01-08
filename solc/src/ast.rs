@@ -107,7 +107,7 @@ pub struct Block {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct If {
+pub struct IfElse {
     pub id: NodeId,
     pub span: Span,
     pub condition: Box<Expr>,
@@ -222,7 +222,7 @@ pub enum Expr {
     Prefix(PrefixExpr),
     Call(CallExpr),
     Index(IndexExpr),
-    IfElse(If),
+    IfElse(IfElse),
     List(List),
     Constructor(Constructor),
     Ref(Box<Expr>),
@@ -246,6 +246,23 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.span,
             Expr::Ref(expr) => expr.span(),
             Expr::RawIdent(_) => unreachable!(),
+        }
+    }
+
+    pub fn id(&self) -> NodeId {
+        match self {
+            Expr::Ident(ident) => ident.id,
+            Expr::Literal(literal) => literal.id,
+            Expr::Block(block) => block.id,
+            Expr::BinOp(bin_op) => bin_op.id,
+            Expr::Prefix(prefix_expr) => prefix_expr.id,
+            Expr::Call(call_expr) => call_expr.id,
+            Expr::Index(index_expr) => index_expr.id,
+            Expr::IfElse(if_else) => if_else.id,
+            Expr::List(list) => list.id,
+            Expr::Constructor(constructor) => constructor.id,
+            Expr::Ref(r#ref) => r#ref.id(),
+            Expr::RawIdent(ident) => ident.id,
         }
     }
 }
