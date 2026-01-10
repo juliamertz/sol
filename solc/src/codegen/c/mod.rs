@@ -9,7 +9,9 @@ use crate::codegen::{Compiler, Emitter, quote};
 use std::borrow::Cow;
 use std::fs;
 use std::hash::Hasher;
+use std::io::{Read, Stdin, Write};
 use std::path::PathBuf;
+use std::process::Stdio;
 
 use miette::{IntoDiagnostic, Result};
 use tempdir::TempDir;
@@ -373,7 +375,7 @@ impl C {
 }
 
 impl Compiler for C {
-    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
+    fn build_exe(&self, source: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
         let mut hasher = WyHash::with_seed(0);
         hasher.write(program.as_bytes());
         let program_hash = hasher.finish();
@@ -390,7 +392,12 @@ impl Compiler for C {
         };
 
         fs::create_dir_all(&opts.outdir).into_diagnostic()?;
-        fs::write(&tmp_src_path, src).unwrap();
+        let src = if cfg!(debug_assertions) {
+            self.format(source)
+        } else {
+            Cow::Borrowed(source)
+        };
+        fs::write(&tmp_src_path, src.as_bytes()).unwrap();
         fs::write(&hash_path, format!("{program_hash:?}")).unwrap();
 
         // let include_arg = format!("-I{CORE_INCLUDE_PATH}");
@@ -422,6 +429,24 @@ impl Compiler for C {
         Ok(out_path)
     }
 
-    // fn format<'a>(&self, source: &'a str) -> Cow<'a, str> {
-    // }
+    fn format<'src>(&self, source: &'src str) -> Cow<'src, str> {
+        let Ok(mut proc) = std::process::Command::new("clang-format")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+        else {
+            return Cow::Borrowed(source);
+        };
+
+        let mut stdin = proc.stdin.take().unwrap();
+        let Ok(_) = stdin.write_all(source.as_bytes()) else {
+            return Cow::Borrowed(source);
+        };
+        drop(stdin);
+
+        let output = proc.wait_with_output().unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+
+        Cow::Owned(stdout)
+    }
 }

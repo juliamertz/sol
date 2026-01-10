@@ -13,7 +13,7 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
 use crate::{
-    analyzer::{check_nodes, Scope, TypeEnv},
+    analyzer::{Scope, TypeEnv, check_nodes},
     codegen::{Compiler, Emitter},
 };
 
@@ -75,12 +75,6 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
 
     let mut c = codegen::C::default();
     let out = c.emit(env, &ast);
-
-    #[cfg(debug_assertions)]
-    {
-        let outpath = PathBuf::from("./out/source.c");
-        std::fs::write(&outpath, &out).unwrap();
-    };
 
     let outpath = c.build_exe(&out, "bin", opts)?;
     Ok(outpath)
