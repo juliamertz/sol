@@ -1,5 +1,5 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, Scope, Type, TypeEnv, infer};
+use crate::analyzer::{self, IntKind, Scope, Type, TypeEnv, infer};
 use crate::ast::{
     BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr, Stmnt,
 };
@@ -131,7 +131,16 @@ impl C {
 
     fn emit_type(&mut self, _env: &TypeEnv, ty: impl Into<Type>) -> String {
         match ty.into() {
-            Type::Int => "int",
+            Type::Int(kind) => match kind {
+                IntKind::U8 => "uint8_t",
+                IntKind::U16 => "uint16_t",
+                IntKind::U32 => "uint32_t",
+                IntKind::U64 => "uint64_t",
+                IntKind::I8 => "int8_t",
+                IntKind::I16 => "int16_t",
+                IntKind::I32 => "int32_t",
+                IntKind::I64 => "int64_t",
+            },
             Type::Str => "char *",
             Type::Bool => "bool",
             Type::List(_) => "List",

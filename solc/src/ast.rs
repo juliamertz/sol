@@ -62,7 +62,7 @@ pub struct Op {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LiteralKind {
     Str(String),
-    Int(u64),
+    Int(i64),
     // Bool(bool),
 }
 
@@ -73,6 +73,7 @@ pub struct Literal {
     pub kind: LiteralKind,
 }
 
+/// A type expression
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ty {
     pub id: NodeId,
@@ -80,10 +81,16 @@ pub struct Ty {
     pub kind: TyKind,
 }
 
-/// Type expression such as `List<Int>`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[rustfmt::skip]
+pub enum IntTyKind {
+    U8, U16, U32, U64,
+    I8, I16, I32, I64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TyKind {
-    Int,
+    Int(IntTyKind),
     Bool,
     Str,
     List {

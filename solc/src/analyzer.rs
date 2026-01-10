@@ -4,8 +4,8 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Let, List, Literal,
-    LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
+    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
 use solc_macros::Id;
 
@@ -24,10 +24,47 @@ pub type Result<T, E = TypeError> = core::result::Result<T, E>;
 #[derive(Id, Debug, Clone, Copy)]
 pub struct DefId(u32);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[rustfmt::skip]
+pub enum IntKind {
+    U8, U16, U32, U64,
+    I8, I16, I32, I64,
+}
+
+impl IntKind {
+    fn is_signed(&self) -> bool {
+        matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64)
+    }
+
+    fn bits(&self) -> usize {
+        match self {
+            Self::U8 | Self::I8 => 8,
+            Self::U16 | Self::I16 => 16,
+            Self::U32 | Self::I32 => 32,
+            Self::U64 | Self::I64 => 64,
+        }
+    }
+}
+
+impl From<&IntTyKind> for IntKind {
+    fn from(value: &IntTyKind) -> Self {
+        match value {
+            IntTyKind::U8 => Self::U8,
+            IntTyKind::U16 => Self::U16,
+            IntTyKind::U32 => Self::U32,
+            IntTyKind::U64 => Self::U64,
+            IntTyKind::I8 => Self::I8,
+            IntTyKind::I16 => Self::I16,
+            IntTyKind::I32 => Self::I32,
+            IntTyKind::I64 => Self::I64,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     None,
-    Int,
+    Int(IntKind),
     Bool,
     Str,
     List((Box<Type>, Option<usize>)),
@@ -53,7 +90,7 @@ impl From<&Ty> for Type {
 impl From<&TyKind> for Type {
     fn from(kind: &TyKind) -> Self {
         match kind {
-            TyKind::Int => Self::Int,
+            TyKind::Int(kind) => Self::Int(kind.into()),
             TyKind::Bool => Self::Bool,
             TyKind::Str => Self::Str,
             TyKind::Var(name) => Self::Var(name.clone()),
@@ -143,7 +180,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Literal(Literal { kind, .. }) => match kind {
             LiteralKind::Str(_) => Ok(Type::Str),
-            LiteralKind::Int(_) => Ok(Type::Int),
+            LiteralKind::Int(_) => Ok(Type::Int(IntKind::I32)), // TODO: infer the correct size
         },
 
         Expr::Block(block) => {
@@ -189,8 +226,10 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 _ => match (lhs, rhs) {
-                    (Type::Int, Type::Int) => match op.kind {
-                        OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div => Ok(Type::Int),
+                    (Type::Int(lhs_kind), Type::Int(rhs_kind)) => match op.kind {
+                        OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div => {
+                            Ok(Type::Int(lhs_kind))
+                        }
                         _ => todo!(),
                     },
                     _ => todo!(),
@@ -201,7 +240,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         Expr::Prefix(PrefixExpr { op, rhs, .. }) => {
             let ty = infer(rhs, env, scope)?;
             match (&op.kind, ty) {
-                (OpKind::Sub, Type::Int) => Ok(Type::Int),
+                (OpKind::Sub, Type::Int(kind)) => Ok(Type::Int(kind)),
                 _ => todo!(),
             }
         }

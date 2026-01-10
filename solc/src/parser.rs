@@ -260,7 +260,14 @@ impl Parser {
         let span = self.curr.span;
         let ident = self.ident()?;
         let kind = match ident.as_ref() {
-            "Int" => TyKind::Int,
+            "i8" => TyKind::Int(IntTyKind::I8),
+            "i16" => TyKind::Int(IntTyKind::I16),
+            "i32" => TyKind::Int(IntTyKind::I32),
+            "i64" => TyKind::Int(IntTyKind::I64),
+            "u8" => TyKind::Int(IntTyKind::U8),
+            "u16" => TyKind::Int(IntTyKind::U16),
+            "u32" => TyKind::Int(IntTyKind::U32),
+            "u64" => TyKind::Int(IntTyKind::U64),
             "Bool" => TyKind::Bool,
             "Str" => TyKind::Str,
             _ => TyKind::Var(ident),
@@ -574,7 +581,6 @@ impl Parser {
         if self.at(TokenKind::Eof) {
             return Ok(lhs);
         }
-
 
         while prec < Prec::from(&self.curr) {
             if self.curr.kind.is_terminator() {
