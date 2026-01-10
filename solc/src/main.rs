@@ -11,7 +11,7 @@ use std::{
 };
 
 use clap::Parser;
-use miette::{IntoDiagnostic, Result};
+use miette::{IntoDiagnostic, NamedSource, Result};
 
 use crate::{
     analyzer::{Scope, TypeEnv, check_nodes},
@@ -65,6 +65,8 @@ enum Command {
 
 fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(filepath).unwrap();
+    let name = filepath.to_string_lossy();
+    let source = NamedSource::new(name, content.clone());
 
     let mut parser = parser::Parser::new(content);
     let ast = match parser.parse() {
@@ -75,7 +77,7 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     };
 
     let mut env = TypeEnv::default();
-    let mut scope = Scope::default();
+    let mut scope = Scope::new(source);
     check_nodes(&ast, &mut env, &mut scope)?;
 
     let mut c = codegen::C::default();
