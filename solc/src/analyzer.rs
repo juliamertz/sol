@@ -361,14 +361,23 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             let def_id = env.define(ty);
             scope.set_var(ident, def_id);
 
-            if let Some(body) = body
+            let body_ty = if let Some(body) = body
                 && !is_extern
             {
-                // FIX: no need for this clone
-                let block = Expr::Block(body.to_owned());
-                let ty = infer(&block, env, scope)?;
-                dbg!(&ty);
-            }
+                let block = Expr::Block(body.to_owned()); // FIX: no need for this clone
+                let scope = &mut scope.child();
+                for (ident, ty) in params {
+                    let def_id = env.define(ty.into());
+                    scope.set_var(ident, def_id);
+                }
+
+                infer(&block, env, scope)?
+            } else {
+                Type::None
+            };
+
+            dbg!(&body_ty);
+
         }
 
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {
@@ -393,7 +402,6 @@ pub fn check_node(node: &Node, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
     match node {
         Node::Expr(expr) => {
             let ty = infer(expr, env, scope)?;
-            dbg!(&expr);
             env.set_type(expr.id(), ty);
             Ok(())
         }

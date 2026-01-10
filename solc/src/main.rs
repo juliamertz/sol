@@ -5,6 +5,7 @@ mod lexer;
 mod parser;
 
 use std::{
+    io::{stdout, Write},
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
 };
@@ -13,8 +14,8 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
 use crate::{
-    analyzer::{Scope, TypeEnv, check_nodes},
-    codegen::{Compiler, Emitter},
+    analyzer::{check_nodes, Scope, TypeEnv},
+    codegen::{Compiler, Emitter}, lexer::TokenKind,
 };
 
 #[derive(clap::Parser)]
@@ -35,7 +36,7 @@ struct BuildOpts {
     outdir: PathBuf,
 
     /// Whether to clean up build artifacts
-    #[arg(short, long, default_value_t = !cfg!(debug_assertions))]
+    #[arg(short, long)]
     cleanup: bool,
 }
 
@@ -52,6 +53,9 @@ enum Command {
 
         #[clap(flatten)]
         opts: BuildOpts,
+    },
+    DumpTokens {
+        filepath: PathBuf,
     },
     DumpAst {
         filepath: PathBuf,
@@ -99,6 +103,23 @@ fn main() -> Result<()> {
                 .unwrap();
             if opts.cleanup {
                 std::fs::remove_file(bin_path).into_diagnostic()?;
+            }
+        }
+        Command::DumpTokens { filepath } => {
+            let content = std::fs::read_to_string(filepath).unwrap();
+            let mut stdout = std::io::stdout();
+            let mut lex = lexer::Lexer::new(content);
+
+            while let Some(token) = lex.read_token() {
+                let kind = token.kind.to_string();
+                stdout.write_all(kind.as_bytes()).unwrap();
+
+                if !token.text.is_empty() && token.kind != TokenKind::Newline {
+                    stdout.write_all(b" :: ").unwrap();
+                    stdout.write_all(token.text.as_bytes()).unwrap();
+                }
+
+                stdout.write_all(b"\n").unwrap();
             }
         }
         Command::DumpAst { filepath } => {

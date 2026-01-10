@@ -109,7 +109,7 @@ impl TokenKind {
 }
 
 lazy_static! {
-    static ref TOKEN_LOOKUP: HashMap<&'static str, TokenKind> = [
+    static ref KEYWORD_LOOKUP: HashMap<&'static str, TokenKind> = [
         ("let", TokenKind::Let),
         ("func", TokenKind::Fn),
         ("return", TokenKind::Ret),
@@ -275,9 +275,10 @@ impl Lexer {
             }
             ch if ch.is_ascii_alphabetic() || ch == '_' => {
                 let start = self.pos;
-                let text = self.read_while(|ch| ch.is_ascii_alphabetic() || ch == '_');
+                let text = self
+                    .read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_');
 
-                let token = if let Some(kind) = TOKEN_LOOKUP.get(text) {
+                let token = if let Some(kind) = KEYWORD_LOOKUP.get(text) {
                     Token::new(*kind, text, text.len() + start)
                 } else {
                     Token::new(TokenKind::Ident, text, text.len() + start)
