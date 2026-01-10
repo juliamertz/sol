@@ -12,15 +12,19 @@ use crate::ast::{
 use solc_macros::Id;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum ErrorKind {
+pub enum TypeError {
     #[error("variable not found in scope: {0}")]
     NotFound(Ident),
 
     #[error("type mismatch: {lhs:?} {rhs:?}")]
     TypeMismatch {
+        #[source_code]
+        src: Arc<NamedSource<String>>,
         #[label("This bit here")]
         lhs_span: SourceSpan,
         lhs: Type,
+        #[label("This bit here")]
+        rhs_span: SourceSpan,
         rhs: Type,
     },
 
@@ -28,23 +32,7 @@ pub enum ErrorKind {
     InvalidType { expected: Type, actual: Type },
 }
 
-#[derive(Error, Debug, Diagnostic)]
-#[error("oops!")]
-#[diagnostic(help("try doing it better next time?"))]
-struct TypeError {
-    #[diagnostic(transparent)]
-    kind: ErrorKind,
-    #[source_code]
-    src: Arc<NamedSource<String>>,
-}
-
-impl TypeError {
-    fn new(kind: ErrorKind, src: Arc<NamedSource<String>>) -> Self {
-        Self { kind, src }
-    }
-}
-
-pub type Result<T, E = ErrorKind> = core::result::Result<T, E>;
+pub type Result<T, E = TypeError> = core::result::Result<T, E>;
 
 #[derive(Id, Debug, Clone, Copy)]
 pub struct DefId(u32);
@@ -206,7 +194,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let name = ident.inner.as_str();
             let def = scope
                 .get_var(name)
-                .ok_or(ErrorKind::NotFound(ident.to_owned()))?;
+                .ok_or(TypeError::NotFound(ident.to_owned()))?;
             let ty = env
                 .get_definition(def)
                 .expect("collected type for definition");
@@ -243,10 +231,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             match op.kind {
                 OpKind::Eq | OpKind::Lt | OpKind::Gt => {
                     if lhs_ty != rhs_ty {
-                        Err(ErrorKind::TypeMismatch {
+                        Err(TypeError::TypeMismatch {
+                            src: scope.src.clone(),
                             lhs: lhs_ty,
                             lhs_span: lhs.span(),
                             rhs: rhs_ty,
+                            rhs_span: rhs.span(),
                         })
                     } else {
                         Ok(Type::Bool)
@@ -316,7 +306,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }) => {
             let condition_ty = infer(condition, env, scope)?;
             if condition_ty != Type::Bool {
-                return Err(ErrorKind::InvalidType {
+                return Err(TypeError::InvalidType {
                     expected: Type::Bool,
                     actual: condition_ty,
                 });
@@ -332,10 +322,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             if let Some(alternative_ty) = alternative_ty
                 && alternative_ty != consequence_ty
             {
-                return Err(ErrorKind::TypeMismatch {
+                return Err(TypeError::TypeMismatch {
+                    src: scope.src.clone(),
                     lhs: consequence_ty,
                     lhs_span: todo!(),
                     rhs: alternative_ty,
+                            rhs_span: todo!(),
                 });
             }
 
@@ -349,7 +341,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         Expr::Constructor(Constructor { ident, fields, .. }) => {
             let def_id = scope
                 .get_var(ident)
-                .ok_or(ErrorKind::NotFound(ident.to_owned()))?;
+                .ok_or(TypeError::NotFound(ident.to_owned()))?;
             let ty = env
                 .get_definition(def_id)
                 .expect("constructor type to be defined");

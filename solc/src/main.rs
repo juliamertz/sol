@@ -8,6 +8,7 @@ use std::{
     io::Write,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use clap::Parser;
@@ -57,6 +58,12 @@ enum Command {
     },
     DumpTokens {
         filepath: PathBuf,
+
+        #[arg(short, long)]
+        spans: bool,
+
+        #[arg(short, long, default_value_t = 0)]
+        take: usize,
     },
     DumpAst {
         filepath: PathBuf,
@@ -108,21 +115,52 @@ fn main() -> Result<()> {
                 std::fs::remove_file(bin_path).into_diagnostic()?;
             }
         }
-        Command::DumpTokens { filepath } => {
+        Command::DumpTokens {
+            filepath,
+            spans,
+            take,
+        } => {
             let content = std::fs::read_to_string(filepath).unwrap();
             let mut stdout = std::io::stdout();
-            let mut lex = lexer::Lexer::new(content);
+            let mut lex = lexer::Lexer::new(content.clone());
 
+            let mut tokens = vec![];
+            let mut idx = 0;
             while let Some(token) = lex.read_token() {
-                let kind = token.kind.to_string();
-                stdout.write_all(kind.as_bytes()).unwrap();
-
-                if !token.text.is_empty() && token.kind != TokenKind::Newline {
-                    stdout.write_all(b" :: ").unwrap();
-                    stdout.write_all(token.text.as_bytes()).unwrap();
+                tokens.push(token);
+                idx += 1;
+                if idx > 0 && idx >= take {
+                    break;
                 }
+            }
 
-                stdout.write_all(b"\n").unwrap();
+            if spans {
+                let src = Arc::new(NamedSource::new("source", content));
+                for token in tokens {
+                    let report = miette::miette!(
+                        labels = vec![miette::LabeledSpan::at(
+                            token.span.offset()..token.span.offset() + token.span.len(),
+                            format!("{:?}", token.kind)
+                        )],
+                        "{:?}",
+                        token.kind
+                    )
+                    .with_source_code(src.clone());
+
+                    println!("{:?}\n", report);
+                }
+            } else {
+                for token in tokens {
+                    let kind = token.kind.to_string();
+                    stdout.write_all(kind.as_bytes()).unwrap();
+
+                    if !token.text.is_empty() && token.kind != TokenKind::Newline {
+                        stdout.write_all(b" :: ").unwrap();
+                        stdout.write_all(token.text.as_bytes()).unwrap();
+                    }
+
+                    stdout.write_all(b"\n").unwrap();
+                }
             }
         }
         Command::DumpAst { filepath } => {

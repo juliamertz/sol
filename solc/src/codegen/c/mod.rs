@@ -1,7 +1,6 @@
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, Stmnt};
-// use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
 use crate::codegen::{Compiler, Emitter, quote};
 
 use std::borrow::Cow;
@@ -14,9 +13,6 @@ use std::process::Stdio;
 use miette::{IntoDiagnostic, Result};
 use tempdir::TempDir;
 use wyhash2::WyHash;
-
-const CORE_INCLUDE_PATH: &str = "/home/julia/projects/2025/sol/src/codegen/c/include";
-const CORE_INCLUDES: &[&str] = &["gc.h", "list.h"];
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");

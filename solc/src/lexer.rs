@@ -142,12 +142,12 @@ impl Display for TokenKind {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, text: impl ToString, pos: usize) -> Self {
+    pub fn new(kind: TokenKind, text: impl ToString, start_pos: usize) -> Self {
         let text = text.to_string();
         Self {
             kind,
             text: text.to_string(),
-            span: (pos, text.len()).into(),
+            span: (start_pos, text.len()).into(),
         }
     }
 
@@ -229,59 +229,59 @@ impl Lexer {
             return Some(Token::new(TokenKind::Eof, "", self.pos));
         }
 
+        let start = self.pos;
+
         let token = match self.curr()? {
-            '"' => Token::new(TokenKind::String, self.read_string().to_string(), self.pos),
-            '+' => Token::new(TokenKind::Add, "+", self.pos),
+            '"' => Token::new(TokenKind::String, self.read_string().to_string(), start),
+            '+' => Token::new(TokenKind::Add, "+", start),
             '=' => {
                 if self.peek() == Some('=') {
                     self.advance();
-                    Token::new(TokenKind::Eq, "==", self.pos)
+                    Token::new(TokenKind::Eq, "==", start)
                 } else {
-                    Token::new(TokenKind::Assign, "=", self.pos)
+                    Token::new(TokenKind::Assign, "=", start)
                 }
             }
             '-' => {
                 if self.peek() == Some('>') {
                     self.advance();
-                    Token::new(TokenKind::Arrow, "->", self.pos)
+                    Token::new(TokenKind::Arrow, "->", start)
                 } else if self.peek() == Some('-') {
                     self.read_while(|ch| ch != '\n');
                     self.read_token()?
                 } else {
-                    Token::new(TokenKind::Sub, "-", self.pos)
+                    Token::new(TokenKind::Sub, "-", start)
                 }
             }
-            '!' => Token::new(TokenKind::Bang, "!", self.pos),
-            '*' => Token::new(TokenKind::Asterisk, "*", self.pos),
-            '/' => Token::new(TokenKind::Slash, "/", self.pos),
-            '&' => Token::new(TokenKind::Ampersand, "&", self.pos),
-            '(' => Token::new(TokenKind::LParen, "(", self.pos),
-            ')' => Token::new(TokenKind::RParen, ")", self.pos),
-            '[' => Token::new(TokenKind::LBracket, "[", self.pos),
-            ']' => Token::new(TokenKind::RBracket, "]", self.pos),
-            '{' => Token::new(TokenKind::LSquirly, "{", self.pos),
-            '}' => Token::new(TokenKind::RSquirly, "}", self.pos),
-            '<' => Token::new(TokenKind::LAngle, "<", self.pos),
-            '>' => Token::new(TokenKind::RAngle, ">", self.pos),
-            ':' => Token::new(TokenKind::Colon, ":", self.pos),
-            ';' => Token::new(TokenKind::Semicolon, ";", self.pos),
-            '.' => Token::new(TokenKind::Dot, ".", self.pos),
-            ',' => Token::new(TokenKind::Comma, ",", self.pos),
-            '\n' => Token::new(TokenKind::Newline, "\n", self.pos),
+            '!' => Token::new(TokenKind::Bang, "!", start),
+            '*' => Token::new(TokenKind::Asterisk, "*", start),
+            '/' => Token::new(TokenKind::Slash, "/", start),
+            '&' => Token::new(TokenKind::Ampersand, "&", start),
+            '(' => Token::new(TokenKind::LParen, "(", start),
+            ')' => Token::new(TokenKind::RParen, ")", start),
+            '[' => Token::new(TokenKind::LBracket, "[", start),
+            ']' => Token::new(TokenKind::RBracket, "]", start),
+            '{' => Token::new(TokenKind::LSquirly, "{", start),
+            '}' => Token::new(TokenKind::RSquirly, "}", start),
+            '<' => Token::new(TokenKind::LAngle, "<", start),
+            '>' => Token::new(TokenKind::RAngle, ">", start),
+            ':' => Token::new(TokenKind::Colon, ":", start),
+            ';' => Token::new(TokenKind::Semicolon, ";", start),
+            '.' => Token::new(TokenKind::Dot, ".", start),
+            ',' => Token::new(TokenKind::Comma, ",", start),
+            '\n' => Token::new(TokenKind::Newline, "\n", start),
             ch if ch.is_ascii_digit() => {
-                let start = self.pos;
                 let text = self.read_while(|ch| ch.is_ascii_digit());
-                return Some(Token::new(TokenKind::Int, text, start + text.len()));
+                return Some(Token::new(TokenKind::Int, text, start));
             }
             ch if ch.is_ascii_alphabetic() || ch == '_' => {
-                let start = self.pos;
                 let text = self
                     .read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_');
 
                 let token = if let Some(kind) = KEYWORD_LOOKUP.get(text) {
-                    Token::new(*kind, text, text.len() + start)
+                    Token::new(*kind, text, start)
                 } else {
-                    Token::new(TokenKind::Ident, text, text.len() + start)
+                    Token::new(TokenKind::Ident, text, start)
                 };
 
                 return Some(token);
