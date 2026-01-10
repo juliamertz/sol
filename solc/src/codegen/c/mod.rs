@@ -1,15 +1,13 @@
 use crate::BuildOpts;
-use crate::analyzer::{self, IntKind, Scope, Type, TypeEnv, infer};
-use crate::ast::{
-    BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr, Stmnt,
-};
+use crate::analyzer::{IntKind, Type, TypeEnv};
+use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, Stmnt};
 // use crate::hir::{Node,Expr,Stmnt,TypeEnv,Type,Scope}
 use crate::codegen::{Compiler, Emitter, quote};
 
 use std::borrow::Cow;
 use std::fs;
 use std::hash::Hasher;
-use std::io::{Read, Stdin, Write};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Stdio;
 
@@ -155,21 +153,6 @@ impl C {
     }
 
     fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
-        let env = &mut env.clone();
-
-        // for (ident, ty) in pre_define.into_iter() {
-        //     if let analyzer::Type::List((inner, _size)) = ty {
-        //         buf.push_str(
-        //             format!(
-        //                 "List {ident}=list_alloc(sizeof({ty}), 64);",
-        //                 ident = self.prefix(&ident),
-        //                 ty = self.emit_type(env, *inner)
-        //             )
-        //             .as_str(),
-        //         );
-        //     }
-        // }
-
         for node in &block.nodes {
             self.emit_node(buf, env, node);
         }
@@ -206,7 +189,7 @@ impl C {
 
             Expr::Constructor(constructor) => {
                 buf.push('(');
-                buf.push_str(&constructor.ident.as_ref());
+                buf.push_str(constructor.ident.as_ref());
                 buf.push(')');
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {
@@ -244,7 +227,7 @@ impl C {
                             ],
                         }),
                     );
-                    self.node_marker.emit.push_str(&buf);
+                    self.node_marker.emit.push_str(buf);
                     self.node_marker.emit.push(';');
                 }
 
@@ -384,11 +367,11 @@ impl Compiler for C {
         let hash_path = opts.outdir.join("hash");
         let tmp_src_path = opts.outdir.join("source.c");
 
-        if let Ok(hash) = fs::read_to_string(&hash_path) {
-            if hash == format!("{program_hash:x}") {
-                // TODO: verify hash of output binary, don't just assume it's right
-                return Ok(out_path);
-            }
+        if let Ok(hash) = fs::read_to_string(&hash_path)
+            && hash == format!("{program_hash:x}")
+        {
+            // TODO: verify hash of output binary, don't just assume it's right
+            return Ok(out_path);
         };
 
         fs::create_dir_all(&opts.outdir).into_diagnostic()?;

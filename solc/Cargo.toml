@@ -18,5 +18,3 @@ thiserror = "2.0.12"
 wyhash2 = "0.2.1"
 serde = { version = "1.0.219", features = ["derive"] }
 
-[dev-dependencies]
-ron = "0.10.1"

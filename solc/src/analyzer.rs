@@ -377,7 +377,6 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             };
 
             dbg!(&body_ty);
-
         }
 
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {

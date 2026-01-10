@@ -5,7 +5,7 @@ mod lexer;
 mod parser;
 
 use std::{
-    io::{stdout, Write},
+    io::Write,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
 };
@@ -14,8 +14,9 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
 use crate::{
-    analyzer::{check_nodes, Scope, TypeEnv},
-    codegen::{Compiler, Emitter}, lexer::TokenKind,
+    analyzer::{Scope, TypeEnv, check_nodes},
+    codegen::{Compiler, Emitter},
+    lexer::TokenKind,
 };
 
 #[derive(clap::Parser)]
