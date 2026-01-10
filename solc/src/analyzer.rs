@@ -1,13 +1,15 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
-    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Span, Stmnt, StructDef, Ty,
-    TyKind, Use,
+use crate::{
+    ast::{
+        BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let,
+        List, Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Span, Stmnt, StructDef,
+        Ty, TyKind, Use,
+    },
+    source::SourceInfo,
 };
 use solc_macros::Id;
 
@@ -16,20 +18,25 @@ pub enum TypeError {
     #[error("variable not found in scope: {0}")]
     NotFound(Ident),
 
-    #[error("type mismatch: {lhs:?} {rhs:?}")]
-    TypeMismatch {
-        #[source_code]
-        src: Arc<NamedSource<String>>,
-        #[label("This bit here")]
-        lhs_span: SourceSpan,
-        lhs: Type,
-        #[label("This bit here")]
-        rhs_span: SourceSpan,
-        rhs: Type,
-    },
-
     #[error("invalid type, expected: {expected:?}, got: {actual:?}")]
     InvalidType { expected: Type, actual: Type },
+
+    #[error("mismatched types in comparison")]
+    ComparisonMismatch {
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("has type `{lhs_ty}`")]
+        lhs_span: SourceSpan,
+        lhs_ty: Type,
+
+        #[label("has type `{rhs_ty}`")]
+        rhs_span: SourceSpan,
+        rhs_ty: Type,
+
+        #[help]
+        help: Option<String>,
+    },
 }
 
 pub type Result<T, E = TypeError> = core::result::Result<T, E>;
@@ -123,19 +130,25 @@ impl From<&TyKind> for Type {
     }
 }
 
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
 #[derive(Debug)]
 pub struct Scope<'a> {
     parent: Option<&'a Scope<'a>>,
     variables: HashMap<String, DefId>,
-    src: Arc<NamedSource<String>>,
+    src: SourceInfo,
 }
 
 impl Scope<'_> {
-    pub fn new(src: impl Into<Arc<NamedSource<String>>>) -> Self {
+    pub fn new(src: SourceInfo) -> Self {
         Self {
             parent: None,
             variables: Default::default(),
-            src: src.into(),
+            src,
         }
     }
 
@@ -231,12 +244,13 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             match op.kind {
                 OpKind::Eq | OpKind::Lt | OpKind::Gt => {
                     if lhs_ty != rhs_ty {
-                        Err(TypeError::TypeMismatch {
+                        Err(TypeError::ComparisonMismatch {
                             src: scope.src.clone(),
-                            lhs: lhs_ty,
                             lhs_span: lhs.span(),
-                            rhs: rhs_ty,
+                            lhs_ty,
                             rhs_span: rhs.span(),
+                            rhs_ty,
+                            help: None,
                         })
                     } else {
                         Ok(Type::Bool)
@@ -320,14 +334,16 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 .transpose()?;
 
             if let Some(alternative_ty) = alternative_ty
+                && let Some(alternative) = alternative
                 && alternative_ty != consequence_ty
             {
-                return Err(TypeError::TypeMismatch {
+                return Err(TypeError::ComparisonMismatch {
                     src: scope.src.clone(),
-                    lhs: consequence_ty,
-                    lhs_span: todo!(),
-                    rhs: alternative_ty,
-                            rhs_span: todo!(),
+                    lhs_span: consequence.span,
+                    lhs_ty: consequence_ty,
+                    rhs_span: alternative.span,
+                    rhs_ty: alternative_ty,
+                    help: None,
                 });
             }
 

@@ -3,6 +3,7 @@ mod ast;
 mod codegen;
 mod lexer;
 mod parser;
+mod source;
 
 use std::{
     io::Write,
@@ -15,9 +16,9 @@ use clap::Parser;
 use miette::{IntoDiagnostic, NamedSource, Result};
 
 use crate::{
-    analyzer::{Scope, TypeEnv, check_nodes},
+    analyzer::{check_nodes, Scope, TypeEnv},
     codegen::{Compiler, Emitter},
-    lexer::TokenKind,
+    lexer::TokenKind, source::SourceInfo,
 };
 
 #[derive(clap::Parser)]
@@ -73,7 +74,7 @@ enum Command {
 fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(filepath).unwrap();
     let name = filepath.to_string_lossy();
-    let source = NamedSource::new(name, content.clone());
+    let source = SourceInfo::new(name, content.clone());
 
     let mut parser = parser::Parser::new(content);
     let ast = match parser.parse() {
