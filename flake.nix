@@ -20,7 +20,7 @@
         pkgs = import nixpkgs {inherit system overlays;};
         inherit (pkgs) lib;
 
-        rust-bin = pkgs.rust-bin.nightly.latest;
+        rust-bin = pkgs.rust-bin.stable.latest;
         rustPlatform = pkgs.makeRustPlatform {
           cargo = rust-bin.minimal;
           rustc = rust-bin.minimal;
