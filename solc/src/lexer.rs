@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 
-pub type Span = miette::SourceSpan;
+use crate::source::{SourceInfo, Span};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TokenKind {
     Eof,
     Newline,

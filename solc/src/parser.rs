@@ -1,9 +1,9 @@
-use miette::{Diagnostic, NamedSource, Result, SourceSpan, miette};
+use miette::{Diagnostic, Result, miette};
 use thiserror::Error;
 
 use crate::ast::*;
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::source::SourceInfo;
+use crate::source::{SourceInfo, Span};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
@@ -13,7 +13,7 @@ pub enum ErrorKind {
         src: SourceInfo,
 
         #[label("this is of kind {actual} but was expected to be {expected}")]
-        span: SourceSpan,
+        span: Span,
 
         expected: TokenKind,
         actual: TokenKind,
@@ -43,7 +43,7 @@ impl ErrorKind {
         ParseError {
             kind: self,
             span,
-            src: NamedSource::new("mysource", parser.lex.content.clone()),
+            src: SourceInfo::new("mysource", parser.lex.content.clone()),
         }
         .into()
     }
@@ -54,10 +54,10 @@ impl ErrorKind {
 #[diagnostic(code(parser))]
 pub struct ParseError {
     #[source_code]
-    src: NamedSource<String>,
+    src: SourceInfo,
 
     #[label("This bit here 💩")]
-    span: SourceSpan,
+    span: Span,
 
     #[diagnostic(transparent)]
     kind: ErrorKind,
@@ -125,14 +125,6 @@ impl Context {
         self.id += 1;
         NodeId::new(id)
     }
-}
-
-/// Take beginning of the first span and the end of the second span
-/// and return a new span covering this whole range
-fn enclosing_span(a: Span, b: Span) -> Span {
-    let offset = a.offset();
-    let len = b.offset() - a.offset() + b.len();
-    Span::from((offset, len))
 }
 
 pub struct Parser {
@@ -261,8 +253,8 @@ impl Parser {
             nodes.push(self.node()?);
         }
 
-        let span = enclosing_span(span, self.curr.span);
         let id = self.ctx.next_id();
+        let span = span.enclosing_to(&self.curr.span);
         Ok(Block { nodes, id, span })
     }
 
@@ -293,7 +285,7 @@ impl Parser {
             _ => TyKind::Var(ident),
         };
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, self.curr.span);
+        let span = span.enclosing_to(&self.curr.span);
         let mut ty = Ty { kind, id, span };
 
         if self.at(TokenKind::LBracket) {
@@ -304,7 +296,7 @@ impl Parser {
                 size: None,
             };
             let id = self.ctx.next_id();
-            let span = enclosing_span(span, self.curr.span);
+            let span = span.enclosing_to(&self.curr.span);
             ty = Ty { kind, id, span }
         }
 
@@ -350,12 +342,12 @@ impl Parser {
             self.consume(TokenKind::End)?;
 
             let id = self.ctx.next_id();
-            let span = enclosing_span(span, self.curr.span);
+            let span = span.enclosing_to(&self.curr.span);
             Some(Block { nodes, id, span })
         };
 
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, self.curr.span);
+        let span = span.enclosing_to(&self.curr.span);
         Ok(Fn {
             is_extern,
             ident,
@@ -372,7 +364,7 @@ impl Parser {
         self.consume(TokenKind::Use)?;
         let ident = self.ident()?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, ident.span);
+        let span = span.enclosing_to(&self.curr.span);
         Ok(Use { ident, id, span })
     }
 
@@ -435,7 +427,7 @@ impl Parser {
                 self.consume(TokenKind::Ret)?;
                 let val = self.expr(Prec::default())?;
                 let id = self.ctx.next_id();
-                let span = enclosing_span(span, self.curr.span);
+        let span = span.enclosing_to(&self.curr.span);
                 Stmnt::Ret(Ret { val, id, span })
             }
             _ => panic!("TODO: {}", self.curr.kind),
@@ -458,7 +450,7 @@ impl Parser {
         self.consume(TokenKind::Assign)?;
         let val = self.expr(Prec::Lowest)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, self.curr.span);
+        let span = span.enclosing_to(&self.curr.span);
 
         Ok(Let {
             ident,
@@ -486,7 +478,7 @@ impl Parser {
         };
         let id = self.ctx.next_id();
         let tok = self.consume(TokenKind::End)?;
-        let span = enclosing_span(span, tok.span());
+        let span = span.enclosing_to(&tok.span);
 
         Ok(IfElse {
             condition: Box::new(condition),
@@ -500,7 +492,7 @@ impl Parser {
     fn prefix_expr(&mut self, op: Op) -> Result<Expr> {
         let rhs = self.expr(Prec::default())?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(op.span, rhs.span());
+        let span = op.span.enclosing_to(&rhs.span());
 
         Ok(Expr::Prefix(PrefixExpr {
             op,
@@ -522,7 +514,7 @@ impl Parser {
 
         let rhs = self.expr(prec)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(lhs.span(), self.curr.span);
+        let span = lhs.span().enclosing_to(&self.curr.span);
 
         Ok(Expr::BinOp(BinOp {
             lhs: Box::new(lhs),
@@ -542,7 +534,7 @@ impl Parser {
         };
         let tok = self.consume(TokenKind::RParen)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(expr.span(), tok.span());
+        let span = expr.span().enclosing_to(&tok.span());
 
         Ok(Expr::Call(CallExpr {
             func: Box::new(expr),
@@ -557,7 +549,7 @@ impl Parser {
         let idx = self.expr(Prec::default())?;
         let tok = self.consume(TokenKind::RBracket)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(expr.span(), tok.span());
+        let span = expr.span().enclosing_to(&tok.span());
 
         Ok(Expr::Index(IndexExpr {
             expr: expr.into(),
@@ -660,7 +652,8 @@ impl Parser {
         let items = self.expr_list()?;
         let tok = self.consume(TokenKind::RBracket)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, tok.span());
+        let span = span.enclosing_to(&tok.span());
+
         Ok(List { items, id, span })
     }
 
@@ -673,7 +666,8 @@ impl Parser {
         let fields = self.typed_params()?;
         let tok = self.consume(TokenKind::End)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(span, tok.span());
+        let span = span.enclosing_to(&tok.span());
+
         Ok(StructDef {
             ident,
             fields,
@@ -687,7 +681,8 @@ impl Parser {
         let fields = self.value_params()?;
         let tok = self.consume(TokenKind::RSquirly)?;
         let id = self.ctx.next_id();
-        let span = enclosing_span(ident.span, tok.span());
+        let span = ident.span.enclosing_to(&tok.span());
+
         Ok(Expr::Constructor(Constructor {
             ident,
             fields,

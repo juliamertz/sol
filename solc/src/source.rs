@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use miette::{NamedSource, SourceCode};
+use serde::{Deserialize, Serialize};
 
 /// Cheaply clonable wrapper of `miette::NamedSource`
 #[derive(Clone)]
@@ -35,8 +36,35 @@ impl Debug for SourceInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
     offset: usize,
     length: usize,
+}
+
+impl Span {
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    pub fn enclosing_to(&self, other: &Self) -> Self {
+        let len = other.offset - self.offset + other.length;
+        Span::from((self.offset, len))
+    }
+}
+
+impl From<(usize, usize)> for Span {
+    fn from((offset, length): (usize, usize)) -> Self {
+        Self { offset, length }
+    }
+}
+
+impl Into<miette::SourceSpan> for Span {
+    fn into(self) -> miette::SourceSpan {
+        (self.offset, self.length).into()
+    }
 }

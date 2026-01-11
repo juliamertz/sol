@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use solc_macros::Id;
 
-pub type Span = miette::SourceSpan;
+use crate::source::{Span};
+use solc_macros::Id;
 
 #[derive(Id, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct NodeId(u32);
