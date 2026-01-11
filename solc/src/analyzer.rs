@@ -283,7 +283,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 _ => match (lhs_ty, rhs_ty) {
-                    (Type::Int(lhs_kind), Type::Int(rhs_kind)) => match op.kind {
+                    (Type::Int(lhs_kind), Type::Int(_rhs_kind)) => match op.kind {
                         OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div => {
                             Ok(Type::Int(lhs_kind))
                         }
@@ -304,8 +304,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Call(CallExpr { func, params, .. }) => {
             let Type::Fn {
-                is_extern,
-                params: param_types,
+                is_extern: _,
+                params: _param_types,
                 returns,
             } = infer(func, env, scope)?
             else {
@@ -313,7 +313,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             };
 
             for param in params {
-                let ty = infer(param, env, scope)?;
+                let _ty = infer(param, env, scope)?;
                 // TODO:
             }
 
@@ -331,7 +331,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::IfElse(IfElse {
-            id,
+            id: _,
             condition,
             consequence,
             alternative,
@@ -369,11 +369,13 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             Ok(consequence_ty)
         }
 
-        Expr::List(List { items, .. }) => {
+        Expr::List(List { items: _, .. }) => {
             todo!()
         }
 
-        Expr::Constructor(Constructor { ident, fields, .. }) => {
+        Expr::Constructor(Constructor {
+            ident, fields: _, ..
+        }) => {
             let def_id = scope.get_var(ident).ok_or(TypeError::NotFound {
                 ident: ident.to_owned(),
                 span: ident.span,
@@ -411,7 +413,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             infer(val, env, scope)?;
         }
 
-        Stmnt::Use(Use { ident, .. }) => {}
+        Stmnt::Use(Use { ident: _, .. }) => {}
 
         Stmnt::Fn(Fn {
             is_extern,
@@ -429,7 +431,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             let def_id = env.define(ty);
             scope.set_var(ident, def_id);
 
-            let body_ty = if let Some(body) = body
+            let _body_ty = if let Some(body) = body
                 && !is_extern
             {
                 let block = Expr::Block(body.to_owned()); // FIX: no need for this clone
@@ -457,7 +459,9 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             scope.set_var(ident, def_id);
         }
 
-        Stmnt::Impl(Impl { ident, body, .. }) => todo!("check impl block"),
+        Stmnt::Impl(Impl {
+            ident: _, body: _, ..
+        }) => todo!("check impl block"),
     }
 
     Ok(())

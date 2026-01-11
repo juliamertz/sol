@@ -73,7 +73,7 @@ enum Command {
 }
 
 fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
-    let content = std::fs::read_to_string(&file_path).unwrap();
+    let content = std::fs::read_to_string(file_path).unwrap();
     let name = file_path.to_string_lossy();
     let source = SourceInfo::new(name, content.clone());
 

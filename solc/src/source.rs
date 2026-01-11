@@ -63,8 +63,8 @@ impl From<(usize, usize)> for Span {
     }
 }
 
-impl Into<miette::SourceSpan> for Span {
-    fn into(self) -> miette::SourceSpan {
-        (self.offset, self.length).into()
+impl From<Span> for miette::SourceSpan {
+    fn from(val: Span) -> Self {
+        (val.offset, val.length).into()
     }
 }
