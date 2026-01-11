@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::sync::Arc;
 
 use solc_lexer::Span;
 use solc_macros::Id;
@@ -10,7 +11,7 @@ pub struct NodeId(u32);
 pub struct Ident {
     pub id: NodeId,
     pub span: Span,
-    pub inner: String,
+    pub inner: Arc<str>,
 }
 
 impl AsRef<str> for Ident {
@@ -25,7 +26,7 @@ impl Display for Ident {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpKind {
     /// num == 10
     Eq,
@@ -59,7 +60,7 @@ pub struct Op {
 /// A literal value within the source code
 #[derive(Debug, Clone)]
 pub enum LiteralKind {
-    Str(String),
+    Str(Arc<str>),
     Int(i64),
     // Bool(bool),
 }
@@ -92,12 +93,12 @@ pub enum TyKind {
     Bool,
     Str,
     List {
-        inner: Box<Ty>,
+        inner: Arc<Ty>,
         size: Option<usize>,
     },
     Fn {
-        params: Vec<Ty>,
-        returns: Box<Ty>,
+        params: Arc<[Ty]>,
+        returns: Arc<Ty>,
         is_extern: bool,
     },
     Var(Ident),
@@ -108,14 +109,14 @@ pub enum TyKind {
 pub struct Block {
     pub id: NodeId,
     pub span: Span,
-    pub nodes: Vec<Node>,
+    pub nodes: Arc<[Node]>,
 }
 
 #[derive(Debug, Clone)]
 pub struct IfElse {
     pub id: NodeId,
     pub span: Span,
-    pub condition: Box<Expr>,
+    pub condition: Arc<Expr>,
     pub consequence: Block,
     pub alternative: Option<Block>,
 }
@@ -124,7 +125,7 @@ pub struct IfElse {
 pub struct List {
     pub id: NodeId,
     pub span: Span,
-    pub items: Vec<Expr>,
+    pub items: Arc<[Expr]>,
 }
 
 #[derive(Debug, Clone)]
@@ -148,32 +149,32 @@ pub struct PrefixExpr {
     pub id: NodeId,
     pub span: Span,
     pub op: Op,
-    pub rhs: Box<Expr>,
+    pub rhs: Arc<Expr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct BinOp {
     pub id: NodeId,
     pub span: Span,
-    pub lhs: Box<Expr>,
+    pub lhs: Arc<Expr>,
     pub op: Op,
-    pub rhs: Box<Expr>,
+    pub rhs: Arc<Expr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CallExpr {
     pub id: NodeId,
     pub span: Span,
-    pub func: Box<Expr>,
-    pub params: Vec<Expr>,
+    pub func: Arc<Expr>,
+    pub params: Arc<[Expr]>,
 }
 
 #[derive(Debug, Clone)]
 pub struct IndexExpr {
     pub id: NodeId,
     pub span: Span,
-    pub expr: Box<Expr>,
-    pub idx: Box<Expr>,
+    pub expr: Arc<Expr>,
+    pub idx: Arc<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -182,7 +183,7 @@ pub struct Fn {
     pub span: Span,
     pub is_extern: bool,
     pub ident: Ident,
-    pub params: Vec<(Ident, Ty)>,
+    pub params: Arc<[(Ident, Ty)]>,
     pub return_ty: Ty,
     pub body: Option<Block>,
 }
@@ -199,7 +200,7 @@ pub struct StructDef {
     pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
-    pub fields: Vec<(Ident, Ty)>,
+    pub fields: Arc<[(Ident, Ty)]>,
 }
 
 #[derive(Debug, Clone)]
@@ -215,7 +216,7 @@ pub struct Constructor {
     pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
-    pub fields: Vec<(Ident, Expr)>,
+    pub fields: Arc<[(Ident, Expr)]>,
 }
 
 #[derive(Debug, Clone)]
@@ -230,10 +231,10 @@ pub enum Expr {
     IfElse(IfElse),
     List(List),
     Constructor(Constructor),
-    Ref(Box<Expr>),
+    Ref(Arc<Expr>),
     /// Used for inserting identifiers that will not be mangled in the final output
     /// For internal use during codegen or when using extern symbols
-    RawIdent(String),
+    RawIdent(Arc<str>),
 }
 
 impl Expr {

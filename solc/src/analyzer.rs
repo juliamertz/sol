@@ -217,8 +217,7 @@ impl TypeEnv {
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Type> {
     let ty = match expr {
         Expr::Ident(ident) => {
-            let name = ident.inner.as_str();
-            let def = scope.get_var(name).ok_or(TypeError::NotFound {
+            let def = scope.get_var(&ident.inner).ok_or(TypeError::NotFound {
                 ident: ident.to_owned(),
                 span: ident.span,
             })?;
@@ -312,7 +311,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 todo!("cannot call a non fn var");
             };
 
-            for param in params {
+            for param in params.iter() {
                 let _ty = infer(param, env, scope)?;
                 // TODO:
             }
@@ -436,7 +435,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             {
                 let block = Expr::Block(body.to_owned()); // FIX: no need for this clone
                 let scope = &mut scope.child();
-                for (ident, ty) in params {
+                for (ident, ty) in params.iter() {
                     let def_id = env.define(ty.into());
                     scope.set_var(ident, def_id);
                 }

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -74,6 +75,7 @@ pub enum Prec {
     Product, // *
     Prefix,  // -a, !a or &a
     Call,    // func()
+    Construct, // Point { x : 10, y : 5 }
     // Index, // list[0]
     Chain, // mod.field
 }
@@ -84,6 +86,7 @@ impl From<&Token> for Prec {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
             TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
+            TokenKind::LSquirly => Self::Construct,
             TokenKind::LAngle | TokenKind::RAngle => Self::Cmp,
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
@@ -230,6 +233,7 @@ impl Parser {
             nodes.push(self.node()?);
         }
 
+        let nodes = Arc::from(nodes);
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
         Ok(Block { nodes, id, span })
@@ -241,7 +245,7 @@ impl Parser {
         Ok(Ident {
             id,
             span: token.span,
-            inner: token.text,
+            inner: Arc::from(token.text),
         })
     }
 
@@ -269,7 +273,7 @@ impl Parser {
             self.consume(TokenKind::LBracket)?;
             self.consume(TokenKind::RBracket)?;
             let kind = TyKind::List {
-                inner: Box::new(ty),
+                inner: Arc::from(ty),
                 size: None,
             };
             let id = self.ctx.next_id();
@@ -314,11 +318,13 @@ impl Parser {
 
             self.consume(TokenKind::End)?;
 
+            let nodes = Arc::from(nodes);
             let id = self.ctx.next_id();
             let span = span.enclosing_to(&self.curr.span);
             Some(Block { nodes, id, span })
         };
 
+        let params = Arc::from(params);
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
         Ok(Fn {
@@ -454,7 +460,7 @@ impl Parser {
         let span = span.enclosing_to(&tok.span);
 
         Ok(IfElse {
-            condition: Box::new(condition),
+            condition: Arc::from(condition),
             consequence,
             alternative,
             id,
@@ -469,7 +475,7 @@ impl Parser {
 
         Ok(PrefixExpr {
             op,
-            rhs: Box::new(rhs),
+            rhs: Arc::from(rhs),
             id,
             span,
         })
@@ -512,9 +518,9 @@ impl Parser {
         let span = lhs.span().enclosing_to(&rhs.span());
 
         Ok(Expr::BinOp(BinOp {
-            lhs: Box::new(lhs),
+            lhs: Arc::from(lhs),
             op,
-            rhs: Box::new(rhs),
+            rhs: Arc::from(rhs),
             id,
             span,
         }))
@@ -522,7 +528,7 @@ impl Parser {
 
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LParen)?;
-        let args = if self.at(TokenKind::RParen) {
+        let params = if self.at(TokenKind::RParen) {
             vec![]
         } else {
             self.expr_list()?
@@ -532,8 +538,8 @@ impl Parser {
         let span = expr.span().enclosing_to(&tok.span());
 
         Ok(Expr::Call(CallExpr {
-            func: Box::new(expr),
-            params: args,
+            func: Arc::from(expr),
+            params: Arc::from(params),
             id,
             span,
         }))
@@ -569,7 +575,7 @@ impl Parser {
     fn str_lit(&mut self) -> Result<Literal> {
         let text = self.curr.text.clone();
         let span = self.curr.span;
-        let kind = LiteralKind::Str(text);
+        let kind = LiteralKind::Str(Arc::from(text));
         self.advance();
         let id = self.ctx.next_id();
         Ok(Literal { id, span, kind })
@@ -658,9 +664,10 @@ impl Parser {
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;
         let tok = self.consume(TokenKind::RBracket)?;
+
+        let items = Arc::from(items);
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&tok.span());
-
         Ok(List { items, id, span })
     }
 
@@ -672,9 +679,10 @@ impl Parser {
         self.skip_whitespace();
         let fields = self.typed_params()?;
         let tok = self.consume(TokenKind::End)?;
+
+        let fields = Arc::from(fields);
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&tok.span());
-
         Ok(StructDef {
             ident,
             fields,
@@ -687,9 +695,10 @@ impl Parser {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.value_params()?;
         let tok = self.consume(TokenKind::RSquirly)?;
+
+        let fields = Arc::from(fields);
         let id = self.ctx.next_id();
         let span = ident.span.enclosing_to(&tok.span());
-
         Ok(Expr::Constructor(Constructor {
             ident,
             fields,

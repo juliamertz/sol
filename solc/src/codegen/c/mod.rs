@@ -4,6 +4,7 @@ use std::hash::Hasher;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
@@ -152,7 +153,7 @@ impl C {
     }
 
     fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
-        for node in &block.nodes {
+        for node in block.nodes.iter() {
             self.emit_node(buf, env, node);
         }
     }
@@ -189,13 +190,13 @@ impl C {
                 buf.push_str("if(");
                 self.emit_expr(buf, env, &r#if.condition);
                 buf.push_str("){");
-                for node in &r#if.consequence.nodes {
+                for node in r#if.consequence.nodes.iter() {
                     self.emit_node(buf, env, node);
                 }
                 buf.push('}');
                 if let Some(ref alternative) = r#if.alternative {
                     buf.push_str("else{");
-                    for node in &alternative.nodes {
+                    for node in alternative.nodes.iter() {
                         self.emit_node(buf, env, node);
                     }
                     buf.push('}');
@@ -228,18 +229,19 @@ impl C {
                 buf.push('=');
                 buf.push_str("list_alloc");
 
-                for item in list.items.clone() {
+                for item in list.items.iter() {
                     self.emit_expr(
                         buf,
                         env,
                         &Expr::Call(CallExpr {
                             id: NodeId::DUMMY,
                             span: (0, 0).into(),
-                            func: Box::new(Expr::RawIdent("list_push_rval".to_string())),
+                            func: Arc::from(Expr::RawIdent("list_push_rval".into())),
                             params: vec![
-                                Expr::Ref(Box::new(Expr::RawIdent(tmp_name.to_string()))),
-                                item,
-                            ],
+                                Expr::Ref(Arc::from(Expr::RawIdent(tmp_name.into()))),
+                                item.clone(),
+                            ]
+                            .into(),
                         }),
                     );
                     self.node_marker.emit.push_str(buf);
@@ -286,7 +288,7 @@ impl C {
 
                 // TODO: pull out into seperate function
                 if let Expr::List(list) = &binding.val {
-                    for item in list.items.clone() {
+                    for item in list.items.iter() {
                         let mut buf = String::new();
                         self.emit_expr(
                             &mut buf,
@@ -294,11 +296,12 @@ impl C {
                             &Expr::Call(CallExpr {
                                 id: NodeId::DUMMY,
                                 span: (0, 0).into(),
-                                func: Box::new(Expr::RawIdent("list_push_rval".into())),
+                                func: Arc::from(Expr::RawIdent("list_push_rval".into())),
                                 params: vec![
-                                    Expr::Ref(Box::new(Expr::Ident(binding.ident.clone()))),
-                                    item,
-                                ],
+                                    Expr::Ref(Arc::from(Expr::Ident(binding.ident.clone().into()))),
+                                    item.clone(),
+                                ]
+                                .into(),
                             }),
                         );
                         self.node_marker.emit.push_str(&buf);
