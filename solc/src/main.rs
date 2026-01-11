@@ -81,7 +81,7 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let ast = match parser.parse() {
         Ok(nodes) => nodes,
         Err(err) => {
-            return Err(err);
+            return Err(err.into());
         }
     };
 
@@ -163,7 +163,6 @@ fn main() -> Result<()> {
                         token.kind
                     )
                     .with_source_code(src.clone());
-
                     println!("{:?}\n", report);
                 }
             } else {

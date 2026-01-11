@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use miette::{Diagnostic, Result, miette};
+use miette::{Diagnostic, miette};
 use thiserror::Error;
 
 use crate::ast::*;
@@ -8,7 +8,8 @@ use crate::lexer::{Lexer, Token, TokenKind};
 use crate::source::{SourceInfo, Span};
 
 #[derive(Error, Diagnostic, Debug)]
-pub enum ErrorKind {
+#[diagnostic(code(parser))]
+pub enum ParseError {
     #[error("expected")]
     Expected {
         #[source_code]
@@ -24,46 +25,35 @@ pub enum ErrorKind {
         help: Option<String>,
     },
 
-    #[error("invalid type: {}", token.text)]
-    InvalidType { token: Token },
+    #[error("invalid type")]
+    InvalidType {
+        #[source_code]
+        src: SourceInfo,
 
-    #[error("invalid operator: {}", token.text)]
-    InvalidOperator { token: Token },
+        #[label("this type")]
+        span: Span,
+
+        #[help]
+        help: Option<String>,
+    },
+
+    #[error("invalid operator")]
+    InvalidOperator {
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("here")]
+        span: Span,
+
+        #[help]
+        help: Option<String>,
+    },
 
     #[error("unhandled token: {0:?}")]
     Todo(Token),
 }
 
-impl ErrorKind {
-    fn into_error(self, parser: &Parser) -> miette::Report {
-        let span = match self {
-            ErrorKind::Todo(ref token) => token.span,
-            ErrorKind::InvalidType { ref token } => token.span,
-            _ => (parser.lex.pos, 1).into(),
-        };
-
-        ParseError {
-            kind: self,
-            span,
-            src: SourceInfo::new("mysource", parser.lex.content.clone()),
-        }
-        .into()
-    }
-}
-
-#[derive(Error, Debug, Diagnostic)]
-#[error("{kind:#}")]
-#[diagnostic(code(parser))]
-pub struct ParseError {
-    #[source_code]
-    src: SourceInfo,
-
-    #[label("This bit here 💩")]
-    span: Span,
-
-    #[diagnostic(transparent)]
-    kind: ErrorKind,
-}
+pub type Result<T, E = ParseError> = core::result::Result<T, E>;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Default)]
 pub enum Prec {
@@ -97,7 +87,8 @@ impl From<&Token> for Prec {
 }
 
 impl Op {
-    fn try_from_token(token: Token, id: NodeId) -> Result<Op> {
+    fn try_from_token(token: impl AsRef<Token>, id: NodeId) -> Option<Op> {
+        let token = token.as_ref();
         let span = token.span;
         let kind = match token.kind {
             TokenKind::Add => OpKind::Add,
@@ -110,9 +101,9 @@ impl Op {
             TokenKind::And => OpKind::And,
             TokenKind::Or => OpKind::Or,
             TokenKind::Dot => OpKind::Chain,
-            _ => return Err(ErrorKind::InvalidOperator { token }.into()),
+            _ => return None,
         };
-        Ok(Op { id, span, kind })
+        Some(Op { id, span, kind })
     }
 }
 
@@ -165,9 +156,7 @@ impl Parser {
             self.skip_whitespace();
             match self.node() {
                 Ok(node) => nodes.push(node),
-                Err(err) => {
-                    err.downcast()?;
-                }
+                Err(err) => return Err(err),
             }
         }
 
@@ -187,14 +176,13 @@ impl Parser {
 
     fn expect(&mut self, expected: TokenKind) -> Result<Token> {
         if self.curr.kind != expected {
-            return Err(ErrorKind::Expected {
+            return Err(ParseError::Expected {
                 src: self.lex.source(),
                 span: self.curr.span,
                 expected,
                 actual: self.curr.kind,
                 help: None,
-            }
-            .into_error(self));
+            });
         }
         Ok(self.curr.clone())
     }
@@ -312,11 +300,12 @@ impl Parser {
             self.advance();
         }
 
-        self.consume(TokenKind::Fn).unwrap();
+        self.consume(TokenKind::Fn)?;
 
         let ident = self
             .ident()
-            .map_err(|_| miette!("expected ident, got: {:?}", self.curr))?;
+            .map_err(|_| miette!("expected ident, got: {:?}", self.curr))
+            .unwrap(); // TODO:
 
         self.consume(TokenKind::LParen)?;
         let mut params = vec![];
@@ -429,7 +418,7 @@ impl Parser {
                 self.consume(TokenKind::Ret)?;
                 let val = self.expr(Prec::default())?;
                 let id = self.ctx.next_id();
-        let span = span.enclosing_to(&self.curr.span);
+                let span = span.enclosing_to(&self.curr.span);
                 Stmnt::Ret(Ret { val, id, span })
             }
             _ => panic!("TODO: {}", self.curr.kind),
@@ -510,7 +499,11 @@ impl Parser {
         }
         let token = self.curr.to_owned();
         let id = self.ctx.next_id();
-        let op = Op::try_from_token(token, id)?;
+        let op = Op::try_from_token(&token, id).ok_or(ParseError::InvalidOperator {
+            src: self.lex.source(),
+            span: token.span(),
+            help: None,
+        })?;
         let prec = Prec::from(&self.curr);
         self.advance();
 
@@ -589,7 +582,7 @@ impl Parser {
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
-            _ => panic!("{:?}", ErrorKind::Todo(self.curr.clone()).into_error(self)),
+            _ => panic!("{:?}", ParseError::Todo(self.curr.clone())),
         };
 
         if self.at(TokenKind::Eof) {

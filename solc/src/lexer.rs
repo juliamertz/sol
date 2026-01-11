@@ -110,6 +110,13 @@ impl TokenKind {
     }
 }
 
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+
 lazy_static! {
     static ref KEYWORD_LOOKUP: HashMap<&'static str, TokenKind> = [
         ("let", TokenKind::Let),
@@ -137,12 +144,6 @@ pub struct Token {
     pub span: Span,
 }
 
-impl Display for TokenKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
 impl Token {
     pub fn new(kind: TokenKind, text: impl ToString, start_pos: usize) -> Self {
         let text = text.to_string();
@@ -155,6 +156,12 @@ impl Token {
 
     pub fn span(&self) -> Span {
         self.span
+    }
+}
+
+impl AsRef<Token> for Token {
+    fn as_ref(&self) -> &Token {
+        self
     }
 }
 
