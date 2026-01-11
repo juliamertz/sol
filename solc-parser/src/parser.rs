@@ -49,8 +49,16 @@ pub enum ParseError {
         help: Option<String>,
     },
 
-    #[error("unhandled token: {0:?}")]
-    Todo(Token),
+    #[error("unhandled token: {:?}", token.kind)]
+    Todo {
+        #[source_code]
+        src: SourceInfo,
+
+        token: Token,
+
+        #[label("this token")]
+        span: Span,
+    },
 }
 
 pub type Result<T, E = ParseError> = core::result::Result<T, E>;
@@ -589,7 +597,13 @@ impl Parser {
                 Expr::Prefix(prefix_expr)
             }
 
-            _ => panic!("{:?}", ParseError::Todo(self.curr.clone())),
+            _ => {
+                return Err(ParseError::Todo {
+                    src: self.lex.source(),
+                    token: self.curr.clone(),
+                    span: self.curr.span,
+                });
+            }
         };
 
         if self.at(TokenKind::Eof) {
