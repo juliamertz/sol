@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use miette::{Diagnostic, miette};
+use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::*;
@@ -94,29 +94,8 @@ impl From<&Token> for Prec {
     }
 }
 
-impl Op {
-    fn try_from_token(token: impl AsRef<Token>, id: NodeId) -> Option<Op> {
-        let token = token.as_ref();
-        let span = token.span;
-        let kind = match token.kind {
-            TokenKind::Add => OpKind::Add,
-            TokenKind::Sub => OpKind::Sub,
-            TokenKind::Eq => OpKind::Eq,
-            TokenKind::Asterisk => OpKind::Mul,
-            TokenKind::Slash => OpKind::Div,
-            TokenKind::LAngle => OpKind::Lt,
-            TokenKind::RAngle => OpKind::Gt,
-            TokenKind::And => OpKind::And,
-            TokenKind::Or => OpKind::Or,
-            TokenKind::Dot => OpKind::Chain,
-            _ => return None,
-        };
-        Some(Op { id, span, kind })
-    }
-}
-
 #[derive(Default)]
-struct Context {
+pub struct Context {
     id: u32,
 }
 
@@ -157,7 +136,7 @@ impl Parser {
         let mut nodes = vec![];
 
         loop {
-            if self.curr.kind == TokenKind::Eof {
+            if self.at(TokenKind::Eof) {
                 break;
             }
 
@@ -196,7 +175,7 @@ impl Parser {
     }
 
     fn accept(&mut self, expected: TokenKind) -> Option<Token> {
-        if self.curr.kind == expected {
+        if self.at(expected) {
             let tok = self.curr.clone();
             self.advance();
             Some(tok)
@@ -216,7 +195,7 @@ impl Parser {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.curr.kind == TokenKind::Newline {
+        while self.at(TokenKind::Newline) {
             self.advance();
         }
     }
@@ -303,23 +282,18 @@ impl Parser {
 
     fn func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
-        let is_extern = self.curr.kind == TokenKind::Extern;
+        let is_extern = self.at(TokenKind::Extern);
         if is_extern {
             self.advance();
         }
 
         self.consume(TokenKind::Fn)?;
-
-        let ident = self
-            .ident()
-            .map_err(|_| miette!("expected ident, got: {:?}", self.curr))
-            .unwrap(); // TODO:
-
+        let ident = self.ident()?;
         self.consume(TokenKind::LParen)?;
         let mut params = vec![];
         while self.curr.kind != TokenKind::RParen {
             params.push(self.typed_param()?);
-            if self.curr.kind == TokenKind::Comma {
+            if self.at(TokenKind::Comma) {
                 self.advance();
             }
         }
@@ -378,7 +352,7 @@ impl Parser {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let expr = self.expr(Prec::Lowest)?;
-        if self.curr.kind == TokenKind::Comma {
+        if self.at(TokenKind::Comma) {
             self.advance();
         }
 
@@ -441,7 +415,7 @@ impl Parser {
         let ident = self.ident()?;
 
         let mut ty = None;
-        if self.curr.kind == TokenKind::Colon {
+        if self.at(TokenKind::Colon) {
             self.consume(TokenKind::Colon)?;
             ty = Some(self.ty()?);
         }
@@ -468,7 +442,7 @@ impl Parser {
         self.accept(TokenKind::Newline);
 
         let consequence = self.block()?;
-        let alternative = if self.curr.kind == TokenKind::Else {
+        let alternative = if self.at(TokenKind::Else) {
             self.advance();
             self.skip_whitespace();
             Some(self.block()?)
@@ -504,13 +478,30 @@ impl Parser {
     fn op(&mut self) -> Result<(Op, Prec)> {
         let token = self.curr.to_owned();
         let id = self.ctx.next_id();
-        let prec = Prec::from(&self.curr);
-        let op = Op::try_from_token(&token, id).ok_or(ParseError::InvalidOperator {
-            src: self.lex.source(),
-            span: token.span(),
-            help: None,
-        })?;
+        let prec = Prec::from(&token);
+        let span = token.span;
+
+        let kind = match token.kind {
+            TokenKind::Add => Ok(OpKind::Add),
+            TokenKind::Sub => Ok(OpKind::Sub),
+            TokenKind::Eq => Ok(OpKind::Eq),
+            TokenKind::Asterisk => Ok(OpKind::Mul),
+            TokenKind::Slash => Ok(OpKind::Div),
+            TokenKind::LAngle => Ok(OpKind::Lt),
+            TokenKind::RAngle => Ok(OpKind::Gt),
+            TokenKind::And => Ok(OpKind::And),
+            TokenKind::Or => Ok(OpKind::Or),
+            TokenKind::Dot => Ok(OpKind::Chain),
+            _ => Err(ParseError::InvalidOperator {
+                src: self.lex.source(),
+                span: token.span(),
+                help: None,
+            }),
+        }?;
+
         self.advance();
+
+        let op = Op { id, span, kind };
         Ok((op, prec))
     }
 
@@ -642,7 +633,7 @@ impl Parser {
     }
 
     fn expr_list(&mut self) -> Result<Vec<Expr>> {
-        if self.curr.kind == TokenKind::RBracket {
+        if self.at(TokenKind::RBracket) {
             return Ok(vec![]);
         }
 
