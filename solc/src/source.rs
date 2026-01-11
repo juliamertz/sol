@@ -34,3 +34,9 @@ impl Debug for SourceInfo {
         f.debug_tuple(self.src.name()).finish()
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Span {
+    offset: usize,
+    length: usize,
+}

@@ -3,11 +3,24 @@ use thiserror::Error;
 
 use crate::ast::*;
 use crate::lexer::{Lexer, Token, TokenKind};
+use crate::source::SourceInfo;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ErrorKind {
-    #[error("expected token {0}")]
-    Expected(TokenKind),
+    #[error("expected")]
+    Expected {
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("this is of kind {actual} but was expected to be {expected}")]
+        span: SourceSpan,
+
+        expected: TokenKind,
+        actual: TokenKind,
+
+        #[help]
+        help: Option<String>,
+    },
 
     #[error("invalid type: {}", token.text)]
     InvalidType { token: Token },
@@ -180,7 +193,14 @@ impl Parser {
 
     fn expect(&mut self, expected: TokenKind) -> Result<Token> {
         if self.curr.kind != expected {
-            return Err(ErrorKind::Expected(expected).into_error(self));
+            return Err(ErrorKind::Expected {
+                src: todo!(),
+                span: todo!(),
+                expected,
+                actual: todo!(),
+                help: todo!(),
+            }
+            .into_error(self));
         }
         Ok(self.curr.clone())
     }
