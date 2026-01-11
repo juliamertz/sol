@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::source::{Span};
+use crate::source::Span;
 use solc_macros::Id;
 
 #[derive(Id, Debug, Clone, Copy, Serialize, Deserialize)]

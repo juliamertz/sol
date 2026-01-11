@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use miette::{Diagnostic, Result, miette};
 use thiserror::Error;
 
@@ -136,8 +138,8 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(content: impl ToString) -> Self {
-        let mut lex = Lexer::new(content);
+    pub fn new(file_path: PathBuf, content: impl ToString) -> Self {
+        let mut lex = Lexer::new(file_path, content);
         let curr = lex
             .read_token()
             .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos));
@@ -186,11 +188,11 @@ impl Parser {
     fn expect(&mut self, expected: TokenKind) -> Result<Token> {
         if self.curr.kind != expected {
             return Err(ErrorKind::Expected {
-                src: todo!(),
-                span: todo!(),
+                src: self.lex.source(),
+                span: self.curr.span,
                 expected,
-                actual: todo!(),
-                help: todo!(),
+                actual: self.curr.kind,
+                help: None,
             }
             .into_error(self));
         }

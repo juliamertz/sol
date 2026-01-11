@@ -16,9 +16,10 @@ use clap::Parser;
 use miette::{IntoDiagnostic, NamedSource, Result};
 
 use crate::{
-    analyzer::{check_nodes, Scope, TypeEnv},
+    analyzer::{Scope, TypeEnv, check_nodes},
     codegen::{Compiler, Emitter},
-    lexer::TokenKind, source::SourceInfo,
+    lexer::TokenKind,
+    source::SourceInfo,
 };
 
 #[derive(clap::Parser)]
@@ -58,7 +59,7 @@ enum Command {
         opts: BuildOpts,
     },
     DumpTokens {
-        filepath: PathBuf,
+        file_path: PathBuf,
 
         #[arg(short, long)]
         spans: bool,
@@ -67,16 +68,16 @@ enum Command {
         take: usize,
     },
     DumpAst {
-        filepath: PathBuf,
+        file_path: PathBuf,
     },
 }
 
-fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
-    let content = std::fs::read_to_string(filepath).unwrap();
-    let name = filepath.to_string_lossy();
+fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
+    let content = std::fs::read_to_string(&file_path).unwrap();
+    let name = file_path.to_string_lossy();
     let source = SourceInfo::new(name, content.clone());
 
-    let mut parser = parser::Parser::new(content);
+    let mut parser = parser::Parser::new(file_path.to_owned(), content);
     let ast = match parser.parse() {
         Ok(nodes) => nodes,
         Err(err) => {
@@ -98,6 +99,21 @@ fn build(filepath: &Path, opts: &BuildOpts) -> Result<PathBuf> {
 fn main() -> Result<()> {
     let opts = Cli::parse();
 
+    miette::set_hook(Box::new(|_| {
+        let theme = miette::GraphicalTheme {
+            characters: miette::ThemeCharacters::unicode(),
+            styles: miette::ThemeStyles::rgb(),
+        };
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .terminal_links(true)
+                .context_lines(3)
+                .graphical_theme(theme)
+                .build(),
+        )
+    }))
+    .unwrap();
+
     match opts.command {
         Command::Build { filepath, opts } => {
             let bin_path = build(&filepath, &opts)?;
@@ -117,13 +133,13 @@ fn main() -> Result<()> {
             }
         }
         Command::DumpTokens {
-            filepath,
+            file_path,
             spans,
             take,
         } => {
-            let content = std::fs::read_to_string(filepath).unwrap();
+            let content = std::fs::read_to_string(&file_path).unwrap();
             let mut stdout = std::io::stdout();
-            let mut lex = lexer::Lexer::new(content.clone());
+            let mut lex = lexer::Lexer::new(file_path, content.clone());
 
             let mut tokens = vec![];
             let mut idx = 0;
@@ -164,9 +180,9 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Command::DumpAst { filepath } => {
-            let content = std::fs::read_to_string(filepath).unwrap();
-            let mut parser = parser::Parser::new(content);
+        Command::DumpAst { file_path } => {
+            let content = std::fs::read_to_string(&file_path).unwrap();
+            let mut parser = parser::Parser::new(file_path, content);
             let ast = parser.parse()?;
             dbg!(ast);
         }

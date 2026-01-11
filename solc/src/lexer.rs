@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -159,18 +160,26 @@ impl Token {
 
 #[derive(Debug)]
 pub struct Lexer {
+    pub file_path: PathBuf,
     pub content: String,
     pub pos: usize,
     pub eof: bool,
 }
 
 impl Lexer {
-    pub fn new(content: impl ToString) -> Self {
+    pub fn new(file_path: PathBuf, content: impl ToString) -> Self {
         Self {
+            file_path,
             content: content.to_string(),
             pos: 0,
             eof: false,
         }
+    }
+
+    pub fn source(&self) -> SourceInfo {
+        // TODO: this can be done more effeciently by directly storing sourceinfo in the lexer. for
+        // now this will do
+        SourceInfo::new(self.file_path.to_string_lossy(), self.content.clone())
     }
 
     pub fn advance(&mut self) -> Option<char> {
