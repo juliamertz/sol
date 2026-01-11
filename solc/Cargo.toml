@@ -9,9 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 solc-macros = { workspace = true }
-solc-lexer = { workspace = true }
-solc-parser = { workspace = true }
-
 thiserror = { workspace = true }
 miette = { workspace = true }
 clap = { version = "4", default-features = false, features = [

@@ -4,9 +4,9 @@ use std::sync::Arc;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::*;
-use solc_lexer::lexer::{Lexer, Token, TokenKind};
-use solc_lexer::source::{SourceInfo, Span};
+use crate::lexer::source::{SourceInfo, Span};
+use crate::lexer::{Lexer, Token, TokenKind};
+use crate::parser::ast::*;
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(parser))]
@@ -68,13 +68,13 @@ pub type Result<T, E = ParseError> = core::result::Result<T, E>;
 pub enum Prec {
     #[default]
     Lowest,
-    AndOr,   // && or || - lower precedence than equality
-    Eq,      // ==
-    Cmp,     // > or <
-    Sum,     // +
-    Product, // *
-    Prefix,  // -a, !a or &a
-    Call,    // func()
+    AndOr,     // && or || - lower precedence than equality
+    Eq,        // ==
+    Cmp,       // > or <
+    Sum,       // +
+    Product,   // *
+    Prefix,    // -a, !a or &a
+    Call,      // func()
     Construct, // Point { x : 10, y : 5 }
     // Index, // list[0]
     Chain, // mod.field

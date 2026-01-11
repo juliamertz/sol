@@ -1,12 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["solc", "solc-lexer", "solc-macros", "solc-parser"]
+members = ["solc", "solc-macros"]
 
 [workspace.dependencies]
 solc-macros = { path = "solc-macros" }
-solc-lexer = { path = "solc-lexer" }
-solc-parser = { path = "solc-parser" }
-
 thiserror = "2"
 miette = { version = "7", features = [
   "derive",

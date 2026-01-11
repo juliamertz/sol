@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-use crate::source::{SourceInfo, Span};
+use super::source::{SourceInfo, Span};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {

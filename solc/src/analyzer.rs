@@ -2,18 +2,22 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use thiserror::Error;
-
-use solc_lexer::source::{SourceInfo, Span};
 use solc_macros::Id;
-use solc_parser::ast::{
+
+use crate::lexer::source::{SourceInfo, Span};
+use crate::parser::ast::{
     BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
     Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
 
 #[derive(Debug, Error, Diagnostic)]
+#[diagnostic(code(analyzer))]
 pub enum TypeError {
     #[error("variable not found in scope")]
     NotFound {
+        #[source_code]
+        src: SourceInfo,
+
         ident: Ident,
 
         #[label("this variable here")]
@@ -218,6 +222,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     let ty = match expr {
         Expr::Ident(ident) => {
             let def = scope.get_var(&ident.inner).ok_or(TypeError::NotFound {
+                src: scope.src.clone(),
                 ident: ident.to_owned(),
                 span: ident.span,
             })?;
@@ -376,6 +381,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             ident, fields: _, ..
         }) => {
             let def_id = scope.get_var(ident).ok_or(TypeError::NotFound {
+                src: scope.src.clone(),
                 ident: ident.to_owned(),
                 span: ident.span,
             })?;

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use solc_lexer::Span;
+use crate::lexer::Span;
 use solc_macros::Id;
 
 #[derive(Id, Debug, Clone, Copy)]

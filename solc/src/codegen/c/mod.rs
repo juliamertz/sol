@@ -12,8 +12,7 @@ use wyhash2::WyHash;
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::codegen::{Compiler, Emitter, quote};
-
-use solc_parser::ast::{
+use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr,
     Stmnt,
 };

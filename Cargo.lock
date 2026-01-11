@@ -246,18 +246,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "miette",
- "solc-lexer",
  "solc-macros",
- "solc-parser",
  "thiserror",
  "wyhash2",
-]
-
-[[package]]
-name = "solc-lexer"
-version = "0.1.0"
-dependencies = [
- "miette",
 ]
 
 [[package]]
@@ -267,16 +258,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "solc-parser"
-version = "0.1.0"
-dependencies = [
- "miette",
- "solc-lexer",
- "solc-macros",
- "thiserror",
 ]
 
 [[package]]
