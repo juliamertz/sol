@@ -1,14 +1,12 @@
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
-
-use crate::source::Span;
+use solc_lexer::Span;
 use solc_macros::Id;
 
-#[derive(Id, Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Id, Debug, Clone, Copy)]
 pub struct NodeId(u32);
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ident {
     pub id: NodeId,
     pub span: Span,
@@ -27,7 +25,7 @@ impl Display for Ident {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum OpKind {
     /// num == 10
     Eq,
@@ -51,7 +49,7 @@ pub enum OpKind {
     Chain,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Op {
     pub id: NodeId,
     pub span: Span,
@@ -59,14 +57,14 @@ pub struct Op {
 }
 
 /// A literal value within the source code
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum LiteralKind {
     Str(String),
     Int(i64),
     // Bool(bool),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Literal {
     pub id: NodeId,
     pub span: Span,
@@ -74,21 +72,21 @@ pub struct Literal {
 }
 
 /// A type expression
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Ty {
     pub id: NodeId,
     pub span: Span,
     pub kind: TyKind,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 #[rustfmt::skip]
 pub enum IntTyKind {
     U8, U16, U32, U64,
     I8, I16, I32, I64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum TyKind {
     Int(IntTyKind),
     Bool,
@@ -106,14 +104,14 @@ pub enum TyKind {
 }
 
 /// A block of nodes, for example the body of a function or module
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Block {
     pub id: NodeId,
     pub span: Span,
     pub nodes: Vec<Node>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct IfElse {
     pub id: NodeId,
     pub span: Span,
@@ -122,14 +120,14 @@ pub struct IfElse {
     pub alternative: Option<Block>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct List {
     pub id: NodeId,
     pub span: Span,
     pub items: Vec<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Let {
     pub id: NodeId,
     pub span: Span,
@@ -138,14 +136,14 @@ pub struct Let {
     pub val: Expr,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Ret {
     pub id: NodeId,
     pub span: Span,
     pub val: Expr,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct PrefixExpr {
     pub id: NodeId,
     pub span: Span,
@@ -153,7 +151,7 @@ pub struct PrefixExpr {
     pub rhs: Box<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct BinOp {
     pub id: NodeId,
     pub span: Span,
@@ -162,7 +160,7 @@ pub struct BinOp {
     pub rhs: Box<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct CallExpr {
     pub id: NodeId,
     pub span: Span,
@@ -170,7 +168,7 @@ pub struct CallExpr {
     pub params: Vec<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct IndexExpr {
     pub id: NodeId,
     pub span: Span,
@@ -178,7 +176,7 @@ pub struct IndexExpr {
     pub idx: Box<Expr>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Fn {
     pub id: NodeId,
     pub span: Span,
@@ -189,14 +187,14 @@ pub struct Fn {
     pub body: Option<Block>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Use {
     pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct StructDef {
     pub id: NodeId,
     pub span: Span,
@@ -204,7 +202,7 @@ pub struct StructDef {
     pub fields: Vec<(Ident, Ty)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Impl {
     pub id: NodeId,
     pub span: Span,
@@ -212,7 +210,7 @@ pub struct Impl {
     pub body: Block,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Constructor {
     pub id: NodeId,
     pub span: Span,
@@ -220,7 +218,7 @@ pub struct Constructor {
     pub fields: Vec<(Ident, Expr)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Ident(Ident),
     Literal(Literal),
@@ -274,7 +272,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum Stmnt {
     Let(Let),
     Ret(Ret),
@@ -284,7 +282,7 @@ pub enum Stmnt {
     Impl(Impl),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Expr(Expr),
     Stmnt(Stmnt),

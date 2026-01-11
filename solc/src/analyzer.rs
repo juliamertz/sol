@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::{
+use solc_lexer::source::{SourceInfo, Span};
+use solc_macros::Id;
+use solc_parser::ast::{
     BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
     Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
-use crate::source::{SourceInfo, Span};
-use solc_macros::Id;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TypeError {

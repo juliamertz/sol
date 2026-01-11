@@ -9,14 +9,11 @@ path = "src/main.rs"
 
 [dependencies]
 solc-macros = { workspace = true }
+solc-lexer = { workspace = true }
+solc-parser = { workspace = true }
 
-serde = { version = "1", features = ["derive"] }
-thiserror = "2"
-miette = { version = "7", features = [
-  "derive",
-  "fancy",
-  "serde",
-], default-features = false }
+thiserror = { workspace = true }
+miette = { workspace = true }
 clap = { version = "4", default-features = false, features = [
   "std",
   "derive",

@@ -1,9 +1,5 @@
 mod analyzer;
-mod ast;
 mod codegen;
-mod lexer;
-mod parser;
-mod source;
 
 use std::{
     io::Write,
@@ -15,12 +11,10 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, NamedSource, Result};
 
-use crate::{
-    analyzer::{Scope, TypeEnv, check_nodes},
-    codegen::{Compiler, Emitter},
-    lexer::TokenKind,
-    source::SourceInfo,
-};
+use crate::analyzer::{Scope, TypeEnv, check_nodes};
+use crate::codegen::{Compiler, Emitter};
+
+use solc_lexer::SourceInfo;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -77,7 +71,7 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let name = file_path.to_string_lossy();
     let source = SourceInfo::new(name, content.clone());
 
-    let mut parser = parser::Parser::new(file_path.to_owned(), content);
+    let mut parser = solc_parser::Parser::new(file_path.to_owned(), content);
     let ast = match parser.parse() {
         Ok(nodes) => nodes,
         Err(err) => {
@@ -139,7 +133,7 @@ fn main() -> Result<()> {
         } => {
             let content = std::fs::read_to_string(&file_path).unwrap();
             let mut stdout = std::io::stdout();
-            let mut lex = lexer::Lexer::new(file_path, content.clone());
+            let mut lex = solc_lexer::Lexer::new(file_path, content.clone());
 
             let mut tokens = vec![];
             let mut idx = 0;
@@ -170,7 +164,7 @@ fn main() -> Result<()> {
                     let kind = token.kind.to_string();
                     stdout.write_all(kind.as_bytes()).unwrap();
 
-                    if !token.text.is_empty() && token.kind != TokenKind::Newline {
+                    if !token.text.is_empty() && token.kind != solc_lexer::TokenKind::Newline {
                         stdout.write_all(b" :: ").unwrap();
                         stdout.write_all(token.text.as_bytes()).unwrap();
                     }
@@ -181,7 +175,7 @@ fn main() -> Result<()> {
         }
         Command::DumpAst { file_path } => {
             let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, content);
+            let mut parser = solc_parser::Parser::new(file_path, content);
             let ast = parser.parse()?;
             dbg!(ast);
         }

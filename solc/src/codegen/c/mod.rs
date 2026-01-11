@@ -1,11 +1,3 @@
-use crate::BuildOpts;
-use crate::analyzer::{IntKind, Type, TypeEnv};
-use crate::ast::{
-    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr,
-    Stmnt,
-};
-use crate::codegen::{Compiler, Emitter, quote};
-
 use std::borrow::Cow;
 use std::fs;
 use std::hash::Hasher;
@@ -15,6 +7,15 @@ use std::process::Stdio;
 
 use miette::{IntoDiagnostic, Result};
 use wyhash2::WyHash;
+
+use crate::BuildOpts;
+use crate::analyzer::{IntKind, Type, TypeEnv};
+use crate::codegen::{Compiler, Emitter, quote};
+
+use solc_parser::ast::{
+    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr,
+    Stmnt,
+};
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");

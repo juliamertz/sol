@@ -4,8 +4,8 @@ use miette::{Diagnostic, miette};
 use thiserror::Error;
 
 use crate::ast::*;
-use crate::lexer::{Lexer, Token, TokenKind};
-use crate::source::{SourceInfo, Span};
+use solc_lexer::lexer::{Lexer, Token, TokenKind};
+use solc_lexer::source::{SourceInfo, Span};
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(parser))]

@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use miette::{NamedSource, SourceCode};
-use serde::{Deserialize, Serialize};
 
 /// Cheaply clonable wrapper of `miette::NamedSource`
 #[derive(Clone)]
@@ -36,7 +35,7 @@ impl Debug for SourceInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     offset: usize,
     length: usize,

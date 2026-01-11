@@ -3,11 +3,9 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-use serde::{Deserialize, Serialize};
-
 use crate::source::{SourceInfo, Span};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     Eof,
     Newline,

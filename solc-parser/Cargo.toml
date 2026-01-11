@@ -1,0 +1,11 @@
+[package]
+name = "solc-parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+solc-macros = { workspace = true }
+solc-lexer = { workspace = true }
+
+miette = { workspace = true }
+thiserror = { workspace = true }
