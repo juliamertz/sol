@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use miette::{IntoDiagnostic, Result};
-use tempdir::TempDir;
 use wyhash2::WyHash;
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
@@ -29,7 +28,7 @@ struct InsertMarker {
 pub struct C {
     node_marker: InsertMarker,
     block_marker: InsertMarker,
-    tempdir: TempDir,
+    tempdir: PathBuf,
 }
 
 impl Default for C {
@@ -37,7 +36,7 @@ impl Default for C {
         Self {
             node_marker: Default::default(),
             block_marker: Default::default(),
-            tempdir: TempDir::new("sol").unwrap(),
+            tempdir: std::env::temp_dir(),
         }
     }
 }
@@ -51,7 +50,7 @@ impl Emitter for C {
         let includes = [("gh.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
 
         for (filename, contents) in includes {
-            let path = self.tempdir.path().join(filename);
+            let path = self.tempdir.join(filename);
             fs::write(&path, contents).unwrap();
             buf.push_str(&format!("#include \"{}\"\n", path.to_str().unwrap()));
         }

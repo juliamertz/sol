@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 use crate::source::{SourceInfo, Span};
@@ -120,8 +120,8 @@ impl Display for TokenKind {
     }
 }
 
-lazy_static! {
-    static ref KEYWORD_LOOKUP: HashMap<&'static str, TokenKind> = [
+static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock::new(|| {
+    [
         ("let", TokenKind::Let),
         ("func", TokenKind::Fn),
         ("return", TokenKind::Ret),
@@ -135,10 +135,9 @@ lazy_static! {
         ("extern", TokenKind::Extern),
         ("struct", TokenKind::Struct),
     ]
-    .iter()
-    .cloned()
-    .collect();
-}
+    .into_iter()
+    .collect()
+});
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
