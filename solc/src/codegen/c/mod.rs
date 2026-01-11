@@ -1,7 +1,8 @@
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::ast::{
-    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, Stmnt,
+    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr,
+    Stmnt,
 };
 use crate::codegen::{Compiler, Emitter, quote};
 
@@ -178,7 +179,10 @@ impl C {
                 LiteralKind::Str(str) => buf.push_str(&quote(str)),
                 LiteralKind::Int(int) => buf.push_str(&int.to_string()),
             },
-            Expr::Prefix(prefix_expr) => todo!("prefix expr"),
+            Expr::Prefix(PrefixExpr { op, rhs, .. }) => {
+                self.emit_op(buf, op);
+                self.emit_expr(buf, env, rhs);
+            }
             Expr::BinOp(binop) => self.emit_binop_expr(buf, env, binop),
             Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
             Expr::IfElse(r#if) => {

@@ -480,36 +480,37 @@ impl Parser {
         })
     }
 
-    fn prefix_expr(&mut self, op: Op) -> Result<Expr> {
+    fn prefix_expr(&mut self, op: Op) -> Result<PrefixExpr> {
         let rhs = self.expr(Prec::default())?;
         let id = self.ctx.next_id();
         let span = op.span.enclosing_to(&rhs.span());
 
-        Ok(Expr::Prefix(PrefixExpr {
+        Ok(PrefixExpr {
             op,
             rhs: Box::new(rhs),
             id,
             span,
-        }))
+        })
     }
 
-    fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
-        if !self.curr.kind.is_operator() {
-            panic!("invalid operator");
-        }
+    fn op(&mut self) -> Result<(Op, Prec)> {
         let token = self.curr.to_owned();
         let id = self.ctx.next_id();
+        let prec = Prec::from(&self.curr);
         let op = Op::try_from_token(&token, id).ok_or(ParseError::InvalidOperator {
             src: self.lex.source(),
             span: token.span(),
             help: None,
         })?;
-        let prec = Prec::from(&self.curr);
         self.advance();
+        Ok((op, prec))
+    }
 
+    fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
+        let (op, prec) = self.op()?;
         let rhs = self.expr(prec)?;
         let id = self.ctx.next_id();
-        let span = lhs.span().enclosing_to(&self.curr.span);
+        let span = lhs.span().enclosing_to(&rhs.span());
 
         Ok(Expr::BinOp(BinOp {
             lhs: Box::new(lhs),
@@ -582,6 +583,12 @@ impl Parser {
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
+            tok if tok.is_prefix_operator() => {
+                let (op, _prec) = self.op()?;
+                let prefix_expr = self.prefix_expr(op)?;
+                Expr::Prefix(prefix_expr)
+            }
+
             _ => panic!("{:?}", ParseError::Todo(self.curr.clone())),
         };
 

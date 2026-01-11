@@ -108,6 +108,10 @@ impl TokenKind {
                 | TokenKind::Ampersand
         )
     }
+
+    pub fn is_prefix_operator(&self) -> bool {
+        matches!(self, TokenKind::Bang | TokenKind::Sub)
+    }
 }
 
 impl Display for TokenKind {
@@ -115,7 +119,6 @@ impl Display for TokenKind {
         write!(f, "{self:?}")
     }
 }
-
 
 lazy_static! {
     static ref KEYWORD_LOOKUP: HashMap<&'static str, TokenKind> = [
