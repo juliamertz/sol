@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -6,8 +7,7 @@ use solc_macros::Id;
 
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
-    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List, Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -107,6 +107,14 @@ pub enum Type {
     Var(Ident),
 }
 
+// impl Type {
+//     fn resolve(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> &Self {
+//         if let Var(ident) = self {
+//         } else {
+//         }
+//     }
+// }
+
 impl From<&Ty> for Type {
     fn from(ty: &Ty) -> Self {
         Self::from(&ty.kind)
@@ -139,14 +147,6 @@ impl From<&TyKind> for Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // Type::None => f.write_str("None"),
-            // Type::Int(int_kind) => ,
-            // Type::Bool => todo!(),
-            // Type::Str => todo!(),
-            // Type::List(_) => todo!(),
-            // Type::Ptr(_) => todo!(),
-            // Type::Fn { is_extern, params, returns } => todo!(),
-            // Type::Struct { ident, fields } => todo!(),
             Type::Var(ident) => f.write_str(ident.as_ref()),
             _ => std::fmt::Debug::fmt(self, f),
         }
@@ -155,22 +155,24 @@ impl std::fmt::Display for Type {
 
 #[derive(Debug)]
 pub struct Scope<'a> {
-    parent: Option<&'a Scope<'a>>,
-    variables: HashMap<String, DefId>,
     src: SourceInfo,
+    parent: Option<&'a Scope<'a>>,
+    variables: HashMap<Arc<str>, DefId>,
+    types: HashMap<Arc<str>, DefId>,
 }
 
 impl Scope<'_> {
     pub fn new(src: SourceInfo) -> Self {
         Self {
+            src,
             parent: None,
             variables: Default::default(),
-            src,
+            types: Default::default(),
         }
     }
 
-    pub fn set_var(&mut self, ident: impl ToString, def_id: DefId) {
-        self.variables.insert(ident.to_string(), def_id);
+    pub fn set_var(&mut self, ident: impl Into<Arc<str>>, def_id: DefId) {
+        self.variables.insert(ident.into(), def_id);
     }
 
     pub fn get_var(&self, ident: impl AsRef<str>) -> Option<&DefId> {
@@ -181,11 +183,24 @@ impl Scope<'_> {
         })
     }
 
+    pub fn set_type(&mut self, ident: impl Into<Arc<str>>, def_id: DefId) {
+        self.types.insert(ident.into(), def_id);
+    }
+
+    pub fn get_type(&self, ident: impl AsRef<str>) -> Option<&DefId> {
+        self.types.get(ident.as_ref()).or_else(|| {
+            self.parent
+                .as_ref()
+                .and_then(|parent| parent.get_type(ident))
+        })
+    }
+
     pub fn child(&self) -> Scope<'_> {
         Scope {
+            src: self.src.clone(),
             parent: Some(self),
             variables: Default::default(),
-            src: self.src.clone(),
+            types: Default::default(),
         }
     }
 }
@@ -391,6 +406,15 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             Ok(ty.to_owned())
         }
 
+        Expr::MemberAccess(MemberAccess { id, span, lhs, ident }) => {
+            let lhs_ty = infer(lhs, env, scope)?;
+            dbg!(&lhs, &lhs_ty);
+            // match lhs_ty {
+            // }
+
+            todo!("infer member access expr")
+        }
+
         Expr::Ref(expr) => Ok(Type::Ptr(infer(expr, env, scope)?.into())),
 
         Expr::RawIdent(_ident) => todo!("infer raw ident"),
@@ -461,7 +485,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
                     .collect(),
             };
             let def_id = env.define(ty);
-            scope.set_var(ident, def_id);
+            scope.set_type(ident, def_id);
         }
 
         Stmnt::Impl(Impl {

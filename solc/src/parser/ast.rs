@@ -20,6 +20,12 @@ impl AsRef<str> for Ident {
     }
 }
 
+impl Into<Arc<str>> for &Ident {
+    fn into(self) -> Arc<str> {
+        self.inner.clone()
+    }
+}
+
 impl Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.inner)
@@ -46,8 +52,6 @@ pub enum OpKind {
     And,
     /// false or true
     Or,
-    /// struct.field or struct.method()
-    Chain,
 }
 
 #[derive(Debug, Clone)]
@@ -212,6 +216,14 @@ pub struct Impl {
 }
 
 #[derive(Debug, Clone)]
+pub struct MemberAccess {
+    pub id: NodeId,
+    pub span: Span,
+    pub lhs: Arc<Expr>,
+    pub ident: Ident,
+}
+
+#[derive(Debug, Clone)]
 pub struct Constructor {
     pub id: NodeId,
     pub span: Span,
@@ -231,6 +243,7 @@ pub enum Expr {
     IfElse(IfElse),
     List(List),
     Constructor(Constructor),
+    MemberAccess(MemberAccess),
     Ref(Arc<Expr>),
     /// Used for inserting identifiers that will not be mangled in the final output
     /// For internal use during codegen or when using extern symbols
@@ -250,6 +263,7 @@ impl Expr {
             Expr::IfElse(if_else) => if_else.span,
             Expr::List(list) => list.span,
             Expr::Constructor(constructor) => constructor.span,
+            Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
             Expr::RawIdent(_) => unreachable!(),
         }
@@ -267,6 +281,7 @@ impl Expr {
             Expr::IfElse(if_else) => if_else.id,
             Expr::List(list) => list.id,
             Expr::Constructor(constructor) => constructor.id,
+            Expr::MemberAccess(member_access) => member_access.id,
             Expr::Ref(r#ref) => r#ref.id(),
             Expr::RawIdent(_) => NodeId::DUMMY,
         }

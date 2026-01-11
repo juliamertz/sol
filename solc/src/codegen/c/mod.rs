@@ -13,8 +13,8 @@ use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::parser::ast::{
-    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, PrefixExpr,
-    Stmnt,
+    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
+    PrefixExpr, Stmnt,
 };
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
@@ -83,7 +83,6 @@ impl C {
             OpKind::Gt => ">",
             OpKind::And => "&&",
             OpKind::Or => "||",
-            OpKind::Chain => ".",
         };
         buf.push_str(text);
     }
@@ -213,6 +212,12 @@ impl C {
                     buf.push(',');
                 }
                 buf.push('}');
+            }
+
+            Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
+                self.emit_expr(buf, env, lhs);
+                buf.push('.');
+                self.emit_ident(buf, env, ident);
             }
 
             Expr::Block(block) => self.emit_block(buf, env, block),

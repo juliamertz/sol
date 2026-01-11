@@ -497,7 +497,6 @@ impl Parser {
             TokenKind::RAngle => Ok(OpKind::Gt),
             TokenKind::And => Ok(OpKind::And),
             TokenKind::Or => Ok(OpKind::Or),
-            TokenKind::Dot => Ok(OpKind::Chain),
             _ => Err(ParseError::InvalidOperator {
                 src: self.lex.source(),
                 span: token.span(),
@@ -557,6 +556,20 @@ impl Parser {
             idx: idx.into(),
             id,
             span,
+        }))
+    }
+
+    fn member_access(&mut self, lhs: Expr) -> Result<Expr> {
+        self.consume(TokenKind::Dot)?;
+        let ident = self.ident()?;
+        let lhs = Arc::from(lhs);
+        let id = self.ctx.next_id();
+        let span = lhs.span().enclosing_to(&ident.span);
+        Ok(Expr::MemberAccess(MemberAccess {
+            id,
+            span,
+            lhs,
+            ident,
         }))
     }
 
@@ -629,6 +642,9 @@ impl Parser {
                 }
                 TokenKind::LBracket => {
                     lhs = self.index_expr(lhs)?;
+                }
+                TokenKind::Dot => {
+                    lhs = self.member_access(lhs)?;
                 }
                 TokenKind::Newline => return Ok(lhs),
                 _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),

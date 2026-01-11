@@ -5,15 +5,11 @@ use miette::{NamedSource, SourceCode};
 
 /// Cheaply clonable wrapper of `miette::NamedSource`
 #[derive(Clone)]
-pub struct SourceInfo {
-    src: Arc<NamedSource<String>>,
-}
+pub struct SourceInfo(Arc<NamedSource<String>>);
 
 impl SourceInfo {
     pub fn new(name: impl AsRef<str>, source: String) -> Self {
-        Self {
-            src: Arc::new(NamedSource::new(name, source)),
-        }
+        Self(Arc::new(NamedSource::new(name, source)))
     }
 }
 
@@ -24,14 +20,14 @@ impl SourceCode for SourceInfo {
         context_lines_before: usize,
         context_lines_after: usize,
     ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-        self.src
+        self.0
             .read_span(span, context_lines_before, context_lines_after)
     }
 }
 
 impl Debug for SourceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple(self.src.name()).finish()
+        f.debug_tuple(self.0.name()).finish()
     }
 }
 
