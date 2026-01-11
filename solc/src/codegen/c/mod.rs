@@ -1,6 +1,8 @@
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
-use crate::ast::{BinOp, Block, CallExpr, Expr, Fn, LiteralKind, Node, NodeId, Op, OpKind, Stmnt};
+use crate::ast::{
+    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, Node, NodeId, Op, OpKind, Stmnt,
+};
 use crate::codegen::{Compiler, Emitter, quote};
 
 use std::borrow::Cow;
@@ -154,11 +156,23 @@ impl C {
         }
     }
 
+    fn emit_ident(&mut self, buf: &mut String, env: &TypeEnv, ident: &Ident) {
+        let ty = env.type_of(&ident.id);
+        let ident = if let Some(Type::Fn {
+            is_extern: true, ..
+        }) = ty
+        {
+            ident.as_ref()
+        } else {
+            &self.prefix(ident)
+        };
+        buf.push_str(ident);
+    }
+
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
-        dbg!(&expr, &expr.id(), &env);
         let ty = env.type_of(&expr.id()).unwrap();
         match expr {
-            Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
+            Expr::Ident(ident) => self.emit_ident(buf, env, ident),
             Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
             Expr::Literal(literal) => match &literal.kind {
                 LiteralKind::Str(str) => buf.push_str(&quote(str)),
