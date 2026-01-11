@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fs;
 use std::hash::Hasher;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -29,7 +29,6 @@ struct InsertMarker {
 
 pub struct C {
     node_marker: InsertMarker,
-    block_marker: InsertMarker,
     tempdir: PathBuf,
 }
 
@@ -37,7 +36,6 @@ impl Default for C {
     fn default() -> Self {
         Self {
             node_marker: Default::default(),
-            block_marker: Default::default(),
             tempdir: std::env::temp_dir(),
         }
     }

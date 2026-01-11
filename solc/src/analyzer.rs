@@ -53,20 +53,20 @@ pub enum IntKind {
     I8, I16, I32, I64,
 }
 
-impl IntKind {
-    fn is_signed(&self) -> bool {
-        matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64)
-    }
-
-    fn bits(&self) -> usize {
-        match self {
-            Self::U8 | Self::I8 => 8,
-            Self::U16 | Self::I16 => 16,
-            Self::U32 | Self::I32 => 32,
-            Self::U64 | Self::I64 => 64,
-        }
-    }
-}
+// impl IntKind {
+//     fn is_signed(&self) -> bool {
+//         matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64)
+//     }
+//
+//     fn bits(&self) -> usize {
+//         match self {
+//             Self::U8 | Self::I8 => 8,
+//             Self::U16 | Self::I16 => 16,
+//             Self::U32 | Self::I32 => 32,
+//             Self::U64 | Self::I64 => 64,
+//         }
+//     }
+// }
 
 impl From<&IntTyKind> for IntKind {
     fn from(value: &IntTyKind) -> Self {
