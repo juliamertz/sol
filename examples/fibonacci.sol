@@ -1,8 +1,8 @@
 use stdio
 
-extern func printf(format: Str) -> Int
+extern func printf(format: Str) -> i32
 
-func fib(n: Int) -> Int
+func fib(n: i32) -> i32
     if n == 0 or n == 1 then
         return n
     end
@@ -10,7 +10,7 @@ func fib(n: Int) -> Int
     return fib(n - 1) + fib(n - 2)
 end
 
-func main() -> Int
+func main() -> i32
     let result = fib(30)
 
     printf("Result is %d", result)

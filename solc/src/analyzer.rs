@@ -3,14 +3,12 @@ use std::collections::HashMap;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::{
-    ast::{
-        BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let,
-        List, Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Span, Stmnt, StructDef,
-        Ty, TyKind, Use,
-    },
-    source::SourceInfo,
+use crate::ast::{
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
+    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Span, Stmnt, StructDef, Ty,
+    TyKind, Use,
 };
+use crate::source::SourceInfo;
 use solc_macros::Id;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -132,7 +130,18 @@ impl From<&TyKind> for Type {
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
+        match self {
+            // Type::None => f.write_str("None"),
+            // Type::Int(int_kind) => ,
+            // Type::Bool => todo!(),
+            // Type::Str => todo!(),
+            // Type::List(_) => todo!(),
+            // Type::Ptr(_) => todo!(),
+            // Type::Fn { is_extern, params, returns } => todo!(),
+            // Type::Struct { ident, fields } => todo!(),
+            Type::Var(ident) => f.write_str(ident.as_ref()),
+            _ => std::fmt::Debug::fmt(self, f),
+        }
     }
 }
 
@@ -291,12 +300,17 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         Expr::Call(CallExpr { func, params, .. }) => {
             let Type::Fn {
                 is_extern,
-                params,
+                params: param_types,
                 returns,
             } = infer(func, env, scope)?
             else {
                 todo!("cannot call a non fn var");
             };
+
+            for param in params {
+                let ty = infer(param, env, scope)?;
+                // TODO:
+            }
 
             // TODO: check validity of params
 
@@ -423,8 +437,6 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             } else {
                 Type::None
             };
-
-            dbg!(&body_ty);
         }
 
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {

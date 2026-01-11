@@ -155,6 +155,7 @@ impl C {
     }
 
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
+        dbg!(&expr, &expr.id(), &env);
         let ty = env.type_of(&expr.id()).unwrap();
         match expr {
             Expr::Ident(ident) => buf.push_str(&self.prefix(ident)),
