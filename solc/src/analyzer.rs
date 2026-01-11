@@ -1,20 +1,24 @@
 use std::collections::HashMap;
 
-use miette::{Diagnostic};
+use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
     BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
-    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty,
-    TyKind, Use,
+    Literal, LiteralKind, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use,
 };
 use crate::source::{SourceInfo, Span};
 use solc_macros::Id;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TypeError {
-    #[error("variable not found in scope: {0}")]
-    NotFound(Ident),
+    #[error("variable not found in scope")]
+    NotFound {
+        ident: Ident,
+
+        #[label("this variable here")]
+        span: Span,
+    },
 
     #[error("invalid type, expected: {expected:?}, got: {actual:?}")]
     InvalidType { expected: Type, actual: Type },
@@ -214,9 +218,10 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     let ty = match expr {
         Expr::Ident(ident) => {
             let name = ident.inner.as_str();
-            let def = scope
-                .get_var(name)
-                .ok_or(TypeError::NotFound(ident.to_owned()))?;
+            let def = scope.get_var(name).ok_or(TypeError::NotFound {
+                ident: ident.to_owned(),
+                span: ident.span,
+            })?;
             let ty = env
                 .get_definition(def)
                 .expect("collected type for definition");
@@ -369,9 +374,10 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::Constructor(Constructor { ident, fields, .. }) => {
-            let def_id = scope
-                .get_var(ident)
-                .ok_or(TypeError::NotFound(ident.to_owned()))?;
+            let def_id = scope.get_var(ident).ok_or(TypeError::NotFound {
+                ident: ident.to_owned(),
+                span: ident.span,
+            })?;
             let ty = env
                 .get_definition(def_id)
                 .expect("constructor type to be defined");
