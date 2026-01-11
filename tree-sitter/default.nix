@@ -3,7 +3,7 @@
   tree-sitter,
   nodejs,
 }: let
-  sourceDir = stdenv.mkDerivation {
+  src = stdenv.mkDerivation {
     name = "grammar-source";
     src = ./.;
     nativeBuildInputs = [
@@ -22,7 +22,7 @@
   };
 in
   tree-sitter.buildGrammar {
-    src = sourceDir;
+    inherit src;
     version = "0.1.0";
     language = "sol";
   }

@@ -29,7 +29,7 @@
         manifest = lib.importTOML ./solc/Cargo.toml;
       in {
         packages = {
-          default = rustPlatform.buildRustPackage rec {
+          default = rustPlatform.buildRustPackage {
             pname = manifest.package.name;
             version = manifest.package.version;
             src = ./.;
@@ -41,7 +41,7 @@
               allowBuiltinFetchGit = true;
             };
 
-            meta.mainProgram = "sol";
+            meta.mainProgram = "solc";
           };
 
           tree-sitter-grammar = pkgs.callPackage ./tree-sitter {};
