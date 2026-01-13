@@ -1,13 +1,18 @@
+// TODO:
+// refactor analyzer to use TypeId's
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use miette::Diagnostic;
-use thiserror::Error;
 use solc_macros::Id;
+use thiserror::Error;
 
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List, Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
+    Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef,
+    Ty, TyKind, Use,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -21,6 +26,19 @@ pub enum TypeError {
         ident: Ident,
 
         #[label("this variable here")]
+        span: Span,
+    },
+
+    #[error("no field '{ident}' on type: '{ty}'")]
+    NoSuchField {
+        #[source_code]
+        src: SourceInfo,
+
+        ident: Ident,
+
+        ty: Type,
+
+        #[label("here")]
         span: Span,
     },
 
@@ -107,13 +125,18 @@ pub enum Type {
     Var(Ident),
 }
 
-// impl Type {
-//     fn resolve(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> &Self {
-//         if let Var(ident) = self {
-//         } else {
-//         }
-//     }
-// }
+impl Type {
+    fn resolve(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Option<Self> {
+        if let Type::Var(ident) = self {
+            scope
+                .get_type(ident)
+                .and_then(|id| env.get_definition(id))
+                .cloned()
+        } else {
+            Some(self.clone())
+        }
+    }
+}
 
 impl From<&Ty> for Type {
     fn from(ty: &Ty) -> Self {
@@ -236,11 +259,13 @@ impl TypeEnv {
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Type> {
     let ty = match expr {
         Expr::Ident(ident) => {
-            let def = scope.get_var(&ident.inner).ok_or(TypeError::NotFound {
-                src: scope.src.clone(),
-                ident: ident.to_owned(),
-                span: ident.span,
-            })?;
+            let def = scope
+                .get_var(&ident.inner)
+                .ok_or_else(|| TypeError::NotFound {
+                    src: scope.src.clone(),
+                    ident: ident.to_owned(),
+                    span: ident.span,
+                })?;
             let ty = env
                 .get_definition(def)
                 .expect("collected type for definition");
@@ -350,7 +375,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::IfElse(IfElse {
-            id: _,
             condition,
             consequence,
             alternative,
@@ -395,7 +419,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         Expr::Constructor(Constructor {
             ident, fields: _, ..
         }) => {
-            let def_id = scope.get_var(ident).ok_or(TypeError::NotFound {
+            let def_id = scope.get_var(ident).ok_or_else(|| TypeError::NotFound {
                 src: scope.src.clone(),
                 ident: ident.to_owned(),
                 span: ident.span,
@@ -403,16 +427,28 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let ty = env
                 .get_definition(def_id)
                 .expect("constructor type to be defined");
+
             Ok(ty.to_owned())
         }
 
-        Expr::MemberAccess(MemberAccess { id, span, lhs, ident }) => {
-            let lhs_ty = infer(lhs, env, scope)?;
-            dbg!(&lhs, &lhs_ty);
-            // match lhs_ty {
-            // }
+        Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
+            let lhs_ty = infer(lhs, env, scope)?.resolve(env, scope).unwrap();
 
-            todo!("infer member access expr")
+            if let Type::Struct { ref fields, .. } = lhs_ty {
+                fields
+                    .iter()
+                    .find(|(field, _)| field.as_ref() == ident.as_ref())
+                    .map(|(_, ty)| ty)
+                    .ok_or_else(|| TypeError::NoSuchField {
+                        src: scope.src.clone(),
+                        ident: ident.clone(),
+                        ty: lhs_ty.clone(),
+                        span: lhs.span().enclosing_to(&ident.span),
+                    })
+                    .cloned()
+            } else {
+                todo!("infer member access expr")
+            }
         }
 
         Expr::Ref(expr) => Ok(Type::Ptr(infer(expr, env, scope)?.into())),

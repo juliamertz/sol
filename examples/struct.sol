@@ -1,6 +1,6 @@
 struct Point =
-  x : Int
-  y : Int
+  x : u32
+  y : u32
 end
 
 extern func printf() -> Int
