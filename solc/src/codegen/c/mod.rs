@@ -6,12 +6,14 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 
-use miette::{IntoDiagnostic, Result};
+use miette::Diagnostic;
+use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::codegen::{Compiler, Emitter, quote};
+use crate::lexer::{SourceInfo, Span};
 use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
     PrefixExpr, Stmnt,
@@ -19,6 +21,15 @@ use crate::parser::ast::{
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(code(codegen::c))]
+pub enum CodegenError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+pub type Result<T, E = CodegenError> = core::result::Result<T, E>;
 
 #[derive(Default)]
 struct InsertMarker {
@@ -168,7 +179,10 @@ impl C {
     }
 
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
-        let ty = env.type_of(&expr.id()).unwrap();
+        dbg!(&expr);
+        let ty = env
+            .type_of(&expr.id())
+            .unwrap();
         match expr {
             Expr::Ident(ident) => self.emit_ident(buf, env, ident),
             Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
@@ -286,6 +300,7 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
+                dbg!(&binding.val, &env);
                 let ty = env.type_of(&binding.val.id()).unwrap();
 
                 // TODO: pull out into seperate function
@@ -378,6 +393,8 @@ impl C {
 }
 
 impl Compiler for C {
+    type Err = CodegenError;
+
     fn build_exe(&self, source: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
         let mut hasher = WyHash::with_seed(0);
         hasher.write(program.as_bytes());
@@ -394,7 +411,7 @@ impl Compiler for C {
             return Ok(out_path);
         };
 
-        fs::create_dir_all(&opts.outdir).into_diagnostic()?;
+        fs::create_dir_all(&opts.outdir)?;
         let src = if cfg!(debug_assertions) {
             self.format(source)
         } else {

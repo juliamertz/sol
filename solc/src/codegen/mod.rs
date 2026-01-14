@@ -4,9 +4,10 @@ pub use c::C;
 use crate::BuildOpts;
 use crate::analyzer::TypeEnv;
 
-use miette::Result;
 use std::borrow::Cow;
 use std::path::PathBuf;
+
+use clap::ValueEnum;
 
 pub trait Emitter {
     type Input;
@@ -15,7 +16,9 @@ pub trait Emitter {
 }
 
 pub trait Compiler {
-    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf>;
+    type Err;
+
+    fn build_exe(&self, src: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf, Self::Err>;
 
     /// Optional formatter implementation for debugging codegen output
     fn format<'src>(&self, source: &'src str) -> Cow<'src, str> {
@@ -23,7 +26,7 @@ pub trait Compiler {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, ValueEnum)]
 pub enum ReleaseType {
     Fast,
     #[default]

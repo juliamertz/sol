@@ -69,10 +69,8 @@ impl Lexer {
 
     fn read_string(&mut self) -> &str {
         assert_eq!(self.curr(), Some('"'),);
-
         self.advance();
-
-        (self.read_while(|ch| ch != '"')) as _
+        self.read_while(|ch| ch != '"')
     }
 
     pub fn read_token(&mut self) -> Option<Token> {

@@ -1,3 +1,6 @@
+#![allow(unused_assignments)]
+// BUG: see: https://github.com/rust-lang/rust/issues/147648
+
 mod analyzer;
 mod codegen;
 mod lexer;

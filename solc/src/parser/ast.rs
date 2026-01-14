@@ -54,7 +54,7 @@ pub enum OpKind {
     Or,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Op {
     pub id: NodeId,
     pub span: Span,
@@ -84,8 +84,8 @@ pub struct Ty {
     pub kind: TyKind,
 }
 
-#[derive(Debug, Clone)]
 #[rustfmt::skip]
+#[derive(Debug, Clone, Copy)]
 pub enum IntTyKind {
     U8, U16, U32, U64,
     I8, I16, I32, I64,

@@ -75,21 +75,6 @@ pub enum IntKind {
     I8, I16, I32, I64,
 }
 
-// impl IntKind {
-//     fn is_signed(&self) -> bool {
-//         matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64)
-//     }
-//
-//     fn bits(&self) -> usize {
-//         match self {
-//             Self::U8 | Self::I8 => 8,
-//             Self::U16 | Self::I16 => 16,
-//             Self::U32 | Self::I32 => 32,
-//             Self::U64 | Self::I64 => 64,
-//         }
-//     }
-// }
-
 impl From<&IntTyKind> for IntKind {
     fn from(value: &IntTyKind) -> Self {
         match value {
@@ -126,14 +111,15 @@ pub enum Type {
 }
 
 impl Type {
-    fn resolve(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Option<Self> {
+    fn resolved(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Self {
         if let Type::Var(ident) = self {
             scope
                 .get_type(ident)
                 .and_then(|id| env.get_definition(id))
-                .cloned()
+                .unwrap_or(self)
+                .clone()
         } else {
-            Some(self.clone())
+            self.clone()
         }
     }
 }
@@ -416,23 +402,28 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             todo!()
         }
 
-        Expr::Constructor(Constructor {
-            ident, fields: _, ..
-        }) => {
-            let def_id = scope.get_var(ident).ok_or_else(|| TypeError::NotFound {
+        Expr::Constructor(Constructor { ident, fields, .. }) => {
+            let def_id = scope.get_type(ident).ok_or_else(|| TypeError::NotFound {
                 src: scope.src.clone(),
                 ident: ident.to_owned(),
                 span: ident.span,
             })?;
             let ty = env
                 .get_definition(def_id)
-                .expect("constructor type to be defined");
+                .expect("constructor type to be defined")
+                .clone();
+
+            for (ident, expr) in fields.iter() {
+                dbg!(&ident, &expr);
+                let field_ty = infer(expr, env, scope)?;
+                dbg!(&field_ty);
+            }
 
             Ok(ty.to_owned())
         }
 
         Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
-            let lhs_ty = infer(lhs, env, scope)?.resolve(env, scope).unwrap();
+            let lhs_ty = infer(lhs, env, scope)?.resolved(env, scope);
 
             if let Type::Struct { ref fields, .. } = lhs_ty {
                 fields
@@ -464,11 +455,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let { ident, ty, val, .. }) => {
-            let ty = if let Some(ty) = ty {
-                Type::from(ty)
-            } else {
-                infer(val, env, scope)?
-            };
+            let ty = infer(val, env, scope)?.resolved(env, scope);
 
             let def_id = env.define(ty);
             scope.set_var(ident, def_id);
