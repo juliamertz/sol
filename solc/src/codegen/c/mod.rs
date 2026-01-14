@@ -13,7 +13,6 @@ use wyhash2::WyHash;
 use crate::BuildOpts;
 use crate::analyzer::{IntKind, Type, TypeEnv};
 use crate::codegen::{Compiler, Emitter, quote};
-use crate::lexer::{SourceInfo, Span};
 use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
     PrefixExpr, Stmnt,
@@ -180,9 +179,7 @@ impl C {
 
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
         dbg!(&expr);
-        let ty = env
-            .type_of(&expr.id())
-            .unwrap();
+        let ty = env.type_of(&expr.id()).unwrap();
         match expr {
             Expr::Ident(ident) => self.emit_ident(buf, env, ident),
             Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),

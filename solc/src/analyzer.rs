@@ -1,5 +1,6 @@
-// TODO:
-// refactor analyzer to use TypeId's
+// required for miette `Diagnostic` derive
+// see: https://github.com/rust-lang/rust/issues/147648
+#![allow(unused_assignments)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,9 +11,7 @@ use thiserror::Error;
 
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List,
-    Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef,
-    Ty, TyKind, Use,
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List, Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -43,7 +42,16 @@ pub enum TypeError {
     },
 
     #[error("invalid type, expected: {expected:?}, got: {actual:?}")]
-    InvalidType { expected: Type, actual: Type },
+    InvalidType {
+        expected: Type,
+        actual: Type,
+
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("here")]
+        span: Span,
+    },
 
     #[error("mismatched types in comparison")]
     ComparisonMismatch {
@@ -90,6 +98,8 @@ impl From<&IntTyKind> for IntKind {
     }
 }
 
+// TODO:
+// refactor analyzer to use TypeId's
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     None,
@@ -369,6 +379,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let condition_ty = infer(condition, env, scope)?;
             if condition_ty != Type::Bool {
                 return Err(TypeError::InvalidType {
+                    src: scope.src.clone(),
+                    span: condition.span(),
                     expected: Type::Bool,
                     actual: condition_ty,
                 });
@@ -455,9 +467,22 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let { ident, ty, val, .. }) => {
-            let ty = infer(val, env, scope)?.resolved(env, scope);
+            let val_ty = infer(val, env, scope)?.resolved(env, scope);
+            if let Some(ty) = ty
+                .as_ref()
+                .map(Type::from)
+                .map(|ty| ty.resolved(env, scope))
+                && ty != val_ty
+            {
+                return Err(TypeError::InvalidType {
+                    src: scope.src.clone(),
+                    span: val.span(),
+                    expected: ty,
+                    actual: val_ty,
+                });
+            };
 
-            let def_id = env.define(ty);
+            let def_id = env.define(val_ty);
             scope.set_var(ident, def_id);
         }
 

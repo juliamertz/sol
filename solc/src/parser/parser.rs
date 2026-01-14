@@ -1,3 +1,7 @@
+// required for miette `Diagnostic` derive
+// see: https://github.com/rust-lang/rust/issues/147648
+#![allow(unused_assignments)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -21,18 +25,6 @@ pub enum ParseError {
 
         expected: TokenKind,
         actual: TokenKind,
-
-        #[help]
-        help: Option<String>,
-    },
-
-    #[error("invalid type")]
-    InvalidType {
-        #[source_code]
-        src: SourceInfo,
-
-        #[label("this type")]
-        span: Span,
 
         #[help]
         help: Option<String>,
