@@ -1,8 +1,8 @@
-mod c;
+pub mod c;
 pub use c::C;
 
 use crate::BuildOpts;
-use crate::analyzer::TypeEnv;
+use crate::type_checker::TypeEnv;
 
 use std::borrow::Cow;
 use std::path::PathBuf;

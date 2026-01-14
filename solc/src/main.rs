@@ -1,4 +1,4 @@
-mod analyzer;
+mod type_checker;
 mod codegen;
 mod lexer;
 mod parser;
@@ -13,7 +13,7 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, NamedSource, Result};
 
-use crate::analyzer::{Scope, TypeEnv, check_nodes};
+use crate::type_checker::{Scope, TypeEnv, check_nodes};
 use crate::codegen::{Compiler, Emitter};
 
 use lexer::SourceInfo;

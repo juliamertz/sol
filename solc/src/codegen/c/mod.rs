@@ -11,7 +11,7 @@ use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
-use crate::analyzer::{IntKind, SignedIntKind, Type, TypeEnv, UnsignedIntKind};
+use crate::type_checker::{IntKind, SignedIntKind, Type, TypeEnv, UnsignedIntKind};
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
