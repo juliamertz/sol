@@ -84,16 +84,31 @@ pub struct Ty {
     pub kind: TyKind,
 }
 
-#[rustfmt::skip]
 #[derive(Debug, Clone, Copy)]
-pub enum IntTyKind {
-    U8, U16, U32, U64,
-    I8, I16, I32, I64,
+pub enum SignedIntTy {
+    I8,
+    I16,
+    I32,
+    I64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UnsignedIntTy {
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum IntTy {
+    Signed(SignedIntTy),
+    Unsigned(UnsignedIntTy),
 }
 
 #[derive(Debug, Clone)]
 pub enum TyKind {
-    Int(IntTyKind),
+    Int(IntTy),
     Bool,
     Str,
     List {

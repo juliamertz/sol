@@ -11,7 +11,9 @@ use thiserror::Error;
 
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTyKind, Let, List, Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Ty, TyKind, Use
+    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTy, Let, List,
+    Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, SignedIntTy, Stmnt,
+    StructDef, Ty, TyKind, UnsignedIntTy, Use,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -77,24 +79,106 @@ pub type Result<T, E = TypeError> = core::result::Result<T, E>;
 pub struct DefId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[rustfmt::skip]
-pub enum IntKind {
-    U8, U16, U32, U64,
-    I8, I16, I32, I64,
+pub enum SignedIntKind {
+    I8,
+    I16,
+    I32,
+    I64,
 }
 
-impl From<&IntTyKind> for IntKind {
-    fn from(value: &IntTyKind) -> Self {
-        match value {
-            IntTyKind::U8 => Self::U8,
-            IntTyKind::U16 => Self::U16,
-            IntTyKind::U32 => Self::U32,
-            IntTyKind::U64 => Self::U64,
-            IntTyKind::I8 => Self::I8,
-            IntTyKind::I16 => Self::I16,
-            IntTyKind::I32 => Self::I32,
-            IntTyKind::I64 => Self::I64,
+impl SignedIntKind {
+    pub fn bits(&self) -> u8 {
+        match self {
+            SignedIntKind::I8 => 8,
+            SignedIntKind::I16 => 16,
+            SignedIntKind::I32 => 32,
+            SignedIntKind::I64 => 64,
         }
+    }
+}
+
+impl From<&SignedIntTy> for SignedIntKind {
+    fn from(value: &SignedIntTy) -> Self {
+        match value {
+            SignedIntTy::I8 => SignedIntKind::I8,
+            SignedIntTy::I16 => SignedIntKind::I16,
+            SignedIntTy::I32 => SignedIntKind::I32,
+            SignedIntTy::I64 => SignedIntKind::I64,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnsignedIntKind {
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+impl UnsignedIntKind {
+    pub fn bits(&self) -> u8 {
+        match self {
+            UnsignedIntKind::U8 => 8,
+            UnsignedIntKind::U16 => 16,
+            UnsignedIntKind::U32 => 32,
+            UnsignedIntKind::U64 => 64,
+        }
+    }
+}
+
+impl From<&UnsignedIntTy> for UnsignedIntKind {
+    fn from(value: &UnsignedIntTy) -> Self {
+        match value {
+            UnsignedIntTy::U8 => UnsignedIntKind::U8,
+            UnsignedIntTy::U16 => UnsignedIntKind::U16,
+            UnsignedIntTy::U32 => UnsignedIntKind::U32,
+            UnsignedIntTy::U64 => UnsignedIntKind::U64,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntKind {
+    Signed(SignedIntKind),
+    Unsigned(UnsignedIntKind),
+}
+
+impl IntKind {
+    pub fn bits(&self) -> u8 {
+        match self {
+            IntKind::Signed(kind) => kind.bits(),
+            IntKind::Unsigned(kind) => kind.bits(),
+        }
+    }
+
+    pub fn is_signed(&self) -> bool {
+        matches!(self, IntKind::Signed(_))
+    }
+
+    pub fn is_unsigned(&self) -> bool {
+        matches!(self, IntKind::Unsigned(_))
+    }
+}
+
+impl From<&IntTy> for IntKind {
+    fn from(value: &IntTy) -> Self {
+        match value {
+            IntTy::Signed(value) => IntKind::Signed(value.into()),
+            IntTy::Unsigned(value) => IntKind::Unsigned(value.into()),
+        }
+    }
+}
+
+impl From<SignedIntKind> for IntKind {
+    fn from(value: SignedIntKind) -> Self {
+        IntKind::Signed(value)
+    }
+}
+
+impl From<UnsignedIntKind> for IntKind {
+    fn from(value: UnsignedIntKind) -> Self {
+        IntKind::Unsigned(value)
     }
 }
 
@@ -270,7 +354,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Literal(Literal { kind, .. }) => match kind {
             LiteralKind::Str(_) => Ok(Type::Str),
-            LiteralKind::Int(_) => Ok(Type::Int(IntKind::I32)), // TODO: infer the correct size
+            LiteralKind::Int(_) => Ok(Type::Int(SignedIntKind::I32.into())), // TODO: infer the correct size
         },
 
         Expr::Block(block) => {

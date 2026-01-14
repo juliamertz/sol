@@ -11,7 +11,7 @@ use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
-use crate::analyzer::{IntKind, Type, TypeEnv};
+use crate::analyzer::{IntKind, SignedIntKind, Type, TypeEnv, UnsignedIntKind};
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
@@ -138,14 +138,18 @@ impl C {
     fn emit_type(&mut self, _env: &TypeEnv, ty: impl Into<Type>) -> String {
         match ty.into() {
             Type::Int(kind) => match kind {
-                IntKind::U8 => "uint8_t",
-                IntKind::U16 => "uint16_t",
-                IntKind::U32 => "uint32_t",
-                IntKind::U64 => "uint64_t",
-                IntKind::I8 => "int8_t",
-                IntKind::I16 => "int16_t",
-                IntKind::I32 => "int32_t",
-                IntKind::I64 => "int64_t",
+                IntKind::Signed(signed_int_kind) => match signed_int_kind {
+                    SignedIntKind::I8 => "int8_t",
+                    SignedIntKind::I16 => "int16_t",
+                    SignedIntKind::I32 => "int32_t",
+                    SignedIntKind::I64 => "int64_t",
+                },
+                IntKind::Unsigned(unsigned_int_kind) => match unsigned_int_kind {
+                    UnsignedIntKind::U8 => "uint8_t",
+                    UnsignedIntKind::U16 => "uint16_t",
+                    UnsignedIntKind::U32 => "uint32_t",
+                    UnsignedIntKind::U64 => "uint64_t",
+                },
             },
             Type::Str => "char *",
             Type::Bool => "bool",
