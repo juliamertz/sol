@@ -12,10 +12,10 @@ use thiserror::Error;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::ast::{
     BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, IntTy, Let, List,
-    Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, SignedIntTy, Stmnt,
-    StructDef, Ty, TyKind, UnsignedIntTy, Use,
+    Literal, LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef,
+    Ty, TyKind, Use,
 };
-use crate::type_checker::{SignedIntKind, Type};
+use crate::type_checker::ty::{self, Type};
 
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(code(analyzer))]
@@ -177,7 +177,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Literal(Literal { kind, .. }) => match kind {
             LiteralKind::Str(_) => Ok(Type::Str),
-            LiteralKind::Int(_) => Ok(Type::Int(SignedIntKind::I32.into())), // TODO: infer the correct size
+            LiteralKind::Int(_) => Ok(Type::Int(ty::IntTy::I32.into())), // TODO: infer the correct size
         },
 
         Expr::Block(block) => {

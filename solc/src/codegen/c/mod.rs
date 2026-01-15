@@ -11,12 +11,12 @@ use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
-use crate::type_checker::{IntKind, SignedIntKind, Type, TypeEnv, UnsignedIntKind};
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::parser::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
     PrefixExpr, Stmnt,
 };
+use crate::type_checker::{IntTy, Type, TypeEnv, UIntTy};
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");
@@ -138,18 +138,16 @@ impl C {
     fn emit_type(&mut self, _env: &TypeEnv, ty: impl Into<Type>) -> String {
         match ty.into() {
             Type::Int(kind) => match kind {
-                IntKind::Signed(signed_int_kind) => match signed_int_kind {
-                    SignedIntKind::I8 => "int8_t",
-                    SignedIntKind::I16 => "int16_t",
-                    SignedIntKind::I32 => "int32_t",
-                    SignedIntKind::I64 => "int64_t",
-                },
-                IntKind::Unsigned(unsigned_int_kind) => match unsigned_int_kind {
-                    UnsignedIntKind::U8 => "uint8_t",
-                    UnsignedIntKind::U16 => "uint16_t",
-                    UnsignedIntKind::U32 => "uint32_t",
-                    UnsignedIntKind::U64 => "uint64_t",
-                },
+                IntTy::I8 => "int8_t",
+                IntTy::I16 => "int16_t",
+                IntTy::I32 => "int32_t",
+                IntTy::I64 => "int64_t",
+            },
+            Type::UInt(kind) => match kind {
+                UIntTy::U8 => "uint8_t",
+                UIntTy::U16 => "uint16_t",
+                UIntTy::U32 => "uint32_t",
+                UIntTy::U64 => "uint64_t",
             },
             Type::Str => "char *",
             Type::Bool => "bool",

@@ -85,7 +85,7 @@ pub struct Ty {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SignedIntTy {
+pub enum IntTy {
     I8,
     I16,
     I32,
@@ -93,22 +93,17 @@ pub enum SignedIntTy {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum UnsignedIntTy {
+pub enum UIntTy {
     U8,
     U16,
     U32,
     U64,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum IntTy {
-    Signed(SignedIntTy),
-    Unsigned(UnsignedIntTy),
-}
-
 #[derive(Debug, Clone)]
 pub enum TyKind {
     Int(IntTy),
+    UInt(UIntTy),
     Bool,
     Str,
     List {
