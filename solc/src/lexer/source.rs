@@ -47,8 +47,11 @@ impl Span {
     }
 
     pub fn enclosing_to(&self, other: &Self) -> Self {
-        let len = other.offset - self.offset + other.length;
-        Span::from((self.offset, len))
+        let length = other.offset - self.offset + other.length;
+        Self {
+            offset: self.offset,
+            length,
+        }
     }
 }
 

@@ -11,11 +11,11 @@ use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
-use crate::codegen::{Compiler, Emitter, quote};
-use crate::parser::ast::{
+use crate::ast::{
     BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
     PrefixExpr, Stmnt,
 };
+use crate::codegen::{Compiler, Emitter, quote};
 use crate::type_checker::{IntTy, Type, TypeEnv, UIntTy};
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
@@ -56,7 +56,7 @@ impl Emitter for C {
     fn emit(&mut self, env: TypeEnv, ast: &Self::Input) -> String {
         let mut buf = String::new();
 
-        let includes = [("gh.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
+        let includes = [("gc.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
 
         for (filename, contents) in includes {
             let path = self.tempdir.join(filename);

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::lexer::Span;
+use crate::lexer::source::Span;
 use solc_macros::Id;
 
 #[derive(Id, Debug, Clone, Copy)]
@@ -312,4 +312,9 @@ pub enum Stmnt {
 pub enum Node {
     Expr(Expr),
     Stmnt(Stmnt),
+}
+
+#[derive(Debug, Clone)]
+pub struct Module {
+    pub nodes: Arc<[Node]>,
 }

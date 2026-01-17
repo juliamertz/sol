@@ -1,7 +1,9 @@
 mod type_checker;
 mod codegen;
 mod lexer;
+mod ast;
 mod parser;
+mod hir;
 
 use std::{
     io::Write,
@@ -15,8 +17,7 @@ use miette::{IntoDiagnostic, NamedSource, Result};
 
 use crate::type_checker::{Scope, TypeEnv, check_nodes};
 use crate::codegen::{Compiler, Emitter};
-
-use lexer::SourceInfo;
+use crate::lexer::source::SourceInfo;
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]

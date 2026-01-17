@@ -1,4 +1,4 @@
-use crate::parser::ast;
+use crate::ast;
 use crate::type_checker::{Scope, TypeEnv};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
