@@ -1,11 +1,11 @@
 use std::fmt::Display;
+use std::hash::Hash;
 use std::sync::Arc;
 
+use crate::id;
 use crate::lexer::source::Span;
-use solc_macros::Id;
 
-#[derive(Id, Debug, Clone, Copy)]
-pub struct NodeId(u32);
+id!(NodeId);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ident {
@@ -14,8 +14,8 @@ pub struct Ident {
     pub inner: Arc<str>,
 }
 
-impl AsRef<str> for Ident {
-    fn as_ref(&self) -> &str {
+impl Ident {
+    pub fn as_str(&self) -> &str {
         &self.inner
     }
 }
@@ -29,6 +29,12 @@ impl Into<Arc<str>> for &Ident {
 impl Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.inner)
+    }
+}
+
+impl Hash for Ident {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::type_checker::{Scope, TypeEnv};
+use crate::ext::Boxed;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntTy {
@@ -50,28 +50,14 @@ pub enum Type {
     Ptr(Box<Type>),
     Fn {
         is_extern: bool,
-        params: Vec<Type>,
+        params: Box<[Type]>,
         returns: Box<Type>,
     },
     Struct {
-        ident: ast::Ident,
-        fields: Vec<(ast::Ident, Type)>,
+        ident: Box<ast::Ident>,
+        fields: Box<[(ast::Ident, Type)]>,
     },
-    Var(ast::Ident), // This is a real headache having to resolve this, not sure how to fix....
-}
-
-impl Type {
-    pub fn resolved(&self, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Self {
-        if let Type::Var(ident) = self {
-            scope
-                .get_type(ident)
-                .and_then(|id| env.get_definition(id))
-                .unwrap_or(self)
-                .clone()
-        } else {
-            self.clone()
-        }
-    }
+    Var(Box<ast::Ident>), // This is a real headache having to resolve this, not sure how to fix....
 }
 
 impl From<&ast::Ty> for Type {
@@ -87,9 +73,9 @@ impl From<&ast::TyKind> for Type {
             ast::TyKind::UInt(kind) => Self::UInt(kind.into()),
             ast::TyKind::Bool => Self::Bool,
             ast::TyKind::Str => Self::Str,
-            ast::TyKind::Var(name) => Self::Var(name.clone()),
+            ast::TyKind::Var(name) => Self::Var(name.clone().boxed()),
             ast::TyKind::List { inner, size } => {
-                Self::List((Box::new(Self::from(inner.as_ref())), *size))
+                Self::List((Self::from(inner.as_ref()).boxed(), *size))
             }
             ast::TyKind::Fn {
                 params,
@@ -98,7 +84,7 @@ impl From<&ast::TyKind> for Type {
             } => Self::Fn {
                 is_extern: *is_extern,
                 params: params.iter().map(Self::from).collect(),
-                returns: Box::new(Self::from(returns.as_ref())),
+                returns: Self::from(returns.as_ref()).boxed(),
             },
         }
     }
@@ -107,7 +93,7 @@ impl From<&ast::TyKind> for Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Var(ident) => f.write_str(ident.as_ref()),
+            Type::Var(ident) => f.write_str(ident.as_str()),
             _ => std::fmt::Debug::fmt(self, f),
         }
     }

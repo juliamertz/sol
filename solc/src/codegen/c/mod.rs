@@ -152,8 +152,8 @@ impl C {
             Type::Str => "char *",
             Type::Bool => "bool",
             Type::List(_) => "List",
-            Type::Struct { ref ident, .. } => ident.as_ref(),
-            Type::Var(ref name) => name.as_ref(),
+            Type::Struct { ref ident, .. } => ident.as_str(),
+            Type::Var(ref name) => name.as_str(),
             Type::Ptr(_ty) => todo!(),
             Type::Fn { .. } | Type::None => todo!(),
         }
@@ -172,7 +172,7 @@ impl C {
             is_extern: true, ..
         }) = ty
         {
-            ident.as_ref()
+            ident.as_str()
         } else {
             &self.prefix(ident)
         };

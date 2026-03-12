@@ -8,6 +8,7 @@ use std::sync::Arc;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::ast::*;
@@ -127,7 +128,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Node>> {
+    pub fn parse(&mut self) -> Result<Module> {
         let mut nodes = vec![];
 
         loop {
@@ -142,7 +143,8 @@ impl Parser {
             }
         }
 
-        Ok(nodes)
+        let nodes = Arc::from(nodes);
+        Ok(Module { nodes })
     }
 
     fn advance(&mut self) -> Option<Token> {
@@ -244,7 +246,7 @@ impl Parser {
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
         let ident = self.ident()?;
-        let kind = match ident.as_ref() {
+        let kind = match ident.as_str() {
             "i8" => TyKind::Int(IntTy::I8),
             "i16" => TyKind::Int(IntTy::I16),
             "i32" => TyKind::Int(IntTy::I32),

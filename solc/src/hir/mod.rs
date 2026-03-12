@@ -2,31 +2,40 @@ use std::sync::Arc;
 
 use solc_macros::Id;
 
-use crate::ast::{
-    BinOp, Block, CallExpr, Constructor, Fn, Ident, IfElse, Impl, IndexExpr, Let, List, Literal,
-    MemberAccess, PrefixExpr, Ret, StructDef, Use,
-};
+use crate::ast;
 use crate::lexer::source::Span;
 use crate::type_checker::Type;
 
+mod collect;
 mod lower;
+
+#[doc(inline)]
+pub use collect::*;
+#[doc(inline)]
+pub use lower::*;
 
 #[derive(Id, Debug, Clone, Copy)]
 pub struct HirId(u32);
 
+#[derive(Debug, Clone)]
+pub struct Block<'ast> {
+    pub id: HirId,
+    pub nodes: Arc<[Node<'ast>]>,
+}
+
 #[derive(Debug)]
 pub enum ExprKind<'ast> {
-    Ident(&'ast Ident),
-    Literal(&'ast Literal),
-    Block(&'ast Block),
-    BinOp(&'ast BinOp),
-    Prefix(&'ast PrefixExpr),
-    Call(&'ast CallExpr),
-    Index(&'ast IndexExpr),
-    IfElse(&'ast IfElse),
-    List(&'ast List),
-    Constructor(&'ast Constructor),
-    MemberAccess(&'ast MemberAccess),
+    Ident(&'ast ast::Ident),
+    Literal(&'ast ast::Literal),
+    Block(&'ast ast::Block),
+    BinOp(&'ast ast::BinOp),
+    Prefix(&'ast ast::PrefixExpr),
+    Call(&'ast ast::CallExpr),
+    Index(&'ast ast::IndexExpr),
+    IfElse(&'ast ast::IfElse),
+    List(&'ast ast::List),
+    Constructor(&'ast ast::Constructor),
+    MemberAccess(&'ast ast::MemberAccess),
     Ref(Box<Expr<'ast>>),
 }
 
@@ -39,19 +48,21 @@ pub struct Expr<'ast> {
 }
 
 #[derive(Debug)]
-pub enum Stmnt {
-    Let(Let),
-    Ret(Ret),
-    Use(Use),
-    Fn(Fn),
-    StructDef(StructDef),
-    Impl(Impl),
+pub enum Stmnt<'ast> {
+    Let(&'ast ast::Let),
+    Ret(&'ast ast::Ret),
+    Use(&'ast ast::Use),
+    Fn(&'ast ast::Fn),
+    StructDef {
+        def: &'ast ast::StructDef,
+        impls: Box<[&'ast ast::Impl]>,
+    },
 }
 
 #[derive(Debug)]
 pub enum Node<'ast> {
     Expr(Expr<'ast>),
-    Stmnt(Stmnt),
+    Stmnt(Stmnt<'ast>),
 }
 
 #[derive(Debug)]

@@ -4,6 +4,9 @@ mod lexer;
 mod ast;
 mod parser;
 mod hir;
+mod ext;
+#[macro_use]
+mod interner;
 
 use std::{
     io::Write,
@@ -75,22 +78,24 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let source = SourceInfo::new(name, content.clone());
 
     let mut parser = parser::Parser::new(file_path.to_owned(), content);
-    let ast = match parser.parse() {
-        Ok(nodes) => nodes,
-        Err(err) => {
-            return Err(err.into());
-        }
-    };
+    let module = parser.parse()?;
 
     let mut env = TypeEnv::default();
     let mut scope = Scope::new(source);
-    check_nodes(&ast, &mut env, &mut scope)?;
 
-    let mut c = codegen::C::default();
-    let out = c.emit(env, &ast);
+    let hir = hir::lower_module(&module, &mut env, &mut scope)?;
 
-    let outpath = c.build_exe(&out, "bin", opts)?;
-    Ok(outpath)
+    dbg!(&hir);
+
+    todo!()
+
+    // check_nodes(&ast, &mut env, &mut scope)?;
+    //
+    // let mut c = codegen::C::default();
+    // let out = c.emit(env, &ast);
+    //
+    // let outpath = c.build_exe(&out, "bin", opts)?;
+    // Ok(outpath)
 }
 
 fn main() -> Result<()> {
@@ -99,7 +104,7 @@ fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         let theme = miette::GraphicalTheme {
             characters: miette::ThemeCharacters::unicode(),
-            styles: miette::ThemeStyles::rgb(),
+            styles: miette::ThemeStyles::ansi(),
         };
         Box::new(
             miette::MietteHandlerOpts::new()
