@@ -16,6 +16,7 @@ use crate::ast::{
     PrefixExpr, Stmnt,
 };
 use crate::codegen::{Compiler, Emitter, quote};
+use crate::lexer::source::Span;
 use crate::type_checker::{IntTy, Type, TypeEnv, UIntTy};
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
@@ -250,7 +251,7 @@ impl C {
                         env,
                         &Expr::Call(CallExpr {
                             id: NodeId::DUMMY,
-                            span: (0, 0).into(),
+                            span: Span::default(),
                             func: Arc::from(Expr::RawIdent("list_push_rval".into())),
                             params: vec![
                                 Expr::Ref(Arc::from(Expr::RawIdent(tmp_name.into()))),
@@ -311,7 +312,7 @@ impl C {
                             env,
                             &Expr::Call(CallExpr {
                                 id: NodeId::DUMMY,
-                                span: (0, 0).into(),
+                                span: Span::default(),
                                 func: Arc::from(Expr::RawIdent("list_push_rval".into())),
                                 params: vec![
                                     Expr::Ref(Arc::from(Expr::Ident(binding.ident.clone()))),

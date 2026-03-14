@@ -31,7 +31,7 @@ impl Debug for SourceInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     offset: usize,
     length: usize,
