@@ -62,7 +62,7 @@ pub fn lower_block<'ast>(
 ) -> Result<hir::Block<'ast>> {
     Ok(hir::Block {
         id: HirId::DUMMY,
-        ty: *TypeId::NONE, //TODO:
+        ty: TypeId::NONE, //TODO:
         span: &block.span,
         nodes: lower_nodes(&block.nodes, env, scope)?.into(),
     })
@@ -75,7 +75,7 @@ pub fn lower_ident<'ast>(
 ) -> Result<hir::Ident<'ast>> {
     Ok(hir::Ident {
         id: HirId::DUMMY,
-        ty: *TypeId::NONE, //TODO:
+        ty: TypeId::NONE, //TODO:
         span: &ident.span,
         inner: &ident.inner,
     })
@@ -198,7 +198,7 @@ pub fn lower_stmnt<'ast>(
                 .ty
                 .as_ref()
                 .map(|ty| env.types.intern(ty))
-                .unwrap_or_else(|| *TypeId::NONE),
+                .unwrap_or(TypeId::NONE),
             val: lower_expr(&inner.val, env, scope)?,
         })),
         ast::Stmnt::Ret(inner) => {
@@ -207,7 +207,7 @@ pub fn lower_stmnt<'ast>(
                 .nodes
                 .get(&inner.val.id())
                 .copied()
-                .unwrap_or(*TypeId::NONE);
+                .unwrap_or(TypeId::NONE);
             Some(hir::Stmnt::Ret(hir::Ret {
                 id: HirId::DUMMY,
                 ty,
@@ -229,24 +229,26 @@ pub fn lower_stmnt<'ast>(
             }
 
             Some(hir::Stmnt::Fn(hir::Fn {
-            id: HirId::DUMMY,
-            span: &func.span,
-            is_extern: func.is_extern,
-            ident: lower_ident(&func.ident, env, &mut scope)?,
-            params: func
-                .params
-                .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env, &mut scope)?, env.types.intern(ty))))
-                .collect::<Result<Vec<_>>>()?
-                .into(),
-            return_ty: env.types.intern(&func.return_ty),
-            body: func
-                .body
-                .as_ref()
-                .map(|body| lower_block(body, env, &mut scope))
-                .transpose()?,
-        }))
-        },
+                id: HirId::DUMMY,
+                span: &func.span,
+                is_extern: func.is_extern,
+                ident: lower_ident(&func.ident, env, &mut scope)?,
+                params: func
+                    .params
+                    .iter()
+                    .map(|(ident, ty)| {
+                        Ok((lower_ident(ident, env, &mut scope)?, env.types.intern(ty)))
+                    })
+                    .collect::<Result<Vec<_>>>()?
+                    .into(),
+                return_ty: env.types.intern(&func.return_ty),
+                body: func
+                    .body
+                    .as_ref()
+                    .map(|body| lower_block(body, env, &mut scope))
+                    .transpose()?,
+            }))
+        }
         ast::Stmnt::StructDef(def) => Some(hir::Stmnt::StructDef(hir::StructDef {
             id: HirId::DUMMY,
             span: &def.span,
