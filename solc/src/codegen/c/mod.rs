@@ -74,11 +74,11 @@ impl Emitter for C {
 
 impl C {
     // namespace prefix to be used for identifiers
-    fn prefix(&self, ident: impl AsRef<str>) -> String {
+    fn prefix(&self, ident: &Ident) -> String {
         format!(
             "__{prefix}_{ident}",
             prefix = env!("CARGO_PKG_NAME"),
-            ident = ident.as_ref()
+            ident = ident.as_str()
         )
     }
 
@@ -214,7 +214,7 @@ impl C {
 
             Expr::Constructor(constructor) => {
                 buf.push('(');
-                buf.push_str(constructor.ident.as_ref());
+                buf.push_str(constructor.ident.as_str());
                 buf.push(')');
                 buf.push('{');
                 for (ident, expr) in constructor.fields.iter() {
@@ -336,7 +336,7 @@ impl C {
             }
             Stmnt::StructDef(strct) => {
                 buf.push_str("typedef struct ");
-                buf.push_str(strct.ident.as_ref());
+                buf.push_str(strct.ident.as_str());
                 buf.push('{');
                 for (ident, ty) in strct.fields.iter() {
                     buf.push_str(&self.emit_type(env, ty));
@@ -345,7 +345,7 @@ impl C {
                     buf.push(';');
                 }
                 buf.push('}');
-                buf.push_str(strct.ident.as_ref());
+                buf.push_str(strct.ident.as_str());
                 buf.push(';');
             }
             Stmnt::Impl(_) => {
@@ -361,10 +361,10 @@ impl C {
 
         buf.push_str(&self.emit_type(env, &func.return_ty));
         buf.push(' ');
-        if func.ident.as_ref() != "main" {
-            buf.push_str(&self.prefix(func.ident.as_ref()));
+        if func.ident.as_str() != "main" {
+            buf.push_str(&self.prefix(&func.ident));
         } else {
-            buf.push_str(func.ident.as_ref());
+            buf.push_str(func.ident.as_str());
         }
         buf.push('(');
         buf.push_str(
@@ -380,7 +380,7 @@ impl C {
 
         if let Some(ref body) = func.body {
             self.emit_block(buf, env, body);
-            if func.ident.as_ref() == "main"
+            if func.ident.as_str() == "main"
                 && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
             {
                 buf.push_str("return 0;");

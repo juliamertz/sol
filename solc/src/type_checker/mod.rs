@@ -143,6 +143,14 @@ pub struct TypeEnv {
     pub nodes: Interner<NodeId, TypeId>,
 }
 
+impl TypeEnv {
+    pub fn type_of(&self, node_id: &NodeId) -> Option<&Type> {
+        self.nodes
+            .get(node_id)
+            .and_then(|type_id| self.types.get(type_id))
+    }
+}
+
 fn resolve_type(ty_id: TypeId, env: &TypeEnv, scope: &Scope<'_>) -> TypeId {
     let ty = env.types.get(&ty_id).unwrap();
     if let Type::Var(ident) = ty {

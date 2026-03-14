@@ -28,7 +28,7 @@ pub trait Strategy<K, V> {
 }
 
 #[derive(Debug, Default)]
-struct DefaultStrategy {
+pub struct DefaultStrategy {
     idx: u32,
 }
 

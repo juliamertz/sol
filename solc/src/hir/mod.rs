@@ -5,6 +5,7 @@ use solc_macros::Id;
 use crate::ast;
 use crate::lexer::source::Span;
 use crate::type_checker::Type;
+use crate::type_checker::interner::TypeId;
 
 mod collect;
 mod lower;
@@ -43,7 +44,7 @@ pub enum ExprKind<'ast> {
 pub struct Expr<'ast> {
     pub hir_id: HirId,
     pub kind: ExprKind<'ast>,
-    pub ty: Type,
+    pub ty: TypeId,
     pub span: Span,
 }
 
