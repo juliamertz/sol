@@ -1,9 +1,5 @@
-use crate::id;
-use crate::interner;
-use crate::interner::Id;
-use crate::type_checker::{IntTy, Type, UIntTy};
-
-id!(TypeId);
+use crate::interner::{self, Id};
+use crate::type_checker::{IntTy, Type, TypeId, UIntTy};
 
 impl TypeId {
     pub const NONE: &TypeId = &TypeId(0);

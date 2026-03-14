@@ -5,7 +5,7 @@ use crate::ast;
 use crate::ext::Boxed;
 use crate::hir::collect::{CollectError, Inventory, collect};
 use crate::hir::{self, HirId};
-use crate::type_checker::{Scope, TypeEnv, TypeError, infer};
+use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, infer};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -62,6 +62,7 @@ pub fn lower_block<'ast>(
 ) -> Result<hir::Block<'ast>> {
     Ok(hir::Block {
         id: HirId::DUMMY,
+        ty: *TypeId::NONE, //TODO:
         span: &block.span,
         nodes: lower_nodes(&block.nodes, env, scope)?.into(),
     })
@@ -74,6 +75,7 @@ pub fn lower_ident<'ast>(
 ) -> Result<hir::Ident<'ast>> {
     Ok(hir::Ident {
         id: HirId::DUMMY,
+        ty: *TypeId::NONE, //TODO:
         span: &ident.span,
         inner: &ident.inner,
     })
@@ -84,29 +86,34 @@ pub fn lower_expr<'ast>(
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<hir::Expr<'ast>> {
-    let kind = match expr {
-        ast::Expr::Ident(ident) => hir::ExprKind::Ident(lower_ident(ident, env, scope)?),
-        ast::Expr::Literal(literal) => hir::ExprKind::Literal(hir::Literal {
+    let ty = infer(expr, env, scope)?;
+    let lowered = match expr {
+        ast::Expr::Ident(ident) => hir::Expr::Ident(lower_ident(ident, env, scope)?),
+        ast::Expr::Literal(literal) => hir::Expr::Literal(hir::Literal {
             id: HirId::DUMMY,
+            ty,
             span: &literal.span,
             kind: &literal.kind,
         }),
-        ast::Expr::Block(block) => hir::ExprKind::Block(lower_block(block, env, scope)?),
-        ast::Expr::BinOp(bin_op) => hir::ExprKind::BinOp(hir::BinOp {
+        ast::Expr::Block(block) => hir::Expr::Block(lower_block(block, env, scope)?),
+        ast::Expr::BinOp(bin_op) => hir::Expr::BinOp(hir::BinOp {
             id: HirId::DUMMY,
+            ty,
             span: &bin_op.span,
             lhs: lower_expr(&bin_op.lhs, env, scope)?.boxed(),
             op: &bin_op.op,
             rhs: lower_expr(&bin_op.rhs, env, scope)?.boxed(),
         }),
-        ast::Expr::Prefix(prefix_expr) => hir::ExprKind::Prefix(hir::Prefix {
+        ast::Expr::Prefix(prefix_expr) => hir::Expr::Prefix(hir::Prefix {
             id: HirId::DUMMY,
+            ty,
             span: &prefix_expr.span,
             op: &prefix_expr.op,
             rhs: lower_expr(&prefix_expr.rhs, env, scope)?.boxed(),
         }),
-        ast::Expr::Call(call_expr) => hir::ExprKind::Call(hir::Call {
+        ast::Expr::Call(call_expr) => hir::Expr::Call(hir::Call {
             id: HirId::DUMMY,
+            ty,
             span: &call_expr.span,
             func: lower_expr(&call_expr.func, env, scope)?.boxed(),
             params: call_expr
@@ -116,14 +123,16 @@ pub fn lower_expr<'ast>(
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
-        ast::Expr::Index(index_expr) => hir::ExprKind::Index(hir::Index {
+        ast::Expr::Index(index_expr) => hir::Expr::Index(hir::Index {
             id: HirId::DUMMY,
+            ty,
             span: &index_expr.span,
             expr: lower_expr(&index_expr.expr, env, scope)?.boxed(),
             idx: lower_expr(&index_expr.idx, env, scope)?.boxed(),
         }),
-        ast::Expr::IfElse(if_else) => hir::ExprKind::IfElse(hir::IfElse {
+        ast::Expr::IfElse(if_else) => hir::Expr::IfElse(hir::IfElse {
             id: HirId::DUMMY,
+            ty,
             span: &if_else.span,
             condition: lower_expr(&if_else.condition, env, scope)?.boxed(),
             consequence: lower_block(&if_else.consequence, env, scope)?,
@@ -133,8 +142,9 @@ pub fn lower_expr<'ast>(
                 .map(|block| lower_block(block, env, scope))
                 .transpose()?,
         }),
-        ast::Expr::List(list) => hir::ExprKind::List(hir::List {
+        ast::Expr::List(list) => hir::Expr::List(hir::List {
             id: HirId::DUMMY,
+            ty,
             span: &list.span,
             items: list
                 .items
@@ -143,8 +153,9 @@ pub fn lower_expr<'ast>(
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
-        ast::Expr::Constructor(constructor) => hir::ExprKind::Constructor(hir::Constructor {
+        ast::Expr::Constructor(constructor) => hir::Expr::Constructor(hir::Constructor {
             id: HirId::DUMMY,
+            ty,
             span: &constructor.span,
             ident: lower_ident(&constructor.ident, env, scope)?,
             fields: constructor
@@ -159,21 +170,17 @@ pub fn lower_expr<'ast>(
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
-        ast::Expr::MemberAccess(member_access) => hir::ExprKind::MemberAccess(hir::MemberAccess {
+        ast::Expr::MemberAccess(member_access) => hir::Expr::MemberAccess(hir::MemberAccess {
             id: HirId::DUMMY,
+            ty,
             span: &member_access.span,
             lhs: lower_expr(&member_access.lhs, env, scope)?.boxed(),
             ident: lower_ident(&member_access.ident, env, scope)?,
         }),
-        ast::Expr::Ref(expr) => hir::ExprKind::Ref(lower_expr(expr, env, scope)?.into()),
+        ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env, scope)?.into()),
         ast::Expr::RawIdent(_) => todo!(),
     };
-    let ty = infer(expr, env, scope)?;
-    Ok(hir::Expr {
-        kind,
-        ty,
-        span: expr.span(),
-    })
+    Ok(lowered)
 }
 
 pub fn lower_stmnt<'ast>(
@@ -187,37 +194,59 @@ pub fn lower_stmnt<'ast>(
             id: HirId::DUMMY,
             span: &inner.span,
             ident: lower_ident(&inner.ident, env, scope)?,
-            ty: inner.ty.as_ref(),
+            ty: inner
+                .ty
+                .as_ref()
+                .map(|ty| env.types.intern(ty))
+                .unwrap_or_else(|| *TypeId::NONE),
             val: lower_expr(&inner.val, env, scope)?,
         })),
-        ast::Stmnt::Ret(inner) => Some(hir::Stmnt::Ret(hir::Ret {
-            id: HirId::DUMMY,
-            span: &inner.span,
-            val: lower_expr(&inner.val, env, scope)?,
-        })),
+        ast::Stmnt::Ret(inner) => {
+            let val = lower_expr(&inner.val, env, scope)?;
+            let ty = env
+                .nodes
+                .get(&inner.val.id())
+                .copied()
+                .unwrap_or(*TypeId::NONE);
+            Some(hir::Stmnt::Ret(hir::Ret {
+                id: HirId::DUMMY,
+                ty,
+                span: &inner.span,
+                val,
+            }))
+        }
         ast::Stmnt::Use(inner) => Some(hir::Stmnt::Use(hir::Use {
             id: HirId::DUMMY,
             span: &inner.span,
             ident: lower_ident(&inner.ident, env, scope)?,
         })),
-        ast::Stmnt::Fn(func) => Some(hir::Stmnt::Fn(hir::Fn {
+        ast::Stmnt::Fn(func) => {
+            let mut scope = scope.new_child();
+
+            for (ident, ty) in func.params.iter() {
+                let type_id = env.types.intern(ty);
+                scope.set_type(ident, type_id);
+            }
+
+            Some(hir::Stmnt::Fn(hir::Fn {
             id: HirId::DUMMY,
             span: &func.span,
             is_extern: func.is_extern,
-            ident: lower_ident(&func.ident, env, scope)?,
+            ident: lower_ident(&func.ident, env, &mut scope)?,
             params: func
                 .params
                 .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, ty)))
+                .map(|(ident, ty)| Ok((lower_ident(ident, env, &mut scope)?, env.types.intern(ty))))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
-            return_ty: &func.return_ty,
+            return_ty: env.types.intern(&func.return_ty),
             body: func
                 .body
                 .as_ref()
-                .map(|body| lower_block(&body, env, scope))
+                .map(|body| lower_block(body, env, &mut scope))
                 .transpose()?,
-        })),
+        }))
+        },
         ast::Stmnt::StructDef(def) => Some(hir::Stmnt::StructDef(hir::StructDef {
             id: HirId::DUMMY,
             span: &def.span,
@@ -225,7 +254,7 @@ pub fn lower_stmnt<'ast>(
             fields: def
                 .fields
                 .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, ty)))
+                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, env.types.intern(ty))))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
             impls: inventory.take_impls(&def.ident).into(),

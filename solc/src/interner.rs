@@ -74,7 +74,8 @@ where
         self.map.insert(key, value);
     }
 
-    pub fn intern(&mut self, value: V) -> K {
+    pub fn intern(&mut self, value: impl Into<V>) -> K {
+        let value = value.into();
         let id = self.strategy.id_for(&value);
         self.map.insert(id, value);
         id

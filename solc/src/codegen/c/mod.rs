@@ -17,7 +17,8 @@ use crate::ast::{
 };
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::lexer::source::Span;
-use crate::type_checker::{IntTy, Type, TypeEnv, UIntTy};
+use crate::type_checker::ty::{IntTy, Type, UIntTy};
+use crate::type_checker::TypeEnv;
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");
