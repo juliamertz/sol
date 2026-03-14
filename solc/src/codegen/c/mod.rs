@@ -314,7 +314,7 @@ impl C {
                                 span: (0, 0).into(),
                                 func: Arc::from(Expr::RawIdent("list_push_rval".into())),
                                 params: vec![
-                                    Expr::Ref(Arc::from(Expr::Ident(binding.ident.clone().into()))),
+                                    Expr::Ref(Arc::from(Expr::Ident(binding.ident.clone()))),
                                     item.clone(),
                                 ]
                                 .into(),

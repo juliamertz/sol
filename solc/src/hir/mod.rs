@@ -4,14 +4,11 @@ use solc_macros::Id;
 
 use crate::ast;
 use crate::lexer::source::Span;
-use crate::type_checker::Type;
 use crate::type_checker::interner::TypeId;
 
 mod collect;
 mod lower;
 
-#[doc(inline)]
-pub use collect::*;
 #[doc(inline)]
 pub use lower::*;
 

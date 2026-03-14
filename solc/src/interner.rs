@@ -15,7 +15,7 @@ macro_rules! id {
             pub const DUMMY: Self = Self(u32::MAX);
         }
 
-        impl crate::interner::Id for $name {
+        impl $crate::interner::Id for $name {
             fn new(inner: u32) -> Self {
                 Self(inner)
             }

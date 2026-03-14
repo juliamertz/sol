@@ -20,9 +20,9 @@ impl Ident {
     }
 }
 
-impl Into<Arc<str>> for &Ident {
-    fn into(self) -> Arc<str> {
-        self.inner.clone()
+impl From<&Ident> for Arc<str> {
+    fn from(val: &Ident) -> Self {
+        val.inner.clone()
     }
 }
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::lexer::source::SourceInfo;
-use crate::lexer::token::{KEYWORD_LOOKUP};
+use crate::lexer::token::KEYWORD_LOOKUP;
 
 pub mod source;
 pub mod token;

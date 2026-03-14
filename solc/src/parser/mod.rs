@@ -8,10 +8,10 @@ use std::sync::Arc;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::ast::*;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::ast::*;
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(parser))]

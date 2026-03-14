@@ -57,7 +57,7 @@ impl interner::Strategy<TypeId, Type> for TypeInterner {
             Type::Bool => *TypeId::BOOL,
             Type::Str => *TypeId::STR,
             Type::List(_) | Type::Ptr(_) | Type::Fn { .. } | Type::Struct { .. } => self.next(),
-            Type::Var(ident) => todo!(),
+            Type::Var(_ident) => todo!(),
         }
     }
 }

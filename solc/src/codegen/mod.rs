@@ -1,5 +1,4 @@
 pub mod c;
-pub use c::C;
 
 use crate::BuildOpts;
 use crate::type_checker::TypeEnv;

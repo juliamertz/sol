@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::ast;
 use crate::hir::collect::{CollectError, Inventory, collect};
 use crate::hir::{self, HirId};
-use crate::type_checker::{Scope, Type, TypeEnv, TypeError, infer};
+use crate::type_checker::{Scope, TypeEnv, TypeError, infer};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -41,7 +41,7 @@ pub fn lower_nodes<'ast>(
         .filter_map(|node| lower_node(node, &mut inventory, env, scope).transpose())
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(nodes.into())
+    Ok(nodes)
 }
 
 pub fn lower_block<'ast>(

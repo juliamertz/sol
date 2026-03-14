@@ -32,7 +32,7 @@ pub fn collect<'ast>(nodes: &'ast [Node]) -> Result<Inventory<'ast>> {
             inventory
                 .impls
                 .entry(inner.ident.clone())
-                .or_insert_with(|| Vec::new())
+                .or_insert_with(Vec::new)
                 .push(inner);
         }
     }

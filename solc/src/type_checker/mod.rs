@@ -183,7 +183,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Literal(Literal { kind, .. }) => match kind {
             LiteralKind::Str(_) => Ok(env.types.intern(Type::Str)),
-            LiteralKind::Int(_) => Ok(env.types.intern(Type::Int(ty::IntTy::I32.into()))), // TODO: infer the correct size
+            LiteralKind::Int(_) => Ok(env.types.intern(Type::Int(ty::IntTy::I32))), // TODO: infer the correct size
         },
 
         Expr::Block(block) => {

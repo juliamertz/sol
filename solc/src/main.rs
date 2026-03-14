@@ -1,10 +1,10 @@
-mod type_checker;
-mod codegen;
-mod lexer;
 mod ast;
-mod parser;
-mod hir;
+mod codegen;
 mod ext;
+mod hir;
+mod lexer;
+mod parser;
+mod type_checker;
 #[macro_use]
 mod interner;
 
@@ -18,9 +18,8 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, NamedSource, Result};
 
-use crate::type_checker::{Scope, TypeEnv, check_nodes};
-use crate::codegen::{Compiler, Emitter};
 use crate::lexer::source::SourceInfo;
+use crate::type_checker::{Scope, TypeEnv};
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -72,7 +71,7 @@ enum Command {
     },
 }
 
-fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
+fn build(file_path: &Path, _opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(file_path).unwrap();
     let name = file_path.to_string_lossy();
     let source = SourceInfo::new(name, content.clone());
