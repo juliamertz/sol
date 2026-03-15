@@ -412,6 +412,7 @@ impl Compiler for C {
     fn build_exe(&self, source: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
         let mut hasher = WyHash::with_seed(0);
         hasher.write(program.as_bytes());
+        hasher.write(source.as_bytes());
         let program_hash = hasher.finish();
 
         let out_path = opts.outdir.join(program);
@@ -432,7 +433,7 @@ impl Compiler for C {
             Cow::Borrowed(source)
         };
         fs::write(&tmp_src_path, src.as_bytes()).unwrap();
-        fs::write(&hash_path, format!("{program_hash:?}")).unwrap();
+        fs::write(&hash_path, format!("{program_hash:x}")).unwrap();
 
         // let include_arg = format!("-I{CORE_INCLUDE_PATH}");
         let mut args = vec![

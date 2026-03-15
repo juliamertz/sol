@@ -196,7 +196,7 @@ impl<'src> Parser<'src> {
         Ok(tok)
     }
 
-    fn at(&mut self, kind: TokenKind) -> bool {
+    fn at(&self, kind: TokenKind) -> bool {
         self.curr.kind == kind
     }
 
