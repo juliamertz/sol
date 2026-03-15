@@ -40,20 +40,21 @@ pub fn lower_nodes<'ast>(
     let mut inventory = collect(nodes)?;
 
     for func in inventory.take_fns() {
-        let ty = infer_fn(func);
+        let ty = infer_fn(func, env);
         let type_id = env.types.intern(ty);
         let def_id = env.definitions.intern(type_id);
         scope.define(&func.ident, def_id);
     }
 
     for struct_def in inventory.take_structs() {
+        let field_tys: Box<[(ast::Ident, TypeId)]> = struct_def
+            .fields
+            .iter()
+            .map(|(ident, ty)| (ident.to_owned(), env.type_from_ast_ty(ty)))
+            .collect();
         let ty = Type::Struct {
             ident: struct_def.ident.to_owned().boxed(),
-            fields: struct_def
-                .fields
-                .iter()
-                .map(|(ident, ty)| (ident.to_owned(), ty.into()))
-                .collect(),
+            fields: field_tys,
         };
         let type_id = env.types.intern(ty);
         let def_id = env.definitions.intern(type_id);
@@ -252,30 +253,31 @@ pub fn lower_stmnt<'ast>(
             let mut scope = scope.new_child();
 
             for (ident, ty) in func.params.iter() {
-                let type_id = env.types.intern(ty);
+                let type_id = env.type_from_ast_ty(ty);
                 let def_id = env.definitions.intern(type_id);
                 scope.define(ident, def_id);
             }
 
-            // for recursion the function itself should also be in scope
-            let type_id = env.types.intern(infer_fn(func));
+            let fn_ty = infer_fn(func, env);
+            let type_id = env.types.intern(fn_ty);
             let def_id = env.definitions.intern(type_id);
-            scope.define(&func.ident, def_id); 
+            scope.define(&func.ident, def_id);
+
+            let param_ids: Vec<_> = func
+                .params
+                .iter()
+                .map(|(ident, ty)| {
+                    Ok((lower_ident(ident, env, &mut scope)?, env.type_from_ast_ty(ty)))
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             Some(hir::Stmnt::Fn(hir::Fn {
                 id: HirId::DUMMY,
                 span: &func.span,
                 is_extern: func.is_extern,
                 ident: lower_ident(&func.ident, env, &mut scope)?,
-                params: func
-                    .params
-                    .iter()
-                    .map(|(ident, ty)| {
-                        Ok((lower_ident(ident, env, &mut scope)?, env.types.intern(ty)))
-                    })
-                    .collect::<Result<Vec<_>>>()?
-                    .into(),
-                return_ty: env.types.intern(&func.return_ty),
+                params: param_ids.into(),
+                return_ty: env.type_from_ast_ty(&func.return_ty),
                 body: func
                     .body
                     .as_ref()
@@ -290,7 +292,7 @@ pub fn lower_stmnt<'ast>(
             fields: def
                 .fields
                 .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, env.types.intern(ty))))
+                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, env.type_from_ast_ty(ty))))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
             impls: inventory.take_impls(&def.ident).into(),

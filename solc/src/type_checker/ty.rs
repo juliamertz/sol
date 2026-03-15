@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::ext::Boxed;
+use crate::type_checker::TypeId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntTy {
@@ -46,48 +46,18 @@ pub enum Type {
     UInt(UIntTy),
     Bool,
     Str,
-    List((Box<Type>, Option<usize>)),
-    Ptr(Box<Type>),
+    List(TypeId, Option<usize>),
+    Ptr(TypeId),
     Fn {
         is_extern: bool,
-        params: Box<[Type]>,
-        returns: Box<Type>,
+        params: Box<[TypeId]>,
+        returns: TypeId,
     },
     Struct {
         ident: Box<ast::Ident>,
-        fields: Box<[(ast::Ident, Type)]>,
+        fields: Box<[(ast::Ident, TypeId)]>,
     },
-    Var(Box<ast::Ident>), // This is a real headache having to resolve this, not sure how to fix....
-}
-
-impl From<&ast::Ty> for Type {
-    fn from(ty: &ast::Ty) -> Self {
-        Self::from(&ty.kind)
-    }
-}
-
-impl From<&ast::TyKind> for Type {
-    fn from(kind: &ast::TyKind) -> Self {
-        match kind {
-            ast::TyKind::Int(kind) => Self::Int(kind.into()),
-            ast::TyKind::UInt(kind) => Self::UInt(kind.into()),
-            ast::TyKind::Bool => Self::Bool,
-            ast::TyKind::Str => Self::Str,
-            ast::TyKind::Var(name) => Self::Var(name.clone().boxed()),
-            ast::TyKind::List { inner, size } => {
-                Self::List((Self::from(inner.as_ref()).boxed(), *size))
-            }
-            ast::TyKind::Fn {
-                params,
-                returns,
-                is_extern,
-            } => Self::Fn {
-                is_extern: *is_extern,
-                params: params.iter().map(Self::from).collect(),
-                returns: Self::from(returns.as_ref()).boxed(),
-            },
-        }
-    }
+    Var(Box<ast::Ident>),
 }
 
 impl std::fmt::Display for Type {

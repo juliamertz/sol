@@ -138,6 +138,30 @@ impl TypeEnv {
             .get(node_id)
             .and_then(|type_id| self.types.get(type_id))
     }
+
+    pub fn type_from_ast_ty(&mut self, ty: &crate::ast::Ty) -> TypeId {
+        self.type_from_ast_ty_kind(&ty.kind)
+    }
+
+    pub fn type_from_ast_ty_kind(&mut self, kind: &crate::ast::TyKind) -> TypeId {
+        let ty = match kind {
+            crate::ast::TyKind::Int(kind) => Type::Int(kind.into()),
+            crate::ast::TyKind::UInt(kind) => Type::UInt(kind.into()),
+            crate::ast::TyKind::Bool => Type::Bool,
+            crate::ast::TyKind::Str => Type::Str,
+            crate::ast::TyKind::Var(name) => Type::Var(name.clone().boxed()),
+            crate::ast::TyKind::List { inner, size } => {
+                let inner_id = self.type_from_ast_ty(inner);
+                Type::List(inner_id, *size)
+            }
+            crate::ast::TyKind::Fn { params, returns, is_extern } => {
+                let param_ids: Box<[TypeId]> = params.iter().map(|p| self.type_from_ast_ty(p)).collect();
+                let return_id = self.type_from_ast_ty(returns);
+                Type::Fn { is_extern: *is_extern, params: param_ids, returns: return_id }
+            }
+        };
+        self.types.intern(ty)
+    }
 }
 
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
@@ -249,7 +273,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 let Type::Fn { returns, .. } = func_ty else {
                     todo!("cannot call a non fn var");
                 };
-                returns.as_ref().clone()
+                *returns
             };
 
             for param in params.iter() {
@@ -257,20 +281,20 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 // TODO: check validity of params
             }
 
-            Ok(env.types.intern(returns))
+            Ok(returns)
         }
 
         Expr::Index(IndexExpr { expr, .. }) => {
             let type_id = infer(expr, env, scope)?;
             let inner = {
                 let ty = env.types.get(&type_id).unwrap();
-                if let Type::List((inner, _)) = ty {
-                    inner.as_ref().clone()
+                if let Type::List(inner, _) = ty {
+                    *inner
                 } else {
                     todo!("can only index for list types")
                 }
             };
-            Ok(env.types.intern(inner))
+            Ok(inner)
         }
 
         Expr::IfElse(IfElse {
@@ -340,13 +364,13 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
             let lhs_type_id = infer(lhs, env, scope)?;
-            let field_ty = {
+            let field_ty_id = {
                 let lhs_ty = env.types.get(&lhs_type_id).unwrap();
                 if let Type::Struct { fields, .. } = lhs_ty {
                     fields
                         .iter()
                         .find(|(field, _)| field.as_str() == ident.as_str())
-                        .map(|(_, ty)| ty.clone())
+                        .map(|(_, ty_id)| *ty_id)
                         .ok_or_else(|| TypeError::NoSuchField {
                             src: scope.src.clone(),
                             ident: ident.clone(),
@@ -357,13 +381,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     todo!("infer member access expr")
                 }
             };
-            Ok(env.types.intern(field_ty))
+            Ok(field_ty_id)
         }
 
         Expr::Ref(expr) => {
             let inner_type_id = infer(expr, env, scope)?;
-            let inner_ty = env.types.get(&inner_type_id).unwrap().clone();
-            Ok(env.types.intern(Type::Ptr(Box::new(inner_ty))))
+            Ok(env.types.intern(Type::Ptr(inner_type_id)))
         }
 
         Expr::RawIdent(_ident) => todo!("infer raw ident"),
@@ -374,11 +397,11 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn(func: &Fn) -> Type {
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv) -> Type {
     Type::Fn {
         is_extern: func.is_extern,
-        params: func.params.iter().map(|(_, ty)| ty.into()).collect(),
-        returns: Box::new((&func.return_ty).into()),
+        params: func.params.iter().map(|(_, ty)| env.type_from_ast_ty(ty)).collect(),
+        returns: env.type_from_ast_ty(&func.return_ty),
     }
 }
 
@@ -387,8 +410,8 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         Stmnt::Let(Let { ident, ty, val, .. }) => {
             let type_id = infer(val, env, scope)?;
 
-            if let Some(declared_ty) = ty.as_ref().map(Type::from) {
-                let declared_type_id = env.types.intern(declared_ty);
+            if let Some(declared_ty) = ty {
+                let declared_type_id = env.type_from_ast_ty(declared_ty);
                 if declared_type_id != type_id {
                     return Err(TypeError::InvalidType {
                         src: scope.src.clone(),
@@ -410,19 +433,20 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         Stmnt::Use(Use { ident: _, .. }) => {}
 
         Stmnt::Fn(func) => {
-            let ty = infer_fn(func);
+            let ty = infer_fn(func, env);
             let type_id = env.types.intern(ty);
             let def_id = env.definitions.intern(type_id);
             scope.define(&func.ident, def_id);
         }
 
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {
+            let field_tys: Box<[(Ident, TypeId)]> = fields
+                .iter()
+                .map(|(ident, ty)| (ident.to_owned(), env.type_from_ast_ty(ty)))
+                .collect();
             let ty = Type::Struct {
                 ident: ident.to_owned().boxed(),
-                fields: fields
-                    .iter()
-                    .map(|(ident, ty)| (ident.to_owned(), ty.into()))
-                    .collect(),
+                fields: field_tys,
             };
             let type_id = env.types.intern(ty);
             let def_id = env.definitions.intern(type_id);
