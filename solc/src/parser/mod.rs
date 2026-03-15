@@ -73,7 +73,7 @@ pub enum Prec {
     Prefix,    // -a, !a or &a
     Call,      // func()
     Construct, // Point { x : 10, y : 5 }
-    // Index, // list[0]
+    Index, // list[0]
     Chain, // mod.field
 }
 
@@ -84,6 +84,7 @@ impl From<&Token<'_>> for Prec {
             TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
             TokenKind::LSquirly => Self::Construct,
+            TokenKind::LBracket => Self::Index,
             TokenKind::LAngle | TokenKind::RAngle => Self::Cmp,
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
