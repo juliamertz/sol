@@ -137,8 +137,8 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &TypeEnv, ty: impl Into<Type>) -> String {
-        match ty.into() {
+    fn emit_type(&mut self, _env: &TypeEnv, ty: &Type) -> String {
+        match ty {
             Type::Int(kind) => match kind {
                 IntTy::I8 => "int8_t",
                 IntTy::I16 => "int16_t",
@@ -153,13 +153,26 @@ impl C {
             },
             Type::Str => "char *",
             Type::Bool => "bool",
-            Type::List(_) => "List",
-            Type::Struct { ref ident, .. } => ident.as_str(),
-            Type::Var(ref name) => name.as_str(),
-            Type::Ptr(_ty) => todo!(),
+            Type::List(..) => "List",
+            Type::Struct { ident, .. } => ident.as_str(),
+            Type::Var(name) => name.as_str(),
+            Type::Ptr(_) => todo!(),
             Type::Fn { .. } | Type::None => todo!(),
         }
         .into()
+    }
+
+    fn emit_ast_ty(&mut self, env: &TypeEnv, ty: &crate::ast::Ty) -> String {
+        use crate::ast::TyKind;
+        match &ty.kind {
+            TyKind::Int(k) => self.emit_type(env, &Type::Int(k.into())),
+            TyKind::UInt(k) => self.emit_type(env, &Type::UInt(k.into())),
+            TyKind::Bool => self.emit_type(env, &Type::Bool),
+            TyKind::Str => self.emit_type(env, &Type::Str),
+            TyKind::List { .. } => "List".into(),
+            TyKind::Fn { .. } => todo!(),
+            TyKind::Var(name) => name.as_str().into(),
+        }
     }
 
     fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
@@ -280,7 +293,7 @@ impl C {
                 buf.push_str("list_get_deref(");
                 self.emit_expr(buf, env, &expr.expr);
                 buf.push(',');
-                buf.push_str(&self.emit_type(env, ty.to_owned()));
+                buf.push_str(&self.emit_type(env, ty));
                 buf.push(',');
                 self.emit_expr(buf, env, &expr.idx);
                 buf.push(')');
@@ -329,7 +342,7 @@ impl C {
                     return;
                 }
 
-                buf.push_str(self.emit_type(env, ty.clone()).as_str());
+                buf.push_str(self.emit_type(env, ty).as_str());
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.ident));
                 buf.push('=');
@@ -341,7 +354,7 @@ impl C {
                 buf.push_str(strct.ident.as_str());
                 buf.push('{');
                 for (ident, ty) in strct.fields.iter() {
-                    buf.push_str(&self.emit_type(env, ty));
+                    buf.push_str(&self.emit_ast_ty(env, ty));
                     buf.push(' ');
                     buf.push_str(&self.prefix(ident));
                     buf.push(';');
@@ -361,7 +374,7 @@ impl C {
             return;
         }
 
-        buf.push_str(&self.emit_type(env, &func.return_ty));
+        buf.push_str(&self.emit_ast_ty(env, &func.return_ty));
         buf.push(' ');
         if func.ident.as_str() != "main" {
             buf.push_str(&self.prefix(&func.ident));
@@ -372,7 +385,7 @@ impl C {
         buf.push_str(
             func.params
                 .iter()
-                .map(|(ident, ty)| format!("{} {}", self.emit_type(env, ty), self.prefix(ident)))
+                .map(|(ident, ty)| format!("{} {}", self.emit_ast_ty(env, ty), self.prefix(ident)))
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),
