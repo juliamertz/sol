@@ -5,7 +5,8 @@ use crate::ast;
 use crate::ext::Boxed;
 use crate::hir::collect::{CollectError, Inventory, collect};
 use crate::hir::{self, HirId};
-use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, infer, infer_fn};
+use crate::type_checker::ty::Type;
+use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, check_stmnt, infer, infer_fn};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -37,6 +38,28 @@ pub fn lower_nodes<'ast>(
     scope: &mut Scope<'_>,
 ) -> Result<Vec<hir::Node<'ast>>> {
     let mut inventory = collect(nodes)?;
+
+    for func in inventory.take_fns() {
+        let ty = infer_fn(func);
+        let type_id = env.types.intern(ty);
+        let def_id = env.definitions.intern(type_id);
+        scope.define(&func.ident, def_id);
+    }
+
+    for struct_def in inventory.take_structs() {
+        let ty = Type::Struct {
+            ident: struct_def.ident.to_owned().boxed(),
+            fields: struct_def
+                .fields
+                .iter()
+                .map(|(ident, ty)| (ident.to_owned(), ty.into()))
+                .collect(),
+        };
+        let type_id = env.types.intern(ty);
+        let def_id = env.definitions.intern(type_id);
+        scope.define(&struct_def.ident, def_id);
+    }
+
     let nodes = nodes
         .iter()
         .filter_map(|node| lower_node(node, &mut inventory, env, scope).transpose())
@@ -189,18 +212,23 @@ pub fn lower_stmnt<'ast>(
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<Option<hir::Stmnt<'ast>>> {
+    check_stmnt(stmnt, env, scope)?;
+
     Ok(match stmnt {
-        ast::Stmnt::Let(inner) => Some(hir::Stmnt::Let(hir::Let {
-            id: HirId::DUMMY,
-            span: &inner.span,
-            ident: lower_ident(&inner.ident, env, scope)?,
-            ty: inner
-                .ty
-                .as_ref()
-                .map(|ty| env.types.intern(ty))
-                .unwrap_or(TypeId::NONE),
-            val: lower_expr(&inner.val, env, scope)?,
-        })),
+        ast::Stmnt::Let(inner) => {
+            let ty = env
+                .nodes
+                .get(&inner.val.id())
+                .copied()
+                .unwrap_or(TypeId::NONE);
+            Some(hir::Stmnt::Let(hir::Let {
+                id: HirId::DUMMY,
+                span: &inner.span,
+                ident: lower_ident(&inner.ident, env, scope)?,
+                ty,
+                val: lower_expr(&inner.val, env, scope)?,
+            }))
+        }
         ast::Stmnt::Ret(inner) => {
             let val = lower_expr(&inner.val, env, scope)?;
             let ty = env
@@ -225,13 +253,14 @@ pub fn lower_stmnt<'ast>(
 
             for (ident, ty) in func.params.iter() {
                 let type_id = env.types.intern(ty);
-                scope.set_type(ident, type_id);
+                let def_id = env.definitions.intern(type_id);
+                scope.define(ident, def_id);
             }
 
             // for recursion the function itself should also be in scope
-            let ty = infer_fn(func);
-            let type_id = env.types.intern(ty);
-            scope.set_type(&func.ident, type_id); 
+            let type_id = env.types.intern(infer_fn(func));
+            let def_id = env.definitions.intern(type_id);
+            scope.define(&func.ident, def_id); 
 
             Some(hir::Stmnt::Fn(hir::Fn {
                 id: HirId::DUMMY,
