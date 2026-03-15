@@ -74,13 +74,12 @@ enum Command {
 fn build(file_path: &Path, _opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(file_path).unwrap();
     let name = file_path.to_string_lossy();
-    let source = SourceInfo::new(name, content.clone());
 
-    let mut parser = parser::Parser::new(file_path.to_owned(), content);
+    let mut parser = parser::Parser::new(file_path.to_owned(), &content);
     let module = parser.parse()?;
 
     let mut env = TypeEnv::default();
-    let mut scope = Scope::new(source);
+    let mut scope = Scope::new(parser.lex.source());
 
     let hir = hir::lower_module(&module, &mut env, &mut scope)?;
 
@@ -140,7 +139,7 @@ fn main() -> Result<()> {
         } => {
             let content = std::fs::read_to_string(&file_path).unwrap();
             let mut stdout = std::io::stdout();
-            let mut lex = lexer::Lexer::new(file_path, content.clone());
+            let mut lex = lexer::Lexer::new(file_path, &content);
 
             let mut tokens = vec![];
             let mut idx = 0;
@@ -153,7 +152,7 @@ fn main() -> Result<()> {
             }
 
             if spans {
-                let src = Arc::new(NamedSource::new("source", content));
+                let src = lex.source();
                 for token in tokens {
                     let report = miette::miette!(
                         labels = vec![miette::LabeledSpan::at(
@@ -182,7 +181,7 @@ fn main() -> Result<()> {
         }
         Command::DumpAst { file_path } => {
             let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, content);
+            let mut parser = parser::Parser::new(file_path, &content);
             let ast = parser.parse()?;
             dbg!(ast);
         }

@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::LazyLock;
@@ -136,29 +137,39 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock
 });
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Token {
+pub struct Token<'src> {
+    pub kind: TokenKind,
+    pub text: &'src str,
+    pub span: Span,
+}
+
+impl Token<'_> {
+    pub fn owned(&self) -> OwnedToken {
+        OwnedToken {
+            kind: self.kind,
+            text: self.text.to_string(),
+            span: self.span,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedToken {
     pub kind: TokenKind,
     pub text: String,
     pub span: Span,
 }
 
-impl Token {
-    pub fn new(kind: TokenKind, text: impl ToString, start_pos: usize) -> Self {
-        let text = text.to_string();
+impl<'src> Token<'src> {
+    pub fn new(kind: TokenKind, text: &'src str, start_pos: usize) -> Self {
         Self {
             kind,
-            text: text.to_string(),
+            text: text,
             span: (start_pos, text.len()).into(),
         }
     }
 
     pub fn span(&self) -> Span {
         self.span
-    }
-}
-
-impl AsRef<Token> for Token {
-    fn as_ref(&self) -> &Token {
-        self
     }
 }

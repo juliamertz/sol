@@ -11,6 +11,7 @@ use thiserror::Error;
 use crate::ast::*;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
+use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -48,7 +49,7 @@ pub enum ParseError {
         #[source_code]
         src: SourceInfo,
 
-        token: Token,
+        token: OwnedToken,
 
         #[label("this token")]
         span: Span,
@@ -73,7 +74,7 @@ pub enum Prec {
     Chain, // mod.field
 }
 
-impl From<&Token> for Prec {
+impl From<&Token<'_>> for Prec {
     fn from(token: &Token) -> Self {
         match token.kind {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
@@ -103,16 +104,16 @@ impl Context {
     }
 }
 
-pub struct Parser {
-    pub lex: Lexer,
+pub struct Parser<'src> {
+    pub lex: Lexer<'src>,
     pub ctx: Context,
-    pub tokens: Vec<Token>,
-    pub curr: Token,
-    pub next: Option<Token>,
+    pub tokens: Vec<Token<'src>>,
+    pub curr: Token<'src>,
+    pub next: Option<Token<'src>>,
 }
 
-impl Parser {
-    pub fn new(file_path: PathBuf, content: impl ToString) -> Self {
+impl<'src> Parser<'src> {
+    pub fn new(file_path: PathBuf, content: &'src str) -> Self {
         let mut lex = Lexer::new(file_path, content);
         let curr = lex
             .read_token()
@@ -147,7 +148,7 @@ impl Parser {
         Ok(Module { nodes })
     }
 
-    fn advance(&mut self) -> Option<Token> {
+    fn advance(&mut self) -> Option<Token<'src>> {
         let curr = self.next.clone();
         if let Some(next) = self.next.clone() {
             self.curr = next;
@@ -158,7 +159,7 @@ impl Parser {
         curr
     }
 
-    fn expect(&mut self, expected: TokenKind) -> Result<Token> {
+    fn expect(&mut self, expected: TokenKind) -> Result<Token<'src>> {
         if self.curr.kind != expected {
             return Err(ParseError::Expected {
                 src: self.lex.source(),
@@ -171,7 +172,7 @@ impl Parser {
         Ok(self.curr.clone())
     }
 
-    fn accept(&mut self, expected: TokenKind) -> Option<Token> {
+    fn accept(&mut self, expected: TokenKind) -> Option<Token<'src>> {
         if self.at(expected) {
             let tok = self.curr.clone();
             self.advance();
@@ -181,7 +182,7 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, expected: TokenKind) -> Result<Token> {
+    fn consume(&mut self, expected: TokenKind) -> Result<Token<'src>> {
         let tok = self.expect(expected)?;
         self.advance();
         Ok(tok)
@@ -580,7 +581,7 @@ impl Parser {
     }
 
     fn str_lit(&mut self) -> Result<Literal> {
-        let text = self.curr.text.clone();
+        let text = self.curr.text;
         let span = self.curr.span;
         let kind = LiteralKind::Str(Arc::from(text));
         self.advance();
@@ -604,7 +605,7 @@ impl Parser {
             _ => {
                 return Err(ParseError::Todo {
                     src: self.lex.source(),
-                    token: self.curr.clone(),
+                    token: self.curr.owned(),
                     span: self.curr.span,
                 });
             }

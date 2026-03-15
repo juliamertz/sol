@@ -9,40 +9,45 @@ pub mod token;
 pub use crate::lexer::token::{Token, TokenKind};
 
 #[derive(Debug)]
-pub struct Lexer {
-    pub file_path: PathBuf,
-    pub content: String,
+pub struct Lexer<'src> {
+    pub source: SourceInfo,
+    pub content: &'src str,
     pub pos: usize,
     pub eof: bool,
 }
 
-impl Lexer {
-    pub fn new(file_path: PathBuf, content: impl ToString) -> Self {
+impl<'src> Lexer<'src> {
+    pub fn new(file_path: PathBuf, content: &'src str) -> Self {
+        let source = SourceInfo::new(file_path.to_string_lossy(), content.to_string());
         Self {
-            file_path,
-            content: content.to_string(),
+            source,
+            content,
             pos: 0,
             eof: false,
         }
     }
 
     pub fn source(&self) -> SourceInfo {
-        // TODO: this can be done more effeciently by directly storing sourceinfo in the lexer. for
-        // now this will do
-        SourceInfo::new(self.file_path.to_string_lossy(), self.content.clone())
+        self.source.clone()
+    }
+
+    pub fn curr(&self) -> Option<char> {
+        self.content
+            .as_bytes()
+            .get(self.pos)
+            .map(|byte| *byte as char)
+    }
+
+    pub fn peek(&self) -> Option<char> {
+        self.content
+            .as_bytes()
+            .get(self.pos + 1)
+            .map(|byte| *byte as char)
     }
 
     pub fn advance(&mut self) -> Option<char> {
         self.pos += 1;
-        self.content.chars().nth(self.pos)
-    }
-
-    pub fn curr(&self) -> Option<char> {
-        self.content.chars().nth(self.pos)
-    }
-
-    pub fn peek(&self) -> Option<char> {
-        self.content.chars().nth(self.pos + 1)
+        self.curr()
     }
 
     fn skip_whitespace(&mut self) {
@@ -55,7 +60,7 @@ impl Lexer {
         }
     }
 
-    fn read_while<F>(&mut self, condition: F) -> &str
+    fn read_while<F>(&mut self, condition: F) -> &'src str
     where
         F: Fn(char) -> bool,
     {
@@ -72,13 +77,13 @@ impl Lexer {
         &self.content[start..self.pos]
     }
 
-    fn read_string(&mut self) -> &str {
+    fn read_string(&mut self) -> &'src str {
         assert_eq!(self.curr(), Some('"'),);
         self.advance();
         self.read_while(|ch| ch != '"')
     }
 
-    pub fn read_token(&mut self) -> Option<Token> {
+    pub fn read_token(&mut self) -> Option<Token<'src>> {
         self.skip_whitespace();
 
         // Dirty little hack to return EOF as last token
@@ -90,7 +95,7 @@ impl Lexer {
         let start = self.pos;
 
         let token = match self.curr()? {
-            '"' => Token::new(TokenKind::String, self.read_string().to_string(), start),
+            '"' => Token::new(TokenKind::String, self.read_string(), start),
             '+' => Token::new(TokenKind::Add, "+", start),
             '=' => {
                 if self.peek() == Some('=') {
@@ -103,7 +108,7 @@ impl Lexer {
             '-' => {
                 if self.peek() == Some('>') {
                     self.advance();
-                    Token::new(TokenKind::Arrow, "->", start)
+                    Token::new( TokenKind::Arrow, "->", start)
                 } else if self.peek() == Some('-') {
                     self.read_while(|ch| ch != '\n');
                     self.read_token()?
