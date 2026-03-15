@@ -4,21 +4,17 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
 use wyhash2::WyHash;
 
 use crate::BuildOpts;
-use crate::ast::{
-    BinOp, Block, CallExpr, Expr, Fn, Ident, LiteralKind, MemberAccess, Node, NodeId, Op, OpKind,
-    PrefixExpr, Stmnt,
-};
+use crate::ast::{LiteralKind, Op, OpKind};
 use crate::codegen::{Compiler, Emitter, quote};
-use crate::lexer::source::Span;
-use crate::type_checker::TypeEnv;
+use crate::hir::{BinOp, Block, Call, Expr, Fn, Ident, MemberAccess, Module, Node, Prefix, Stmnt};
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
+use crate::type_checker::{TypeEnv, TypeId};
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");
@@ -53,9 +49,7 @@ impl Default for C {
 }
 
 impl Emitter for C {
-    type Input = Vec<Node>;
-
-    fn emit(&mut self, env: TypeEnv, ast: &Self::Input) -> String {
+    fn emit(&mut self, env: TypeEnv, hir: &Module<'_>) -> String {
         let mut buf = String::new();
 
         let includes = [("gc.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
@@ -66,7 +60,7 @@ impl Emitter for C {
             buf.push_str(&format!("#include \"{}\"\n", path.to_str().unwrap()));
         }
 
-        for node in ast {
+        for node in hir.nodes.iter() {
             self.emit_node(&mut buf, &env, node);
         }
 
@@ -101,22 +95,23 @@ impl C {
 
     fn emit_binop_expr(&mut self, buf: &mut String, env: &TypeEnv, binop: &BinOp) {
         self.emit_expr(buf, env, binop.lhs.as_ref());
-        self.emit_op(buf, &binop.op);
+        self.emit_op(buf, binop.op);
         self.emit_expr(buf, env, binop.rhs.as_ref());
     }
 
-    fn emit_call_expr(&mut self, buf: &mut String, env: &TypeEnv, call_expr: &CallExpr) {
-        self.emit_expr(buf, env, &call_expr.func);
-
-        buf.push('(');
-
-        for (idx, arg) in call_expr.params.iter().enumerate() {
+    fn emit_expr_list(&mut self, buf: &mut String, env: &TypeEnv, list: &[Expr<'_>]) {
+        for (idx, arg) in list.iter().enumerate() {
             self.emit_expr(buf, env, arg);
-            if idx != call_expr.params.len() - 1 {
+            if idx != list.len() - 1 {
                 buf.push(',');
             }
         }
+    }
 
+    fn emit_call_expr(&mut self, buf: &mut String, env: &TypeEnv, call_expr: &Call) {
+        self.emit_expr(buf, env, &call_expr.func);
+        buf.push('(');
+        self.emit_expr_list(buf, env, &call_expr.params);
         buf.push(')');
     }
 
@@ -137,7 +132,8 @@ impl C {
         }
     }
 
-    fn emit_type(&mut self, _env: &TypeEnv, ty: &Type) -> String {
+    fn emit_type(&mut self, env: &TypeEnv, type_id: &TypeId) -> String {
+        let ty = env.types.get(type_id).expect("type to be defined");
         match ty {
             Type::Int(kind) => match kind {
                 IntTy::I8 => "int8_t",
@@ -162,19 +158,6 @@ impl C {
         .into()
     }
 
-    fn emit_ast_ty(&mut self, env: &TypeEnv, ty: &crate::ast::Ty) -> String {
-        use crate::ast::TyKind;
-        match &ty.kind {
-            TyKind::Int(k) => self.emit_type(env, &Type::Int(k.into())),
-            TyKind::UInt(k) => self.emit_type(env, &Type::UInt(k.into())),
-            TyKind::Bool => self.emit_type(env, &Type::Bool),
-            TyKind::Str => self.emit_type(env, &Type::Str),
-            TyKind::List { .. } => "List".into(),
-            TyKind::Fn { .. } => todo!(),
-            TyKind::Var(name) => name.as_str().into(),
-        }
-    }
-
     fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
         for node in block.nodes.iter() {
             self.emit_node(buf, env, node);
@@ -182,7 +165,7 @@ impl C {
     }
 
     fn emit_ident(&mut self, buf: &mut String, env: &TypeEnv, ident: &Ident) {
-        let ty = env.type_of(&ident.id);
+        let ty = env.types.get(&ident.ty);
         let ident = if let Some(Type::Fn {
             is_extern: true, ..
         }) = ty
@@ -195,16 +178,14 @@ impl C {
     }
 
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
-        dbg!(&expr);
-        let ty = env.type_of(&expr.id()).unwrap();
         match expr {
             Expr::Ident(ident) => self.emit_ident(buf, env, ident),
-            Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
+            // Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
             Expr::Literal(literal) => match &literal.kind {
                 LiteralKind::Str(str) => buf.push_str(&quote(str)),
                 LiteralKind::Int(int) => buf.push_str(&int.to_string()),
             },
-            Expr::Prefix(PrefixExpr { op, rhs, .. }) => {
+            Expr::Prefix(Prefix { op, rhs, .. }) => {
                 self.emit_op(buf, op);
                 self.emit_expr(buf, env, rhs);
             }
@@ -260,20 +241,14 @@ impl C {
                 buf.push_str("list_alloc");
 
                 for item in list.items.iter() {
-                    self.emit_expr(
-                        buf,
-                        env,
-                        &Expr::Call(CallExpr {
-                            id: NodeId::DUMMY,
-                            span: Span::default(),
-                            func: Arc::from(Expr::RawIdent("list_push_rval".into())),
-                            params: vec![
-                                Expr::Ref(Arc::from(Expr::RawIdent(tmp_name.into()))),
-                                item.clone(),
-                            ]
-                            .into(),
-                        }),
-                    );
+                    buf.push_str("list_push_rval");
+                    buf.push('(');
+                    buf.push('&');
+                    buf.push_str(tmp_name);
+                    buf.push(',');
+                    self.emit_expr(buf, env, item);
+                    buf.push(')');
+
                     self.node_marker.emit.push_str(buf);
                     self.node_marker.emit.push(';');
                 }
@@ -293,7 +268,7 @@ impl C {
                 buf.push_str("list_get_deref(");
                 self.emit_expr(buf, env, &expr.expr);
                 buf.push(',');
-                buf.push_str(&self.emit_type(env, ty));
+                buf.push_str(&self.emit_type(env, &expr.ty));
                 buf.push(',');
                 self.emit_expr(buf, env, &expr.idx);
                 buf.push(')');
@@ -305,7 +280,7 @@ impl C {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
-                buf.push_str(format!("#include <{}.h>\n", r#use.ident).as_str());
+                buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
             }
             Stmnt::Ret(ret) => {
                 buf.push_str("return");
@@ -314,27 +289,20 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                dbg!(&binding.val, &env);
-                let ty = env.type_of(&binding.val.id()).unwrap();
-
                 // TODO: pull out into seperate function
+                let type_id = binding.val.type_id();
                 if let Expr::List(list) = &binding.val {
                     for item in list.items.iter() {
                         let mut buf = String::new();
-                        self.emit_expr(
-                            &mut buf,
-                            env,
-                            &Expr::Call(CallExpr {
-                                id: NodeId::DUMMY,
-                                span: Span::default(),
-                                func: Arc::from(Expr::RawIdent("list_push_rval".into())),
-                                params: vec![
-                                    Expr::Ref(Arc::from(Expr::Ident(binding.ident.clone()))),
-                                    item.clone(),
-                                ]
-                                .into(),
-                            }),
-                        );
+
+                        buf.push_str("list_push_rval");
+                        buf.push('(');
+                        buf.push('&');
+                        buf.push_str(binding.ident.as_str());
+                        buf.push(',');
+                        self.emit_expr(&mut buf, env, item);
+                        buf.push(')');
+
                         self.node_marker.emit.push_str(&buf);
                         self.node_marker.emit.push(';');
                     }
@@ -342,7 +310,7 @@ impl C {
                     return;
                 }
 
-                buf.push_str(self.emit_type(env, ty).as_str());
+                buf.push_str(self.emit_type(env, type_id).as_str());
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.ident));
                 buf.push('=');
@@ -354,7 +322,7 @@ impl C {
                 buf.push_str(strct.ident.as_str());
                 buf.push('{');
                 for (ident, ty) in strct.fields.iter() {
-                    buf.push_str(&self.emit_ast_ty(env, ty));
+                    buf.push_str(&self.emit_type(env, ty));
                     buf.push(' ');
                     buf.push_str(&self.prefix(ident));
                     buf.push(';');
@@ -362,9 +330,6 @@ impl C {
                 buf.push('}');
                 buf.push_str(strct.ident.as_str());
                 buf.push(';');
-            }
-            Stmnt::Impl(_) => {
-                todo!()
             }
         }
     }
@@ -374,7 +339,7 @@ impl C {
             return;
         }
 
-        buf.push_str(&self.emit_ast_ty(env, &func.return_ty));
+        buf.push_str(&self.emit_type(env, &func.return_ty));
         buf.push(' ');
         if func.ident.as_str() != "main" {
             buf.push_str(&self.prefix(&func.ident));
@@ -385,7 +350,7 @@ impl C {
         buf.push_str(
             func.params
                 .iter()
-                .map(|(ident, ty)| format!("{} {}", self.emit_ast_ty(env, ty), self.prefix(ident)))
+                .map(|(ident, ty)| format!("{} {}", self.emit_type(env, ty), self.prefix(ident)))
                 .collect::<Vec<_>>()
                 .join(",")
                 .as_str(),

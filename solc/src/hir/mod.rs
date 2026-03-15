@@ -186,3 +186,28 @@ pub enum Node<'ast> {
 pub struct Module<'ast> {
     pub nodes: Box<[Node<'ast>]>,
 }
+
+impl Ident<'_> {
+    pub fn as_str(&self) -> &str {
+        self.inner
+    }
+}
+
+impl Expr<'_> {
+    pub fn type_id(&self) -> &TypeId {
+        match self {
+            Expr::Ident(ident) => &ident.ty,
+            Expr::Literal(literal) => &literal.ty,
+            Expr::Block(block) => &block.ty,
+            Expr::BinOp(bin_op) => &bin_op.ty,
+            Expr::Prefix(prefix) => &prefix.ty,
+            Expr::Call(call) => &call.ty,
+            Expr::Index(index) => &index.ty,
+            Expr::IfElse(if_else) => &if_else.ty,
+            Expr::List(list) => &list.ty,
+            Expr::Constructor(constructor) => &constructor.ty,
+            Expr::MemberAccess(member_access) => &member_access.ty,
+            Expr::Ref(expr) => expr.type_id(),
+        }
+    }
+}

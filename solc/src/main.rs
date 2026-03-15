@@ -17,7 +17,10 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
-use crate::type_checker::{Scope, TypeEnv};
+use crate::{
+    codegen::{Compiler, Emitter},
+    type_checker::{Scope, TypeEnv},
+};
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -69,7 +72,7 @@ enum Command {
     },
 }
 
-fn build(file_path: &Path, _opts: &BuildOpts) -> Result<PathBuf> {
+fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(file_path).unwrap();
     let _name = file_path.to_string_lossy();
 
@@ -81,17 +84,11 @@ fn build(file_path: &Path, _opts: &BuildOpts) -> Result<PathBuf> {
 
     let hir = hir::lower_module(&module, &mut env, &mut scope)?;
 
-    dbg!(&hir);
+    let mut c = codegen::c::C::default();
+    let out = c.emit(env, &hir);
 
-    todo!()
-
-    // check_nodes(&ast, &mut env, &mut scope)?;
-    //
-    // let mut c = codegen::C::default();
-    // let out = c.emit(env, &ast);
-    //
-    // let outpath = c.build_exe(&out, "bin", opts)?;
-    // Ok(outpath)
+    let outpath = c.build_exe(&out, "bin", opts)?;
+    Ok(outpath)
 }
 
 fn main() -> Result<()> {

@@ -1,6 +1,7 @@
 pub mod c;
 
 use crate::BuildOpts;
+use crate::hir;
 use crate::type_checker::TypeEnv;
 
 use std::borrow::Cow;
@@ -9,9 +10,7 @@ use std::path::PathBuf;
 use clap::ValueEnum;
 
 pub trait Emitter {
-    type Input;
-
-    fn emit(&mut self, env: TypeEnv, ast: &Self::Input) -> String;
+    fn emit(&mut self, env: TypeEnv, input: &hir::Module<'_>) -> String;
 }
 
 pub trait Compiler {
