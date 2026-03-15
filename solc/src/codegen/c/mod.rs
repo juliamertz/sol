@@ -280,6 +280,7 @@ impl C {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
+                assert!(r#use.is_extern, "non extern `use` statements are not supported yet");
                 buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
             }
             Stmnt::Ret(ret) => {

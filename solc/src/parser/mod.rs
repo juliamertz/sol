@@ -141,7 +141,7 @@ impl<'src> Parser<'src> {
                 break;
             }
 
-            self.skip_whitespace();
+            self.skip_whitespace()?;
             match self.node() {
                 Ok(node) => nodes.push(node),
                 Err(err) => return Err(err),
@@ -250,7 +250,14 @@ impl<'src> Parser<'src> {
             id,
             span: token.span,
             inner: Arc::from(token.text),
+            is_extern: false,
         })
+    }
+
+    fn extern_ident(&mut self) -> Result<Ident> {
+        let mut ident = self.ident()?;
+        ident.is_extern = true;
+        Ok(ident)
     }
 
     fn ty(&mut self) -> Result<Ty> {
@@ -345,10 +352,20 @@ impl<'src> Parser<'src> {
     fn r#use(&mut self) -> Result<Use> {
         let span = self.curr.span;
         self.consume(TokenKind::Use)?;
-        let ident = self.ident()?;
+        let is_extern = self.accept(TokenKind::Extern)?.is_some();
+        let ident = if is_extern {
+            self.extern_ident()?
+        } else {
+            self.ident()?
+        };
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
-        Ok(Use { ident, id, span })
+        Ok(Use {
+            id,
+            span,
+            is_extern,
+            ident,
+        })
     }
 
     fn typed_param(&mut self) -> Result<(Ident, Ty)> {

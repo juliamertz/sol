@@ -1,4 +1,4 @@
-use stdio
+use extern stdio
 
 extern func printf(format: Str) -> i32
 

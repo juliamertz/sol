@@ -144,6 +144,7 @@ pub struct Ret<'ast> {
 pub struct Use<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
+    pub is_extern: bool,
     pub ident: Ident<'ast>,
 }
 

@@ -173,23 +173,25 @@ impl TypeEnv {
     }
 }
 
+pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
+    let def_id = scope
+        .get_definition(ident)
+        .ok_or_else(|| TypeError::NotFound {
+            src: scope.src.clone(),
+            ident: ident.to_owned(),
+            span: ident.span,
+        })?;
+    let type_id = env
+        .definitions
+        .get(def_id)
+        .copied()
+        .ok_or(TypeError::Internal)?;
+    Ok(type_id)
+}
+
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
-        Expr::Ident(ident) => {
-            let def_id = scope
-                .get_definition(ident)
-                .ok_or_else(|| TypeError::NotFound {
-                    src: scope.src.clone(),
-                    ident: ident.to_owned(),
-                    span: ident.span,
-                })?;
-            let type_id = env
-                .definitions
-                .get(def_id)
-                .copied()
-                .ok_or(TypeError::Internal)?;
-            Ok(type_id)
-        }
+        Expr::Ident(ident) => infer_ident(ident, env, scope),
 
         Expr::Literal(Literal { kind, .. }) => match kind {
             LiteralKind::Str(_) => Ok(env.types.intern(Type::Str)),

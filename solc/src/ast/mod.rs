@@ -12,6 +12,7 @@ pub struct Ident {
     pub id: NodeId,
     pub span: Span,
     pub inner: Arc<str>,
+    pub is_extern: bool,
 }
 
 impl Ident {
@@ -212,6 +213,7 @@ pub struct Fn {
 pub struct Use {
     pub id: NodeId,
     pub span: Span,
+    pub is_extern: bool,
     pub ident: Ident,
 }
 

@@ -6,7 +6,9 @@ use crate::ext::Boxed;
 use crate::hir::collect::{CollectError, Inventory, collect};
 use crate::hir::{self, HirId};
 use crate::type_checker::ty::Type;
-use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, check_stmnt, infer, infer_fn};
+use crate::type_checker::{
+    Scope, TypeEnv, TypeError, TypeId, check_stmnt, infer, infer_fn, infer_ident,
+};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -94,12 +96,17 @@ pub fn lower_block<'ast>(
 
 pub fn lower_ident<'ast>(
     ident: &'ast ast::Ident,
-    _env: &mut TypeEnv,
-    _scope: &mut Scope<'_>,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
 ) -> Result<hir::Ident<'ast>> {
+    let ty = if ident.is_extern {
+        TypeId::NONE // TODO:
+    } else {
+        infer_ident(ident, env, scope)?
+    };
     Ok(hir::Ident {
         id: HirId::DUMMY,
-        ty: TypeId::NONE, //TODO:
+        ty,
         span: &ident.span,
         inner: &ident.inner,
     })
@@ -246,6 +253,7 @@ pub fn lower_stmnt<'ast>(
         ast::Stmnt::Use(inner) => Some(hir::Stmnt::Use(hir::Use {
             id: HirId::DUMMY,
             span: &inner.span,
+            is_extern: inner.is_extern,
             ident: lower_ident(&inner.ident, env, scope)?,
         })),
         ast::Stmnt::Fn(func) => {
