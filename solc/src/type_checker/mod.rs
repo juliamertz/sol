@@ -397,8 +397,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let inner_type_id = infer(expr, env, scope)?;
             Ok(env.types.intern(Type::Ptr(inner_type_id)))
         }
-
-        Expr::RawIdent(_ident) => todo!("infer raw ident"),
     }?;
 
     env.nodes.insert(expr.id(), ty);

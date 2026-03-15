@@ -260,10 +260,7 @@ pub enum Expr {
     List(List),
     Constructor(Constructor),
     MemberAccess(MemberAccess),
-    Ref(Arc<Expr>),
-    /// Used for inserting identifiers that will not be mangled in the final output
-    /// For internal use during codegen or when using extern symbols
-    RawIdent(Arc<str>),
+    Ref(Arc<Expr>), // TODO: why is this unused?
 }
 
 impl Expr {
@@ -281,7 +278,6 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.span,
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
-            Expr::RawIdent(_) => unreachable!(),
         }
     }
 
@@ -299,7 +295,6 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.id,
             Expr::MemberAccess(member_access) => member_access.id,
             Expr::Ref(r#ref) => r#ref.id(),
-            Expr::RawIdent(_) => NodeId::DUMMY,
         }
     }
 }

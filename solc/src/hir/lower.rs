@@ -202,7 +202,6 @@ pub fn lower_expr<'ast>(
             ident: lower_ident(&member_access.ident, env, scope)?,
         }),
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env, scope)?.into()),
-        ast::Expr::RawIdent(_) => todo!(),
     };
     Ok(lowered)
 }
