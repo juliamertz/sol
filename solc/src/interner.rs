@@ -12,6 +12,7 @@ macro_rules! id {
         pub struct $name(pub u32);
 
         impl $name {
+            #[allow(unused)]
             pub const DUMMY: Self = Self(u32::MAX);
         }
 

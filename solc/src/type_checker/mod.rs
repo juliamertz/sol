@@ -389,6 +389,14 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
+pub fn infer_fn(func: &Fn) -> Type {
+    Type::Fn {
+        is_extern: func.is_extern,
+        params: func.params.iter().map(|(_, ty)| ty.into()).collect(),
+        returns: Box::new((&func.return_ty).into()),
+    }
+}
+
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let { ident, ty, val, .. }) => {

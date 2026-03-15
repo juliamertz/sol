@@ -5,7 +5,7 @@ use crate::ast;
 use crate::ext::Boxed;
 use crate::hir::collect::{CollectError, Inventory, collect};
 use crate::hir::{self, HirId};
-use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, infer};
+use crate::type_checker::{Scope, TypeEnv, TypeError, TypeId, infer, infer_fn};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -227,6 +227,11 @@ pub fn lower_stmnt<'ast>(
                 let type_id = env.types.intern(ty);
                 scope.set_type(ident, type_id);
             }
+
+            // for recursion the function itself should also be in scope
+            let ty = infer_fn(func);
+            let type_id = env.types.intern(ty);
+            scope.set_type(&func.ident, type_id); 
 
             Some(hir::Stmnt::Fn(hir::Fn {
                 id: HirId::DUMMY,
