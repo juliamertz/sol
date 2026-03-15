@@ -15,7 +15,7 @@ use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
-#[diagnostic(code(parser))]
+#[diagnostic(code(solc::parser))]
 pub enum ParseError {
     #[error("expected")]
     Expected {
@@ -54,6 +54,9 @@ pub enum ParseError {
         #[label("this token")]
         span: Span,
     },
+
+    #[error(transparent)]
+    Lexer(#[from] crate::lexer::LexerError),
 }
 
 pub type Result<T, E = ParseError> = core::result::Result<T, E>;
@@ -113,20 +116,21 @@ pub struct Parser<'src> {
 }
 
 impl<'src> Parser<'src> {
-    pub fn new(file_path: PathBuf, content: &'src str) -> Self {
+    pub fn new(file_path: PathBuf, content: &'src str) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
         let curr = lex
             .read_token()
+            .transpose()?
             .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos));
-        let next = lex.read_token();
+        let next = lex.read_token().transpose()?;
         let ctx = Context::default();
-        Self {
+        Ok(Self {
             lex,
             ctx,
             curr,
             next,
             tokens: vec![],
-        }
+        })
     }
 
     pub fn parse(&mut self) -> Result<Module> {
@@ -148,15 +152,19 @@ impl<'src> Parser<'src> {
         Ok(Module { nodes })
     }
 
-    fn advance(&mut self) -> Option<Token<'src>> {
+    fn advance(&mut self) -> Result<Option<Token<'src>>> {
         let curr = self.next.clone();
         if let Some(next) = self.next.clone() {
             self.curr = next;
         }
 
-        self.next = self.lex.read_token();
-        self.tokens.push(self.next.clone()?);
-        curr
+        self.next = self.lex.read_token().transpose()?;
+        Ok(if let Some(next) = &self.next {
+            self.tokens.push(next.clone());
+            curr
+        } else {
+            None
+        })
     }
 
     fn expect(&mut self, expected: TokenKind) -> Result<Token<'src>> {
@@ -172,19 +180,19 @@ impl<'src> Parser<'src> {
         Ok(self.curr.clone())
     }
 
-    fn accept(&mut self, expected: TokenKind) -> Option<Token<'src>> {
+    fn accept(&mut self, expected: TokenKind) -> Result<Option<Token<'src>>> {
         if self.at(expected) {
             let tok = self.curr.clone();
-            self.advance();
-            Some(tok)
+            self.advance()?;
+            Ok(Some(tok))
         } else {
-            None
+            Ok(None)
         }
     }
 
     fn consume(&mut self, expected: TokenKind) -> Result<Token<'src>> {
         let tok = self.expect(expected)?;
-        self.advance();
+        self.advance()?;
         Ok(tok)
     }
 
@@ -192,10 +200,11 @@ impl<'src> Parser<'src> {
         self.curr.kind == kind
     }
 
-    fn skip_whitespace(&mut self) {
+    fn skip_whitespace(&mut self) -> Result<()> {
         while self.at(TokenKind::Newline) {
-            self.advance();
+            self.advance()?;
         }
+        Ok(())
     }
 
     pub fn node(&mut self) -> Result<Node> {
@@ -213,7 +222,7 @@ impl<'src> Parser<'src> {
             Node::Expr(self.expr(Prec::default())?)
         };
 
-        self.skip_whitespace();
+        self.skip_whitespace()?;
 
         Ok(node)
     }
@@ -283,7 +292,7 @@ impl<'src> Parser<'src> {
         let span = self.curr.span;
         let is_extern = self.at(TokenKind::Extern);
         if is_extern {
-            self.advance();
+            self.advance()?;
         }
 
         self.consume(TokenKind::Fn)?;
@@ -293,14 +302,14 @@ impl<'src> Parser<'src> {
         while self.curr.kind != TokenKind::RParen {
             params.push(self.typed_param()?);
             if self.at(TokenKind::Comma) {
-                self.advance();
+                self.advance()?;
             }
         }
         self.consume(TokenKind::RParen)?;
 
         self.consume(TokenKind::Arrow)?;
         let return_ty = self.ty()?;
-        self.skip_whitespace();
+        self.skip_whitespace()?;
 
         let body = if is_extern || self.curr.kind.is_terminator() {
             None
@@ -354,7 +363,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Colon)?;
         let expr = self.expr(Prec::Lowest)?;
         if self.at(TokenKind::Comma) {
-            self.advance();
+            self.advance()?;
         }
 
         Ok((ident, expr))
@@ -364,7 +373,7 @@ impl<'src> Parser<'src> {
         let mut args = vec![];
 
         loop {
-            self.skip_whitespace();
+            self.skip_whitespace()?;
             if self.curr.kind.is_terminator() {
                 break;
             }
@@ -379,7 +388,7 @@ impl<'src> Parser<'src> {
         let mut args = vec![];
 
         loop {
-            self.skip_whitespace();
+            self.skip_whitespace()?;
             if self.curr.kind.is_terminator() {
                 break;
             }
@@ -440,12 +449,12 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::If)?;
         let condition = self.expr(Prec::Lowest)?;
         self.consume(TokenKind::Then)?;
-        self.accept(TokenKind::Newline);
+        self.accept(TokenKind::Newline)?;
 
         let consequence = self.block()?;
         let alternative = if self.at(TokenKind::Else) {
-            self.advance();
-            self.skip_whitespace();
+            self.advance()?;
+            self.skip_whitespace()?;
             Some(self.block()?)
         } else {
             None
@@ -499,7 +508,7 @@ impl<'src> Parser<'src> {
             }),
         }?;
 
-        self.advance();
+        self.advance()?;
 
         let op = Op { id, span, kind };
         Ok((op, prec))
@@ -575,7 +584,7 @@ impl<'src> Parser<'src> {
             .parse()
             .map(LiteralKind::Int)
             .expect("unable to parse integer");
-        self.advance();
+        self.advance()?;
         let id = self.ctx.next_id();
         Ok(Literal { id, span, kind })
     }
@@ -584,7 +593,7 @@ impl<'src> Parser<'src> {
         let text = self.curr.text;
         let span = self.curr.span;
         let kind = LiteralKind::Str(Arc::from(text));
-        self.advance();
+        self.advance()?;
         let id = self.ctx.next_id();
         Ok(Literal { id, span, kind })
     }
@@ -687,7 +696,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Struct)?;
         let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
-        self.skip_whitespace();
+        self.skip_whitespace()?;
         let fields = self.typed_params()?;
         let tok = self.consume(TokenKind::End)?;
 

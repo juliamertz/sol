@@ -12,13 +12,11 @@ use std::{
     io::Write,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use clap::Parser;
-use miette::{IntoDiagnostic, NamedSource, Result};
+use miette::{IntoDiagnostic, Result};
 
-use crate::lexer::source::SourceInfo;
 use crate::type_checker::{Scope, TypeEnv};
 
 #[derive(clap::Parser)]
@@ -73,9 +71,9 @@ enum Command {
 
 fn build(file_path: &Path, _opts: &BuildOpts) -> Result<PathBuf> {
     let content = std::fs::read_to_string(file_path).unwrap();
-    let name = file_path.to_string_lossy();
+    let _name = file_path.to_string_lossy();
 
-    let mut parser = parser::Parser::new(file_path.to_owned(), &content);
+    let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
     let module = parser.parse()?;
 
     let mut env = TypeEnv::default();
@@ -143,11 +141,19 @@ fn main() -> Result<()> {
 
             let mut tokens = vec![];
             let mut idx = 0;
-            while let Some(token) = lex.read_token() {
-                tokens.push(token);
-                idx += 1;
-                if idx > 0 && idx >= take {
-                    break;
+            while let Some(result) = lex.read_token() {
+                match result {
+                    Ok(token) => {
+                        tokens.push(token);
+                        idx += 1;
+                        if idx > 0 && idx >= take {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("error reading token: {err:?}");
+                        break;
+                    }
                 }
             }
 
@@ -181,7 +187,7 @@ fn main() -> Result<()> {
         }
         Command::DumpAst { file_path } => {
             let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, &content);
+            let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
             dbg!(ast);
         }

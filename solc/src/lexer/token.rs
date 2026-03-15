@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::LazyLock;
@@ -164,7 +163,7 @@ impl<'src> Token<'src> {
     pub fn new(kind: TokenKind, text: &'src str, start_pos: usize) -> Self {
         Self {
             kind,
-            text: text,
+            text,
             span: (start_pos, text.len()).into(),
         }
     }

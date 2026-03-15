@@ -154,10 +154,19 @@ impl TypeEnv {
                 let inner_id = self.type_from_ast_ty(inner);
                 Type::List(inner_id, *size)
             }
-            crate::ast::TyKind::Fn { params, returns, is_extern } => {
-                let param_ids: Box<[TypeId]> = params.iter().map(|p| self.type_from_ast_ty(p)).collect();
+            crate::ast::TyKind::Fn {
+                params,
+                returns,
+                is_extern,
+            } => {
+                let param_ids: Box<[TypeId]> =
+                    params.iter().map(|p| self.type_from_ast_ty(p)).collect();
                 let return_id = self.type_from_ast_ty(returns);
-                Type::Fn { is_extern: *is_extern, params: param_ids, returns: return_id }
+                Type::Fn {
+                    is_extern: *is_extern,
+                    params: param_ids,
+                    returns: return_id,
+                }
             }
         };
         self.types.intern(ty)
@@ -400,7 +409,11 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 pub fn infer_fn(func: &Fn, env: &mut TypeEnv) -> Type {
     Type::Fn {
         is_extern: func.is_extern,
-        params: func.params.iter().map(|(_, ty)| env.type_from_ast_ty(ty)).collect(),
+        params: func
+            .params
+            .iter()
+            .map(|(_, ty)| env.type_from_ast_ty(ty))
+            .collect(),
         returns: env.type_from_ast_ty(&func.return_ty),
     }
 }

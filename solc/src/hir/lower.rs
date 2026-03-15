@@ -267,7 +267,10 @@ pub fn lower_stmnt<'ast>(
                 .params
                 .iter()
                 .map(|(ident, ty)| {
-                    Ok((lower_ident(ident, env, &mut scope)?, env.type_from_ast_ty(ty)))
+                    Ok((
+                        lower_ident(ident, env, &mut scope)?,
+                        env.type_from_ast_ty(ty),
+                    ))
                 })
                 .collect::<Result<Vec<_>>>()?;
 
