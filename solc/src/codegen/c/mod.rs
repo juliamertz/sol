@@ -151,7 +151,6 @@ impl C {
             Type::Bool => "bool",
             Type::List(..) => "List",
             Type::Struct { ident, .. } => ident.as_str(),
-            Type::Var(name) => name.as_str(),
             Type::Ptr(_) => todo!(),
             Type::Fn { .. } | Type::None => todo!(),
         }

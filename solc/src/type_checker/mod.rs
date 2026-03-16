@@ -26,7 +26,7 @@ use ty::*;
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(code(solc::type_checker))]
 pub enum TypeError {
-    #[error("variable not found in scope")]
+    #[error("{ident} not found in scope")]
     NotFound {
         #[source_code]
         src: SourceInfo,
@@ -67,13 +67,30 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
+        lhs_ty: Type,
         #[label("has type `{lhs_ty}`")]
         lhs_span: Span,
-        lhs_ty: Type,
 
+        rhs_ty: Type,
         #[label("has type `{rhs_ty}`")]
         rhs_span: Span,
-        rhs_ty: Type,
+
+        #[help]
+        help: Option<String>,
+    },
+
+    #[error("mismatched element types in list")]
+    HeterogeneousList {
+        #[source_code]
+        src: SourceInfo,
+
+        first_ty: Type,
+        #[label("first element has type `{first_ty}`")]
+        first_span: Span,
+
+        other_ty: Type,
+        #[label("this element has type `{other_ty}`")]
+        other_span: Span,
 
         #[help]
         help: Option<String>,
@@ -139,19 +156,22 @@ impl TypeEnv {
             .and_then(|type_id| self.types.get(type_id))
     }
 
-    pub fn type_from_ast_ty(&mut self, ty: &crate::ast::Ty) -> TypeId {
-        self.type_from_ast_ty_kind(&ty.kind)
-    }
-
-    pub fn type_from_ast_ty_kind(&mut self, kind: &crate::ast::TyKind) -> TypeId {
-        let ty = match kind {
+    pub fn type_from_ast_ty(&mut self, ty: &crate::ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
+        let ty = match &ty.kind {
             crate::ast::TyKind::Int(kind) => Type::Int(kind.into()),
             crate::ast::TyKind::UInt(kind) => Type::UInt(kind.into()),
             crate::ast::TyKind::Bool => Type::Bool,
             crate::ast::TyKind::Str => Type::Str,
-            crate::ast::TyKind::Var(name) => Type::Var(name.clone().boxed()),
+            crate::ast::TyKind::Var(ident) => {
+                let def = scope.get_definition(ident).ok_or(TypeError::NotFound {
+                    src: scope.src.clone(),
+                    ident: ident.to_owned(),
+                    span: ident.span,
+                })?;
+                todo!("ty from var tykind")
+            }
             crate::ast::TyKind::List { inner, size } => {
-                let inner_id = self.type_from_ast_ty(inner);
+                let inner_id = self.type_from_ast_ty(inner, scope)?;
                 Type::List(inner_id, *size)
             }
             crate::ast::TyKind::Fn {
@@ -159,9 +179,12 @@ impl TypeEnv {
                 returns,
                 is_extern,
             } => {
-                let param_ids: Box<[TypeId]> =
-                    params.iter().map(|p| self.type_from_ast_ty(p)).collect();
-                let return_id = self.type_from_ast_ty(returns);
+                let param_ids: Box<[TypeId]> = params
+                    .iter()
+                    .map(|param| self.type_from_ast_ty(param, scope))
+                    .collect::<Result<Vec<_>>>()?
+                    .into();
+                let return_id = self.type_from_ast_ty(returns, scope)?;
                 Type::Fn {
                     is_extern: *is_extern,
                     params: param_ids,
@@ -169,7 +192,8 @@ impl TypeEnv {
                 }
             }
         };
-        self.types.intern(ty)
+
+        Ok(self.types.intern(ty))
     }
 }
 
@@ -348,8 +372,33 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             Ok(consequence_ty)
         }
 
-        Expr::List(List { items: _, .. }) => {
-            todo!()
+        Expr::List(List { items, .. }) => {
+            let mut iter = items.iter();
+            let first_item = iter.next();
+
+            let inner_type = first_item
+                .map(|expr| infer(expr, env, scope))
+                .transpose()?
+                .unwrap_or(TypeId::NONE);
+
+            while let Some(item) = iter.next()
+                && let Some(first_item) = first_item
+            {
+                let ty = infer(item, env, scope)?;
+                if ty != inner_type {
+                    return Err(TypeError::HeterogeneousList {
+                        src: scope.src.clone(),
+                        first_ty: env.types.get(&inner_type).unwrap().clone(),
+                        first_span: first_item.span(),
+                        other_ty: env.types.get(&ty).unwrap().clone(),
+                        other_span: item.span(),
+                        help: Some("pick a type and commit to it".into()),
+                    });
+                }
+            }
+            let ty = Type::List(inner_type, None); // TODO: fixed sized lists
+            let type_id = env.types.intern(ty);
+            Ok(type_id)
         }
 
         Expr::Constructor(Constructor { ident, fields, .. }) => {
@@ -406,16 +455,17 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv) -> Type {
-    Type::Fn {
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<Type> {
+    Ok(Type::Fn {
         is_extern: func.is_extern,
         params: func
             .params
             .iter()
-            .map(|(_, ty)| env.type_from_ast_ty(ty))
-            .collect(),
-        returns: env.type_from_ast_ty(&func.return_ty),
-    }
+            .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
+            .collect::<Result<Vec<_>>>()?
+            .into(),
+        returns: env.type_from_ast_ty(&func.return_ty, scope)?,
+    })
 }
 
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
@@ -424,7 +474,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             let type_id = infer(val, env, scope)?;
 
             if let Some(declared_ty) = ty {
-                let declared_type_id = env.type_from_ast_ty(declared_ty);
+                let declared_type_id = env.type_from_ast_ty(declared_ty, scope)?;
                 if declared_type_id != type_id {
                     return Err(TypeError::InvalidType {
                         src: scope.src.clone(),
@@ -446,7 +496,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         Stmnt::Use(Use { ident: _, .. }) => {}
 
         Stmnt::Fn(func) => {
-            let ty = infer_fn(func, env);
+            let ty = infer_fn(func, env, scope)?;
             let type_id = env.types.intern(ty);
             let def_id = env.definitions.intern(type_id);
             scope.define(&func.ident, def_id);
@@ -455,8 +505,9 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         Stmnt::StructDef(StructDef { ident, fields, .. }) => {
             let field_tys: Box<[(Ident, TypeId)]> = fields
                 .iter()
-                .map(|(ident, ty)| (ident.to_owned(), env.type_from_ast_ty(ty)))
-                .collect();
+                .map(|(ident, ty)| Ok((ident.to_owned(), env.type_from_ast_ty(ty, scope)?)))
+                .collect::<Result<Vec<_>>>()?
+                .into();
             let ty = Type::Struct {
                 ident: ident.to_owned().boxed(),
                 fields: field_tys,

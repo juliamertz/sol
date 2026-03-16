@@ -57,14 +57,10 @@ pub enum Type {
         ident: Box<ast::Ident>,
         fields: Box<[(ast::Ident, TypeId)]>,
     },
-    Var(Box<ast::Ident>),
 }
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Type::Var(ident) => f.write_str(ident.as_str()),
-            _ => std::fmt::Debug::fmt(self, f),
-        }
+        std::fmt::Debug::fmt(self, f)
     }
 }

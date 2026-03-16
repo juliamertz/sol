@@ -42,7 +42,7 @@ pub fn lower_nodes<'ast>(
     let mut inventory = collect(nodes)?;
 
     for func in inventory.take_fns() {
-        let ty = infer_fn(func, env);
+        let ty = infer_fn(func, env, scope)?;
         let type_id = env.types.intern(ty);
         let def_id = env.definitions.intern(type_id);
         scope.define(&func.ident, def_id);
@@ -52,8 +52,9 @@ pub fn lower_nodes<'ast>(
         let field_tys: Box<[(ast::Ident, TypeId)]> = struct_def
             .fields
             .iter()
-            .map(|(ident, ty)| (ident.to_owned(), env.type_from_ast_ty(ty)))
-            .collect();
+            .map(|(ident, ty)| Ok((ident.to_owned(), env.type_from_ast_ty(ty, scope)?)))
+            .collect::<Result<Vec<_>>>()?
+            .into();
         let ty = Type::Struct {
             ident: struct_def.ident.to_owned().boxed(),
             fields: field_tys,
@@ -260,12 +261,12 @@ pub fn lower_stmnt<'ast>(
             let mut scope = scope.new_child();
 
             for (ident, ty) in func.params.iter() {
-                let type_id = env.type_from_ast_ty(ty);
+                let type_id = env.type_from_ast_ty(ty, &scope)?;
                 let def_id = env.definitions.intern(type_id);
                 scope.define(ident, def_id);
             }
 
-            let fn_ty = infer_fn(func, env);
+            let fn_ty = infer_fn(func, env, &scope)?;
             let type_id = env.types.intern(fn_ty);
             let def_id = env.definitions.intern(type_id);
             scope.define(&func.ident, def_id);
@@ -276,7 +277,7 @@ pub fn lower_stmnt<'ast>(
                 .map(|(ident, ty)| {
                     Ok((
                         lower_ident(ident, env, &mut scope)?,
-                        env.type_from_ast_ty(ty),
+                        env.type_from_ast_ty(ty, &scope)?,
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -287,7 +288,7 @@ pub fn lower_stmnt<'ast>(
                 is_extern: func.is_extern,
                 ident: lower_ident(&func.ident, env, &mut scope)?,
                 params: param_ids.into(),
-                return_ty: env.type_from_ast_ty(&func.return_ty),
+                return_ty: env.type_from_ast_ty(&func.return_ty, &scope)?,
                 body: func
                     .body
                     .as_ref()
@@ -302,7 +303,12 @@ pub fn lower_stmnt<'ast>(
             fields: def
                 .fields
                 .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env, scope)?, env.type_from_ast_ty(ty))))
+                .map(|(ident, ty)| {
+                    Ok((
+                        lower_ident(ident, env, scope)?,
+                        env.type_from_ast_ty(ty, scope)?,
+                    ))
+                })
                 .collect::<Result<Vec<_>>>()?
                 .into(),
             impls: inventory.take_impls(&def.ident).into(),

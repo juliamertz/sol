@@ -1,8 +1,8 @@
-use stdio
+use extern stdio
 
-extern func printf(format: Str) -> Int
+extern func printf(format: Str) -> i32
 
-func main() -> Int
+func main() -> i32
     let items = [10, 250, 450]
     printf("0: %d\n", items[0])
     printf("1: %d\n", items[1])
