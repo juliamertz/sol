@@ -193,7 +193,7 @@ impl C {
         buf.push_str(&self.emit_type(env, &list.ty));
         buf.push(')');
         buf.push(',');
-        buf.push_str("8"); // TODO: smart list sizing
+        buf.push('8'); // TODO: smart list sizing
         buf.push(')');
         buf.push(';');
 

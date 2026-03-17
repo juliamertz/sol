@@ -165,7 +165,7 @@ impl TypeEnv {
                     span: ident.span,
                 })?;
                 let type_id = self.definitions.get(def_id).unwrap(); // TODO: handle error
-                return Ok(*type_id)
+                return Ok(*type_id);
             }
             crate::ast::TyKind::List { inner, size } => {
                 let inner_id = self.type_from_ast_ty(inner, scope)?;
