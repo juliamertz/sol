@@ -11,19 +11,24 @@ use wyhash2::WyHash;
 
 use crate::BuildOpts;
 use crate::ast::{LiteralKind, Op, OpKind};
+use crate::codegen::c::compiler::{CcOpts, cc};
 use crate::codegen::{Compiler, Emitter, quote};
 use crate::hir::{BinOp, Block, Call, Expr, Fn, Ident, MemberAccess, Module, Node, Prefix, Stmnt};
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
 use crate::type_checker::{TypeEnv, TypeId};
 
+mod compiler;
+
 const GC_HEADERS: &str = include_str!("include/gc.h");
 const LIST_HEADERS: &str = include_str!("include/list.h");
 
 #[derive(Debug, Error, Diagnostic)]
-#[diagnostic(code(codegen::c))]
 pub enum CodegenError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("cc error: {0}")]
+    #[diagnostic(transparent)]
+    Cc(#[from] compiler::CcError),
 }
 
 pub type Result<T, E = CodegenError> = core::result::Result<T, E>;
@@ -279,7 +284,10 @@ impl C {
         match stmnt {
             Stmnt::Fn(func) => self.emit_fn(buf, env, func),
             Stmnt::Use(r#use) => {
-                assert!(r#use.is_extern, "non extern `use` statements are not supported yet");
+                assert!(
+                    r#use.is_extern,
+                    "non extern `use` statements are not supported yet"
+                );
                 buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
             }
             Stmnt::Ret(ret) => {
@@ -375,21 +383,8 @@ impl Compiler for C {
     type Err = CodegenError;
 
     fn build_exe(&self, source: &str, program: &str, opts: &BuildOpts) -> Result<PathBuf> {
-        let mut hasher = WyHash::with_seed(0);
-        hasher.write(program.as_bytes());
-        hasher.write(source.as_bytes());
-        let program_hash = hasher.finish();
-
         let out_path = opts.outdir.join(program);
-        let hash_path = opts.outdir.join("hash");
-        let tmp_src_path = opts.outdir.join("source.c");
-
-        if let Ok(hash) = fs::read_to_string(&hash_path)
-            && hash == format!("{program_hash:x}")
-        {
-            // TODO: verify hash of output binary, don't just assume it's right
-            return Ok(out_path);
-        };
+        let source_path = opts.outdir.join("source.c");
 
         fs::create_dir_all(&opts.outdir)?;
         let src = if cfg!(debug_assertions) {
@@ -397,33 +392,20 @@ impl Compiler for C {
         } else {
             Cow::Borrowed(source)
         };
-        fs::write(&tmp_src_path, src.as_bytes()).unwrap();
-        fs::write(&hash_path, format!("{program_hash:x}")).unwrap();
+        fs::write(&source_path, src.as_bytes())?;
 
-        // let include_arg = format!("-I{CORE_INCLUDE_PATH}");
-        let mut args = vec![
-            tmp_src_path.to_str().unwrap(),
-            "-o",
-            out_path.to_str().expect("valid out path"),
-        ];
+        let cc_opts = CcOpts::new(&out_path)
+            .link_time_optimization(true)
+            .warnings(if cfg!(debug_assertions) {
+                vec!["all", "extra"]
+            } else {
+                vec![]
+            });
 
-        if cfg!(debug_assertions) {
-            args.extend_from_slice(&["-Wall", "-Wextra"]);
-        }
-
-        if opts.release {
-            args.extend_from_slice(&["-O3", "-flto"]);
-        }
-
-        let handle = std::process::Command::new("cc")
-            .args(&args)
-            .spawn()
-            .expect("to start cc");
-
-        let _output = handle.wait_with_output().expect("cc failed to build");
+        let _output = cc(&source_path, &cc_opts)?;
 
         if opts.cleanup {
-            fs::remove_file(tmp_src_path).unwrap();
+            fs::remove_file(source_path)?;
         }
 
         Ok(out_path)
