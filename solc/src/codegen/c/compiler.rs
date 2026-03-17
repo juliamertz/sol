@@ -1,5 +1,3 @@
-#![allow(unused_assignments)]
-
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -55,7 +53,7 @@ impl<'a> CcOpts<'a> {
     }
 }
 
-pub fn cc<'a>(source: &Path, opts: &CcOpts<'a>) -> Result<&'a Path, CcError> {
+pub fn cc(source: &Path, opts: &CcOpts<'_>) -> Result<(), CcError> {
     let mut root_cmd = Command::new("cc");
     let mut cmd = root_cmd
         .env_clear()
@@ -97,5 +95,5 @@ pub fn cc<'a>(source: &Path, opts: &CcOpts<'a>) -> Result<&'a Path, CcError> {
         });
     }
 
-    Ok(opts.out_path)
+    Ok(())
 }

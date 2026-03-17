@@ -13,7 +13,7 @@ id!(HirId);
 #[derive(Debug)]
 pub struct Ident<'ast> {
     pub id: HirId,
-    pub ty: TypeId, // TODO: do we even need to store the type for an ident?
+    pub ty: TypeId,
     pub span: &'ast Span,
     pub inner: &'ast str,
 }

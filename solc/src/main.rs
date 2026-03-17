@@ -1,3 +1,7 @@
+// required for miette `Diagnostic` derive
+// see: https://github.com/rust-lang/rust/issues/147648
+#![allow(unused_assignments)]
+
 mod ast;
 mod codegen;
 mod ext;

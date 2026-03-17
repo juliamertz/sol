@@ -1,7 +1,3 @@
-// required for miette `Diagnostic` derive
-// see: https://github.com/rust-lang/rust/issues/147648
-#![allow(unused_assignments)]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -163,12 +159,13 @@ impl TypeEnv {
             crate::ast::TyKind::Bool => Type::Bool,
             crate::ast::TyKind::Str => Type::Str,
             crate::ast::TyKind::Var(ident) => {
-                let def = scope.get_definition(ident).ok_or(TypeError::NotFound {
+                let def_id = scope.get_definition(ident).ok_or(TypeError::NotFound {
                     src: scope.src.clone(),
                     ident: ident.to_owned(),
                     span: ident.span,
                 })?;
-                todo!("ty from var tykind")
+                let type_id = self.definitions.get(def_id).unwrap(); // TODO: handle error
+                return Ok(*type_id)
             }
             crate::ast::TyKind::List { inner, size } => {
                 let inner_id = self.type_from_ast_ty(inner, scope)?;

@@ -193,7 +193,7 @@ impl C {
         buf.push_str(&self.emit_type(env, &list.ty));
         buf.push(')');
         buf.push(',');
-        buf.push_str("10"); // TODO: smart list sizing
+        buf.push_str("8"); // TODO: smart list sizing
         buf.push(')');
         buf.push(';');
 
@@ -389,7 +389,7 @@ impl Compiler for C {
                 vec![]
             });
 
-        let _output = cc(&source_path, &cc_opts)?;
+        cc(&source_path, &cc_opts)?;
 
         if opts.cleanup {
             fs::remove_file(source_path)?;

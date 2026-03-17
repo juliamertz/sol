@@ -305,7 +305,12 @@ pub fn lower_stmnt<'ast>(
                 .iter()
                 .map(|(ident, ty)| {
                     Ok((
-                        lower_ident(ident, env, scope)?,
+                        hir::Ident {
+                            id: HirId::DUMMY,
+                            ty: TypeId::NONE,
+                            span: &ident.span,
+                            inner: &ident.inner,
+                        },
                         env.type_from_ast_ty(ty, scope)?,
                     ))
                 })

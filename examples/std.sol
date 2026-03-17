@@ -1,11 +1,11 @@
-extern func write() -> Int
+extern func write() -> i32
 
 struct String =
-  inner : Int[]
-  len : Int
+  inner : u8[]
+  len : u64
 end
 
-func main() -> Int
+func main() -> i32
   let l : String = String { inner: [], len: 0 }
 
   write(1, "hello", 6)
