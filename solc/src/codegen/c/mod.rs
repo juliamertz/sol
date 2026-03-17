@@ -1,19 +1,19 @@
 use std::borrow::Cow;
 use std::fs;
-use std::hash::Hasher;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 
 use miette::Diagnostic;
 use thiserror::Error;
-use wyhash2::WyHash;
 
 use crate::BuildOpts;
 use crate::ast::{LiteralKind, Op, OpKind};
 use crate::codegen::c::compiler::{CcOpts, cc};
 use crate::codegen::{Compiler, Emitter, quote};
-use crate::hir::{BinOp, Block, Call, Expr, Fn, Ident, MemberAccess, Module, Node, Prefix, Stmnt};
+use crate::hir::{
+    BinOp, Block, Call, Expr, Fn, Ident, List, MemberAccess, Module, Node, Prefix, Stmnt,
+};
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
 use crate::type_checker::{TypeEnv, TypeId};
 
@@ -181,6 +181,39 @@ impl C {
         buf.push_str(ident);
     }
 
+    fn emit_list_expr(&mut self, buf: &mut String, env: &TypeEnv, list: &List<'_>) {
+        let tmp_name = "inner"; // TODO: implement some system to avoid naming conflicts
+        buf.push_str("({");
+        buf.push_str("List");
+        buf.push(' ');
+        buf.push_str(tmp_name);
+        buf.push('=');
+        buf.push_str("list_alloc");
+        buf.push_str("(sizeof(");
+        buf.push_str(&self.emit_type(env, &list.ty));
+        buf.push(')');
+        buf.push(',');
+        buf.push_str("10"); // TODO: smart list sizing
+        buf.push(')');
+        buf.push(';');
+
+        for item in list.items.iter() {
+            buf.push_str("list_push_rval");
+            buf.push('(');
+            buf.push('&');
+            buf.push_str(tmp_name);
+            buf.push(',');
+            self.emit_expr(buf, env, item);
+            buf.push(')');
+            buf.push(';');
+        }
+
+        buf.push_str(tmp_name);
+        buf.push(';');
+
+        buf.push_str("})");
+    }
+
     fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
         match expr {
             Expr::Ident(ident) => self.emit_ident(buf, env, ident),
@@ -235,33 +268,7 @@ impl C {
 
             Expr::Block(block) => self.emit_block(buf, env, block),
 
-            Expr::List(list) => {
-                let tmp_name = "inner"; // TODO: implement some system to avoid naming conflicts
-                buf.push_str("({");
-                buf.push_str("List");
-                buf.push(' ');
-                buf.push_str(tmp_name);
-                buf.push('=');
-                buf.push_str("list_alloc");
-
-                for item in list.items.iter() {
-                    buf.push_str("list_push_rval");
-                    buf.push('(');
-                    buf.push('&');
-                    buf.push_str(tmp_name);
-                    buf.push(',');
-                    self.emit_expr(buf, env, item);
-                    buf.push(')');
-
-                    self.node_marker.emit.push_str(buf);
-                    self.node_marker.emit.push(';');
-                }
-
-                buf.push_str(tmp_name);
-                buf.push(';');
-
-                buf.push_str("})");
-            }
+            Expr::List(list) => self.emit_list_expr(buf, env, list),
 
             Expr::Ref(inner) => {
                 buf.push('&');
@@ -297,27 +304,7 @@ impl C {
                 buf.push(';');
             }
             Stmnt::Let(binding) => {
-                // TODO: pull out into seperate function
                 let type_id = binding.val.type_id();
-                if let Expr::List(list) = &binding.val {
-                    for item in list.items.iter() {
-                        let mut buf = String::new();
-
-                        buf.push_str("list_push_rval");
-                        buf.push('(');
-                        buf.push('&');
-                        buf.push_str(binding.ident.as_str());
-                        buf.push(',');
-                        self.emit_expr(&mut buf, env, item);
-                        buf.push(')');
-
-                        self.node_marker.emit.push_str(&buf);
-                        self.node_marker.emit.push(';');
-                    }
-
-                    return;
-                }
-
                 buf.push_str(self.emit_type(env, type_id).as_str());
                 buf.push(' ');
                 buf.push_str(&self.prefix(&binding.ident));
