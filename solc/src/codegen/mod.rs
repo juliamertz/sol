@@ -1,16 +1,19 @@
 pub mod c;
 
-use crate::BuildOpts;
 use crate::hir;
 use crate::type_checker::TypeEnv;
 
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use clap::ValueEnum;
-
 pub trait Emitter {
     fn emit(&mut self, env: TypeEnv, input: &hir::Module<'_>) -> String;
+}
+
+pub struct BuildOpts {
+    pub release: bool,
+    pub outdir: PathBuf,
+    pub cleanup: bool,
 }
 
 pub trait Compiler {
@@ -22,13 +25,6 @@ pub trait Compiler {
     fn format<'src>(&self, source: &'src str) -> Cow<'src, str> {
         Cow::Borrowed(source)
     }
-}
-
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, ValueEnum)]
-pub enum ReleaseType {
-    Fast,
-    #[default]
-    Debug,
 }
 
 pub fn quote(text: impl AsRef<str>) -> String {

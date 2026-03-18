@@ -8,7 +8,6 @@ name = "solc"
 path = "src/main.rs"
 
 [dependencies]
-solc-macros = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 clap = { version = "4", default-features = false, features = [
@@ -16,4 +15,4 @@ clap = { version = "4", default-features = false, features = [
   "derive",
   "help",
 ] }
-wyhash2 = "0.2"
+strum = { version = "0.28.0", features = ["derive"] }

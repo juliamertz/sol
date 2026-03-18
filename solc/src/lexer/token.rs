@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::LazyLock;
 
+use strum::EnumIs;
+
 use crate::lexer::source::Span;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
 pub enum TokenKind {
     Eof,
     Newline,
@@ -149,6 +151,10 @@ impl Token<'_> {
             text: self.text.to_string(),
             span: self.span,
         }
+    }
+
+    pub fn kind(&self) -> &TokenKind {
+        &self.kind
     }
 }
 

@@ -1,17 +1,3 @@
-// required for miette `Diagnostic` derive
-// see: https://github.com/rust-lang/rust/issues/147648
-#![allow(unused_assignments)]
-
-mod ast;
-mod codegen;
-mod ext;
-mod hir;
-mod lexer;
-mod parser;
-mod type_checker;
-#[macro_use]
-mod interner;
-
 use std::{
     io::Write,
     os::unix::fs::MetadataExt,
@@ -21,8 +7,11 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
-use crate::{
-    codegen::{Compiler, Emitter},
+use solc::{
+    codegen::{self, Compiler, Emitter},
+    hir,
+    lexer,
+    parser,
     type_checker::{Scope, TypeEnv},
 };
 
@@ -46,6 +35,16 @@ struct BuildOpts {
     /// Whether to clean up build artifacts
     #[arg(short, long)]
     cleanup: bool,
+}
+
+impl From<&BuildOpts> for codegen::BuildOpts {
+    fn from(opts: &BuildOpts) -> Self {
+        Self {
+            release: opts.release,
+            outdir: opts.outdir.clone(),
+            cleanup: opts.cleanup,
+        }
+    }
 }
 
 #[derive(clap::Subcommand)]
@@ -91,7 +90,7 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut c = codegen::c::C::default();
     let out = c.emit(env, &hir);
 
-    let outpath = c.build_exe(&out, "bin", opts)?;
+    let outpath = c.build_exe(&out, "bin", &codegen::BuildOpts::from(opts))?;
     Ok(outpath)
 }
 

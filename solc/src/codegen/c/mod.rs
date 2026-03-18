@@ -7,10 +7,9 @@ use std::process::Stdio;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::BuildOpts;
 use crate::ast::{LiteralKind, Op, OpKind};
 use crate::codegen::c::compiler::{CcOpts, cc};
-use crate::codegen::{Compiler, Emitter, quote};
+use crate::codegen::{BuildOpts, Compiler, Emitter, quote};
 use crate::hir::{
     BinOp, Block, Call, Expr, Fn, Ident, List, MemberAccess, Module, Node, Prefix, Stmnt,
 };
