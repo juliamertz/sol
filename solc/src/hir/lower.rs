@@ -113,6 +113,16 @@ pub fn lower_ident<'ast>(
     })
 }
 
+/// lower identifier without inferring it's type.
+pub fn lower_untyped_ident<'ast>(ident: &'ast ast::Ident) -> hir::Ident<'ast> {
+    hir::Ident {
+        id: HirId::DUMMY,
+        ty: TypeId::NONE,
+        span: &ident.span,
+        inner: &ident.inner,
+    }
+}
+
 pub fn lower_expr<'ast>(
     expr: &'ast ast::Expr,
     env: &mut TypeEnv,
@@ -194,10 +204,7 @@ pub fn lower_expr<'ast>(
                 .fields
                 .iter()
                 .map(|(ident, expr)| {
-                    Ok((
-                        lower_ident(ident, env, scope)?,
-                        lower_expr(expr, env, scope)?,
-                    ))
+                    Ok((lower_untyped_ident(ident), lower_expr(expr, env, scope)?))
                 })
                 .collect::<Result<Vec<_>>>()?
                 .into(),
@@ -304,15 +311,7 @@ pub fn lower_stmnt<'ast>(
                 .fields
                 .iter()
                 .map(|(ident, ty)| {
-                    Ok((
-                        hir::Ident {
-                            id: HirId::DUMMY,
-                            ty: TypeId::NONE,
-                            span: &ident.span,
-                            inner: &ident.inner,
-                        },
-                        env.type_from_ast_ty(ty, scope)?,
-                    ))
+                    Ok((lower_untyped_ident(ident), env.type_from_ast_ty(ty, scope)?))
                 })
                 .collect::<Result<Vec<_>>>()?
                 .into(),
