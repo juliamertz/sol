@@ -113,14 +113,19 @@ pub fn lower_ident<'ast>(
     })
 }
 
-/// lower identifier without inferring it's type.
-pub fn lower_untyped_ident<'ast>(ident: &'ast ast::Ident) -> hir::Ident<'ast> {
+/// lower ident with a predetermined type
+pub fn lower_typed_ident<'ast>(ident: &'ast ast::Ident, ty: TypeId) -> hir::Ident<'ast> {
     hir::Ident {
         id: HirId::DUMMY,
-        ty: TypeId::NONE,
+        ty,
         span: &ident.span,
         inner: &ident.inner,
     }
+}
+
+/// lower identifier without inferring it's type.
+pub fn lower_untyped_ident<'ast>(ident: &'ast ast::Ident) -> hir::Ident<'ast> {
+    lower_typed_ident(ident, TypeId::NONE)
 }
 
 pub fn lower_expr<'ast>(
@@ -214,7 +219,7 @@ pub fn lower_expr<'ast>(
             ty,
             span: &member_access.span,
             lhs: lower_expr(&member_access.lhs, env, scope)?.boxed(),
-            ident: lower_ident(&member_access.ident, env, scope)?,
+            ident: lower_typed_ident(&member_access.ident, ty),
         }),
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env, scope)?.into()),
     };
