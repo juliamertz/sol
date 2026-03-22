@@ -11,7 +11,7 @@ use crate::ast::{LiteralKind, Op, OpKind};
 use crate::codegen::c::compiler::{CcOpts, cc};
 use crate::codegen::{BuildOpts, Compiler, Emitter, quote};
 use crate::hir::{
-    BinOp, Block, Call, Expr, Fn, Ident, List, MemberAccess, Module, Node, Prefix, Stmnt,
+    BinOp, Block, Call, Expr, Fn, Ident, Item, List, MemberAccess, Module, Prefix, Stmnt,
 };
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
 use crate::type_checker::{TypeEnv, TypeId};
@@ -64,8 +64,8 @@ impl Emitter for C {
             buf.push_str(&format!("#include \"{}\"\n", path.to_str().unwrap()));
         }
 
-        for node in hir.nodes.iter() {
-            self.emit_node(&mut buf, &env, node);
+        for item in hir.items.iter() {
+            self.emit_item(&mut buf, &env, item);
         }
 
         buf
@@ -119,15 +119,32 @@ impl C {
         buf.push(')');
     }
 
-    fn emit_node(&mut self, buf: &mut String, env: &TypeEnv, node: &Node) {
+    fn emit_item(&mut self, buf: &mut String, env: &TypeEnv, item: &Item) {
         self.node_marker.pos = Some(buf.len());
 
-        match node {
-            Node::Expr(expr) => {
-                self.emit_expr(buf, env, expr);
+        match item {
+            Item::Fn(func) => self.emit_fn(buf, env, func),
+            Item::Use(r#use) => {
+                assert!(
+                    r#use.is_extern,
+                    "non extern `use` statements are not supported yet"
+                );
+                buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
+            }
+            Item::StructDef(strct) => {
+                buf.push_str("typedef struct ");
+                buf.push_str(strct.name.as_str());
+                buf.push('{');
+                for (ident, ty) in strct.fields.iter() {
+                    buf.push_str(&self.emit_type(env, ty));
+                    buf.push(' ');
+                    buf.push_str(&self.prefix(ident));
+                    buf.push(';');
+                }
+                buf.push('}');
+                buf.push_str(strct.name.as_str());
                 buf.push(';');
             }
-            Node::Stmnt(stmnt) => self.emit_stmnt(buf, env, stmnt),
         }
 
         if let Some(pos) = self.node_marker.pos {
@@ -154,16 +171,17 @@ impl C {
             Type::Str => "char *",
             Type::Bool => "bool",
             Type::List(..) => "List",
-            Type::Struct { ident, .. } => ident.as_str(),
+            Type::Struct { name, .. } => name.as_str(),
             Type::Ptr(_) => todo!(),
-            Type::Fn { .. } | Type::None => todo!(),
+            Type::Fn { .. } => todo!(),
+            Type::None => "__NONE__",
         }
         .into()
     }
 
     fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
-        for node in block.nodes.iter() {
-            self.emit_node(buf, env, node);
+        for stmnt in block.nodes.iter() {
+            self.emit_stmnt(buf, env, stmnt);
         }
     }
 
@@ -231,14 +249,14 @@ impl C {
                 buf.push_str("if(");
                 self.emit_expr(buf, env, &r#if.condition);
                 buf.push_str("){");
-                for node in r#if.consequence.nodes.iter() {
-                    self.emit_node(buf, env, node);
+                for stmnt in r#if.consequence.nodes.iter() {
+                    self.emit_stmnt(buf, env, stmnt);
                 }
                 buf.push('}');
                 if let Some(ref alternative) = r#if.alternative {
                     buf.push_str("else{");
-                    for node in alternative.nodes.iter() {
-                        self.emit_node(buf, env, node);
+                    for stmnt in alternative.nodes.iter() {
+                        self.emit_stmnt(buf, env, stmnt);
                     }
                     buf.push('}');
                 }
@@ -288,20 +306,6 @@ impl C {
 
     fn emit_stmnt(&mut self, buf: &mut String, env: &TypeEnv, stmnt: &Stmnt) {
         match stmnt {
-            Stmnt::Fn(func) => self.emit_fn(buf, env, func),
-            Stmnt::Use(r#use) => {
-                assert!(
-                    r#use.is_extern,
-                    "non extern `use` statements are not supported yet"
-                );
-                buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
-            }
-            Stmnt::Ret(ret) => {
-                buf.push_str("return");
-                buf.push(' ');
-                self.emit_expr(buf, env, &ret.val);
-                buf.push(';');
-            }
             Stmnt::Let(binding) => {
                 let type_id = binding.val.type_id();
                 buf.push_str(self.emit_type(env, type_id).as_str());
@@ -311,18 +315,14 @@ impl C {
                 self.emit_expr(buf, env, &binding.val);
                 buf.push(';');
             }
-            Stmnt::StructDef(strct) => {
-                buf.push_str("typedef struct ");
-                buf.push_str(strct.ident.as_str());
-                buf.push('{');
-                for (ident, ty) in strct.fields.iter() {
-                    buf.push_str(&self.emit_type(env, ty));
-                    buf.push(' ');
-                    buf.push_str(&self.prefix(ident));
-                    buf.push(';');
-                }
-                buf.push('}');
-                buf.push_str(strct.ident.as_str());
+            Stmnt::Ret(ret) => {
+                buf.push_str("return");
+                buf.push(' ');
+                self.emit_expr(buf, env, &ret.val);
+                buf.push(';');
+            }
+            Stmnt::Expr(expr) => {
+                self.emit_expr(buf, env, expr);
                 buf.push(';');
             }
         }
@@ -354,9 +354,7 @@ impl C {
 
         if let Some(ref body) = func.body {
             self.emit_block(buf, env, body);
-            if func.ident.as_str() == "main"
-                && !matches!(body.nodes.last().unwrap(), Node::Stmnt(Stmnt::Ret(_)))
-            {
+            if func.ident.as_str() == "main" && !matches!(body.nodes.last(), Some(Stmnt::Ret(_))) {
                 buf.push_str("return 0;");
             }
         }

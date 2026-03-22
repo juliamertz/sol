@@ -54,7 +54,7 @@ pub enum Type {
         returns: TypeId,
     },
     Struct {
-        ident: Box<ast::Ident>,
+        name: Box<ast::Name>, // TODO: this field should probably be removed but we're still using it in places to pass around the name
         fields: Box<[(ast::Ident, TypeId)]>,
     },
 }

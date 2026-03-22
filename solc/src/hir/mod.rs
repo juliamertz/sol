@@ -2,7 +2,6 @@ use crate::lexer::source::Span;
 use crate::type_checker::TypeId;
 use crate::{ast, id};
 
-mod collect;
 mod lower;
 
 #[doc(inline)]
@@ -14,6 +13,13 @@ id!(HirId);
 pub struct Ident<'ast> {
     pub id: HirId,
     pub ty: TypeId,
+    pub span: &'ast Span,
+    pub inner: &'ast str,
+}
+
+#[derive(Debug)]
+pub struct Name<'ast> {
+    pub id: HirId,
     pub span: &'ast Span,
     pub inner: &'ast str,
 }
@@ -31,7 +37,7 @@ pub struct Block<'ast> {
     pub id: HirId,
     pub ty: TypeId,
     pub span: &'ast Span,
-    pub nodes: Box<[Node<'ast>]>,
+    pub nodes: Box<[Stmnt<'ast>]>,
 }
 
 #[derive(Debug)]
@@ -163,7 +169,7 @@ pub struct Fn<'ast> {
 pub struct StructDef<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
-    pub ident: Ident<'ast>,
+    pub name: Name<'ast>,
     pub fields: Box<[(Ident<'ast>, TypeId)]>,
     pub impls: Box<[&'ast ast::Impl]>, // TODO: This should probably also be lowered...
 }
@@ -172,23 +178,28 @@ pub struct StructDef<'ast> {
 pub enum Stmnt<'ast> {
     Let(Let<'ast>),
     Ret(Ret<'ast>),
+    Expr(Expr<'ast>),
+}
+
+#[derive(Debug)]
+pub enum Item<'ast> {
     Use(Use<'ast>),
     Fn(Fn<'ast>),
     StructDef(StructDef<'ast>),
 }
 
 #[derive(Debug)]
-pub enum Node<'ast> {
-    Expr(Expr<'ast>),
-    Stmnt(Stmnt<'ast>),
-}
-
-#[derive(Debug)]
 pub struct Module<'ast> {
-    pub nodes: Box<[Node<'ast>]>,
+    pub items: Box<[Item<'ast>]>,
 }
 
 impl Ident<'_> {
+    pub fn as_str(&self) -> &str {
+        self.inner
+    }
+}
+
+impl Name<'_> {
     pub fn as_str(&self) -> &str {
         self.inner
     }

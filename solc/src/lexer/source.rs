@@ -1,33 +1,54 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use miette::{NamedSource, SourceCode};
-
-/// Cheaply clonable wrapper of `miette::NamedSource`
 #[derive(Clone)]
-pub struct SourceInfo(Arc<NamedSource<String>>);
+pub struct SourceInfo {
+    name: Arc<str>,
+    source: Arc<str>,
+}
 
 impl SourceInfo {
-    pub fn new(name: impl AsRef<str>, source: String) -> Self {
-        Self(Arc::new(NamedSource::new(name, source)))
+    pub fn new(name: impl Into<Arc<str>>, source: impl Into<Arc<str>>) -> Self {
+        Self {
+            name: name.into(),
+            source: source.into(),
+        }
+    }
+
+    pub fn inner(&self) -> &str {
+        &self.source
     }
 }
 
-impl SourceCode for SourceInfo {
+impl std::fmt::Debug for SourceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceInfo")
+            .field("name", &self.name)
+            .field("source", &"<redacted>");
+        Ok(())
+    }
+}
+
+impl miette::SourceCode for SourceInfo {
     fn read_span<'a>(
         &'a self,
         span: &miette::SourceSpan,
         context_lines_before: usize,
         context_lines_after: usize,
     ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-        self.0
-            .read_span(span, context_lines_before, context_lines_after)
-    }
-}
-
-impl Debug for SourceInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple(self.0.name()).finish()
+        let inner_contents =
+            self.inner()
+                .read_span(span, context_lines_before, context_lines_after)?;
+        let mut contents = miette::MietteSpanContents::new_named(
+            self.name.to_string(),
+            inner_contents.data(),
+            *inner_contents.span(),
+            inner_contents.line(),
+            inner_contents.column(),
+            inner_contents.line_count(),
+        );
+        contents = contents.with_language("sol");
+        Ok(Box::new(contents))
     }
 }
 

@@ -131,7 +131,7 @@ impl<'src> Parser<'src> {
     }
 
     pub fn parse(&mut self) -> Result<Module> {
-        let mut nodes = vec![];
+        let mut items = vec![];
 
         loop {
             if self.at(TokenKind::Eof) {
@@ -139,14 +139,15 @@ impl<'src> Parser<'src> {
             }
 
             self.skip_whitespace()?;
-            match self.node() {
-                Ok(node) => nodes.push(node),
+            match self.item() {
+                Ok(item) => items.push(item),
                 Err(err) => return Err(err),
             }
         }
 
-        let nodes = Arc::from(nodes);
-        Ok(Module { nodes })
+        Ok(Module {
+            items: Arc::from(items),
+        })
     }
 
     fn advance(&mut self) -> Result<Option<Token<'src>>> {
@@ -204,24 +205,24 @@ impl<'src> Parser<'src> {
         Ok(())
     }
 
-    pub fn node(&mut self) -> Result<Node> {
-        let node = if matches!(
-            self.curr.kind,
-            TokenKind::Ret
-                | TokenKind::Use
-                | TokenKind::Fn
-                | TokenKind::Extern
-                | TokenKind::Let
-                | TokenKind::Struct
-        ) {
-            Node::Stmnt(self.stmnt()?)
-        } else {
-            Node::Expr(self.expr(Prec::default())?)
+    pub fn item(&mut self) -> Result<Item> {
+        let item = match self.curr.kind {
+            TokenKind::Fn | TokenKind::Extern => Item::Fn(self.func()?),
+            TokenKind::Use => Item::Use(self.r#use()?),
+            TokenKind::Struct => Item::StructDef(self.struct_def()?),
+            TokenKind::Impl => Item::Impl(self.imp()?),
+            _ => {
+                return Err(ParseError::Todo {
+                    src: self.lex.source(),
+                    token: self.curr.owned(),
+                    span: self.curr.span,
+                });
+            }
         };
 
         self.skip_whitespace()?;
 
-        Ok(node)
+        Ok(item)
     }
 
     fn block(&mut self) -> Result<Block> {
@@ -231,7 +232,7 @@ impl<'src> Parser<'src> {
             if self.curr.kind.is_terminator() {
                 break;
             }
-            nodes.push(self.node()?);
+            nodes.push(self.stmnt()?);
         }
 
         let nodes = Arc::from(nodes);
@@ -248,6 +249,14 @@ impl<'src> Parser<'src> {
             span: token.span,
             inner: Arc::from(token.text),
             is_extern: false,
+        })
+    }
+
+    fn name(&mut self) -> Result<Name> {
+        let token = self.consume(TokenKind::Ident)?;
+        Ok(Name {
+            span: token.span,
+            inner: Arc::from(token.text),
         })
     }
 
@@ -321,7 +330,7 @@ impl<'src> Parser<'src> {
             let span = self.curr.span;
             let mut nodes = vec![];
             while self.curr.kind != TokenKind::End {
-                nodes.push(self.node()?);
+                nodes.push(self.stmnt()?);
             }
 
             self.consume(TokenKind::End)?;
@@ -333,7 +342,6 @@ impl<'src> Parser<'src> {
         };
 
         let params = Arc::from(params);
-        let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
         Ok(Fn {
             is_extern,
@@ -341,7 +349,6 @@ impl<'src> Parser<'src> {
             params,
             return_ty,
             body,
-            id,
             span,
         })
     }
@@ -355,10 +362,8 @@ impl<'src> Parser<'src> {
         } else {
             self.ident()?
         };
-        let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
         Ok(Use {
-            id,
             span,
             is_extern,
             ident,
@@ -415,20 +420,18 @@ impl<'src> Parser<'src> {
 
     fn stmnt(&mut self) -> Result<Stmnt> {
         let stmnt = match self.curr.kind {
-            TokenKind::Fn | TokenKind::Extern => Stmnt::Fn(self.func()?),
-            TokenKind::Use => Stmnt::Use(self.r#use()?),
             TokenKind::Let => Stmnt::Let(self.r#let()?),
-            TokenKind::Struct => Stmnt::StructDef(self.struct_def()?),
             TokenKind::Ret => {
                 let span = self.curr.span;
                 self.consume(TokenKind::Ret)?;
                 let val = self.expr(Prec::default())?;
-                let id = self.ctx.next_id();
                 let span = span.enclosing_to(&self.curr.span);
-                Stmnt::Ret(Ret { val, id, span })
+                Stmnt::Ret(Ret { val, span })
             }
-            _ => panic!("TODO: {}", self.curr.kind),
+            _ => Stmnt::Expr(self.expr(Prec::default())?),
         };
+
+        self.skip_whitespace()?;
 
         Ok(stmnt)
     }
@@ -438,22 +441,19 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Let)?;
         let ident = self.ident()?;
 
-        let mut ty = None;
-        if self.at(TokenKind::Colon) {
-            self.consume(TokenKind::Colon)?;
-            ty = Some(self.ty()?);
-        }
+        let ty = self
+            .accept(TokenKind::Colon)?
+            .map(|_| self.ty())
+            .transpose()?;
 
         self.consume(TokenKind::Assign)?;
         let val = self.expr(Prec::Lowest)?;
-        let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
 
         Ok(Let {
             ident,
             ty,
             val,
-            id,
             span,
         })
     }
@@ -501,7 +501,6 @@ impl<'src> Parser<'src> {
 
     fn op(&mut self) -> Result<(Op, Prec)> {
         let token = self.curr.to_owned();
-        let id = self.ctx.next_id();
         let prec = Prec::from(&token);
         let span = token.span;
 
@@ -524,7 +523,7 @@ impl<'src> Parser<'src> {
 
         self.advance()?;
 
-        let op = Op { id, span, kind };
+        let op = Op { span, kind };
         Ok((op, prec))
     }
 
@@ -694,7 +693,7 @@ impl<'src> Parser<'src> {
     }
 
     fn list(&mut self) -> Result<List> {
-        let span = self.curr.span;
+        let span = self.curr.span();
         self.consume(TokenKind::LBracket)?;
         let items = self.expr_list()?;
         let tok = self.consume(TokenKind::RBracket)?;
@@ -706,22 +705,46 @@ impl<'src> Parser<'src> {
     }
 
     fn struct_def(&mut self) -> Result<StructDef> {
-        let span = self.curr.span;
+        let span = self.curr.span();
         self.consume(TokenKind::Struct)?;
-        let ident = self.ident()?;
+        let name = self.name()?;
         self.consume(TokenKind::Assign)?;
         self.skip_whitespace()?;
         let fields = self.typed_params()?;
         let tok = self.consume(TokenKind::End)?;
 
         let fields = Arc::from(fields);
-        let id = self.ctx.next_id();
         let span = span.enclosing_to(&tok.span());
         Ok(StructDef {
-            ident,
+            name,
             fields,
-            id,
             span,
+        })
+    }
+
+    fn imp(&mut self) -> Result<Impl> {
+        let span = self.curr.span();
+        self.consume(TokenKind::Impl)?;
+        let ident = self.ident()?;
+        self.consume(TokenKind::Assign)?;
+        self.skip_whitespace()?;
+
+        let mut items = vec![];
+        loop {
+            self.skip_whitespace()?;
+            if self.at(TokenKind::End) {
+                break;
+            }
+
+            items.push(self.func()?);
+        }
+
+        let tok = self.consume(TokenKind::End)?;
+        let span = span.enclosing_to(&tok.span());
+        Ok(Impl {
+            span,
+            ident,
+            items: Arc::from(items),
         })
     }
 

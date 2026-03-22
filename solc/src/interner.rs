@@ -25,7 +25,11 @@ macro_rules! id {
 }
 
 pub trait Strategy<K, V> {
-    fn id_for(&mut self, value: &V) -> K;
+    fn key_for(&mut self, value: &V) -> K;
+
+    fn default_values() -> Option<HashMap<K, V>> {
+        None
+    }
 }
 
 #[derive(Debug, Default)]
@@ -37,7 +41,7 @@ impl<K, V> Strategy<K, V> for DefaultStrategy
 where
     K: Id,
 {
-    fn id_for(&mut self, _value: &V) -> K {
+    fn key_for(&mut self, _value: &V) -> K {
         let id = K::new(self.idx);
         self.idx += 1;
         id
@@ -55,10 +59,9 @@ where
     S: Strategy<K, V> + Default,
 {
     fn default() -> Self {
-        Self {
-            strategy: Default::default(),
-            map: Default::default(),
-        }
+        let strategy = S::default();
+        let map = S::default_values().unwrap_or_default();
+        Self { strategy, map }
     }
 }
 
@@ -77,7 +80,7 @@ where
 
     pub fn intern(&mut self, value: impl Into<V>) -> K {
         let value = value.into();
-        let id = self.strategy.id_for(&value);
+        let id = self.strategy.key_for(&value);
         self.map.insert(id, value);
         id
     }

@@ -96,7 +96,10 @@ fn brackets_and_delimiters() {
     };
 
     let kinds: Vec<_> = tokens.iter().map(|t| *t.kind()).collect();
-    assert_eq!(kinds, vec![LBracket, Int, Comma, Int, Comma, Int, RBracket, Eof]);
+    assert_eq!(
+        kinds,
+        vec![LBracket, Int, Comma, Int, Comma, Int, RBracket, Eof]
+    );
 }
 
 #[test]
@@ -152,7 +155,9 @@ fn struct_definition() {
         .collect();
     assert_eq!(
         kinds,
-        vec![Struct, Ident, Ident, Colon, Ident, Ident, Colon, Ident, End, Eof]
+        vec![
+            Struct, Ident, Ident, Colon, Ident, Ident, Colon, Ident, End, Eof
+        ]
     );
 }
 
@@ -196,7 +201,9 @@ fn extern_func_declaration() {
     let kinds: Vec<_> = tokens.iter().map(|t| *t.kind()).collect();
     assert_eq!(
         kinds,
-        vec![Extern, Fn, Ident, LParen, Ident, Colon, Ident, RParen, Arrow, Ident, Eof]
+        vec![
+            Extern, Fn, Ident, LParen, Ident, Colon, Ident, RParen, Arrow, Ident, Eof
+        ]
     );
 }
 
@@ -285,9 +292,7 @@ fn nested_function_calls() {
     assert_eq!(
         kinds,
         vec![
-            Ident, LParen, Ident, Sub, Int, RParen,
-            Add,
-            Ident, LParen, Ident, Sub, Int, RParen,
+            Ident, LParen, Ident, Sub, Int, RParen, Add, Ident, LParen, Ident, Sub, Int, RParen,
             Eof,
         ]
     );

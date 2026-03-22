@@ -40,6 +40,7 @@ pub enum TokenKind {
     Use,
     Extern,
     Struct,
+    Impl,
 
     // Operators
     Eq,
@@ -70,6 +71,7 @@ impl TokenKind {
                 | TokenKind::Use
                 | TokenKind::Extern
                 | TokenKind::Struct
+                | TokenKind::Impl
         )
     }
 
@@ -132,6 +134,7 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock
         ("or", TokenKind::Or),
         ("extern", TokenKind::Extern),
         ("struct", TokenKind::Struct),
+        ("impl", TokenKind::Impl),
     ]
     .into_iter()
     .collect()

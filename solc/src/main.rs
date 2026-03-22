@@ -9,10 +9,8 @@ use miette::{IntoDiagnostic, Result};
 
 use solc::{
     codegen::{self, Compiler, Emitter},
-    hir,
-    lexer,
-    parser,
-    type_checker::{Scope, TypeEnv},
+    hir, lexer, parser,
+    type_checker::{self, Scope, TypeEnv},
 };
 
 #[derive(clap::Parser)]
@@ -73,6 +71,9 @@ enum Command {
     DumpAst {
         file_path: PathBuf,
     },
+    DumpHir {
+        file_path: PathBuf,
+    },
 }
 
 fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
@@ -85,7 +86,9 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut env = TypeEnv::default();
     let mut scope = Scope::new(parser.lex.source());
 
-    let hir = hir::lower_module(&module, &mut env, &mut scope)?;
+    type_checker::check_module(&module, &mut env, &mut scope)?;
+
+    let hir = hir::lower_module(&module, &mut env)?;
 
     let mut c = codegen::c::C::default();
     let out = c.emit(env, &hir);
@@ -190,6 +193,17 @@ fn main() -> Result<()> {
             let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
             dbg!(ast);
+        }
+        Command::DumpHir { file_path } => {
+            let content = std::fs::read_to_string(&file_path).unwrap();
+            let mut parser = parser::Parser::new(file_path, &content)?;
+            let module = parser.parse()?;
+
+            let mut env = TypeEnv::default();
+            let mut scope = Scope::new(parser.lex.source());
+            type_checker::check_module(&module, &mut env, &mut scope)?;
+            let hir = hir::lower_module(&module, &mut env)?;
+            dbg!(&hir);
         }
     }
 

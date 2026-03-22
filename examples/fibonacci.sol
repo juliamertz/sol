@@ -3,11 +3,11 @@ use extern stdio
 extern func printf(format: Str) -> i32
 
 func fib(n: i32) -> i32
-    if n == 0 or n == 1 then
+    if n == 0 or n == 1 then 
         return n
+    else
+        return fib(n - 1) + fib(n - 2)
     end
-
-    return fib(n - 1) + fib(n - 2)
 end
 
 func main() -> i32
@@ -15,5 +15,3 @@ func main() -> i32
 
     printf("Result is %d", result)
 end
-
--- vim:ft=sol

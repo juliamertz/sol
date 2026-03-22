@@ -5,23 +5,28 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    BinOp, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Let, List, Literal,
-    LiteralKind, MemberAccess, Node, NodeId, OpKind, PrefixExpr, Ret, Stmnt, StructDef, Use,
+    self, BinOp, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Item, Let,
+    List, Literal, LiteralKind, MemberAccess, Module, NodeId, OpKind, PrefixExpr, Ret, Stmnt,
 };
 use crate::ext::Boxed;
 use crate::id;
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
+use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::interner::TypeInterner;
+use crate::type_checker::ty::*;
 
+pub mod collect;
 pub mod interner;
 pub mod ty;
-
-use ty::*;
 
 #[derive(Debug, Error, Diagnostic)]
 #[diagnostic(code(solc::type_checker))]
 pub enum TypeError {
+    #[diagnostic(forward(0))]
+    #[error(transparent)]
+    Collect(#[from] CollectError),
+
     #[error("{ident} not found in scope")]
     NotFound {
         #[source_code]
@@ -146,32 +151,34 @@ pub struct TypeEnv {
 }
 
 impl TypeEnv {
-    pub fn type_of(&self, node_id: &NodeId) -> Option<&Type> {
+    pub fn type_of(&self, node_id: &NodeId) -> TypeId {
         self.nodes
             .get(node_id)
-            .and_then(|type_id| self.types.get(type_id))
+            .copied()
+            .unwrap_or_else(|| panic!("untyped node, id: {}", node_id.0))
     }
 
-    pub fn type_from_ast_ty(&mut self, ty: &crate::ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
-        let ty = match &ty.kind {
-            crate::ast::TyKind::Int(kind) => Type::Int(kind.into()),
-            crate::ast::TyKind::UInt(kind) => Type::UInt(kind.into()),
-            crate::ast::TyKind::Bool => Type::Bool,
-            crate::ast::TyKind::Str => Type::Str,
-            crate::ast::TyKind::Var(ident) => {
+    pub fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
+        let ty = match &ast_ty.kind {
+            ast::TyKind::Int(kind) => Type::Int(kind.into()),
+            ast::TyKind::UInt(kind) => Type::UInt(kind.into()),
+            ast::TyKind::Bool => Type::Bool,
+            ast::TyKind::Str => Type::Str,
+            ast::TyKind::Var(ident) => {
                 let def_id = scope.get_definition(ident).ok_or(TypeError::NotFound {
                     src: scope.src.clone(),
                     ident: ident.to_owned(),
                     span: ident.span,
                 })?;
-                let type_id = self.definitions.get(def_id).unwrap(); // TODO: handle error
-                return Ok(*type_id);
+                let type_id = self.definitions.get(def_id).copied().unwrap(); // TODO: handle error
+                self.nodes.insert(ast_ty.id, type_id);
+                return Ok(type_id);
             }
-            crate::ast::TyKind::List { inner, size } => {
+            ast::TyKind::List { inner, size } => {
                 let inner_id = self.type_from_ast_ty(inner, scope)?;
                 Type::List(inner_id, *size)
             }
-            crate::ast::TyKind::Fn {
+            ast::TyKind::Fn {
                 params,
                 returns,
                 is_extern,
@@ -190,7 +197,9 @@ impl TypeEnv {
             }
         };
 
-        Ok(self.types.intern(ty))
+        let type_id = self.types.intern(ty);
+        self.nodes.insert(ast_ty.id, type_id);
+        Ok(type_id)
     }
 }
 
@@ -210,31 +219,44 @@ pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(type_id)
 }
 
+pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
+    check_stmnts(&block.nodes, env, scope)?;
+
+    let type_id = if let Some(last) = block.nodes.last() {
+        match last {
+            Stmnt::Expr(expr) => env.nodes.get(&expr.id()).copied().unwrap(),
+            Stmnt::Ret(Ret { val, .. }) => env.nodes.get(&val.id()).copied().unwrap(),
+            _ => env.types.intern(Type::None),
+        }
+    } else {
+        TypeId::NONE
+    };
+
+    env.nodes.insert(block.id, type_id);
+
+    Ok(type_id)
+}
+
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
         Expr::Ident(ident) => infer_ident(ident, env, scope),
 
-        Expr::Literal(Literal { kind, .. }) => match kind {
-            LiteralKind::Str(_) => Ok(env.types.intern(Type::Str)),
-            LiteralKind::Int(_) => Ok(env.types.intern(Type::Int(ty::IntTy::I32))), // TODO: infer the correct size
+        Expr::Literal(Literal { id, kind, .. }) => match kind {
+            LiteralKind::Str(_) => {
+                let type_id = TypeId::STR;
+                env.nodes.insert(*id, type_id);
+                Ok(type_id)
+            }
+            LiteralKind::Int(_) => {
+                let type_id = TypeId::I32; // TODO: infer the correct size
+                env.nodes.insert(*id, type_id);
+                Ok(type_id)
+            }
         },
 
         Expr::Block(block) => {
             let scope = &mut scope.new_child();
-            check_nodes(&block.nodes, env, scope)?;
-
-            if let Some(last_node) = block.nodes.last() {
-                let return_ty = match last_node {
-                    Node::Expr(expr) => env.nodes.get(&expr.id()).copied().unwrap(),
-                    Node::Stmnt(Stmnt::Ret(Ret { val, .. })) => {
-                        env.nodes.get(&val.id()).copied().unwrap()
-                    }
-                    _ => env.types.intern(Type::None),
-                };
-                Ok(return_ty)
-            } else {
-                Ok(TypeId::NONE)
-            }
+            infer_block(block, env, scope)
         }
 
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
@@ -316,16 +338,23 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             Ok(returns)
         }
 
-        Expr::Index(IndexExpr { expr, .. }) => {
-            let type_id = infer(expr, env, scope)?;
+        Expr::Index(IndexExpr { id, expr, idx, .. }) => {
+            let val_type_id = infer(expr, env, scope)?;
+            env.nodes.insert(expr.id(), val_type_id);
+
+            let idx_type_id = infer(idx, env, scope)?;
+            env.nodes.insert(idx.id(), idx_type_id);
+
             let inner = {
-                let ty = env.types.get(&type_id).unwrap();
+                let ty = env.types.get(&val_type_id).unwrap();
                 if let Type::List(inner, _) = ty {
                     *inner
                 } else {
                     todo!("can only index for list types")
                 }
             };
+
+            env.nodes.insert(*id, inner);
             Ok(inner)
         }
 
@@ -398,7 +427,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             Ok(type_id)
         }
 
-        Expr::Constructor(Constructor { ident, fields, .. }) => {
+        Expr::Constructor(Constructor {
+            id, ident, fields, ..
+        }) => {
             let def_id = scope
                 .get_definition(ident)
                 .ok_or_else(|| TypeError::NotFound {
@@ -416,6 +447,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 // TODO: validate fields
             }
 
+            env.nodes.insert(*id, type_id);
+            env.nodes.insert(ident.id, type_id);
+
             Ok(type_id)
         }
 
@@ -426,7 +460,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 if let Type::Struct { fields, .. } = lhs_ty {
                     fields
                         .iter()
-                        .find(|(field, _)| field.as_str() == ident.as_str())
+                        .find(|(field, _)| field == ident)
                         .map(|(_, ty_id)| *ty_id)
                         .ok_or_else(|| TypeError::NoSuchField {
                             src: scope.src.clone(),
@@ -452,23 +486,51 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<Type> {
-    Ok(Type::Fn {
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeId> {
+    let params = func
+        .params
+        .iter()
+        .map(|(ident, ty)| {
+            let type_id = env.type_from_ast_ty(ty, scope)?;
+            env.nodes.insert(ident.id, type_id);
+            Ok(type_id)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into();
+
+    let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+
+    let fn_type = Type::Fn {
         is_extern: func.is_extern,
-        params: func
-            .params
-            .iter()
-            .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
-            .collect::<Result<Vec<_>>>()?
-            .into(),
-        returns: env.type_from_ast_ty(&func.return_ty, scope)?,
-    })
+        params,
+        returns,
+    };
+    let fn_type_id = env.types.intern(fn_type);
+
+    if !func.is_extern {
+        let body = func.body.as_ref().unwrap();
+        let mut scope = scope.new_child();
+        for (ident, _) in func.params.iter() {
+            let type_id = env.nodes.get(&ident.id).unwrap();
+            let def_id = env.definitions.intern(*type_id);
+            scope.define(ident, def_id);
+        }
+        let def_id = env.definitions.intern(fn_type_id);
+        scope.define(&func.ident, def_id);
+
+        let type_id = infer_block(body, env, &mut scope)?;
+        env.nodes.insert(body.id, type_id)
+    }
+
+    Ok(fn_type_id)
 }
 
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let { ident, ty, val, .. }) => {
             let type_id = infer(val, env, scope)?;
+            env.nodes.insert(ident.id, type_id);
+            env.nodes.insert(val.id(), type_id);
 
             if let Some(declared_ty) = ty {
                 let declared_type_id = env.type_from_ast_ty(declared_ty, scope)?;
@@ -490,51 +552,94 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             infer(val, env, scope)?;
         }
 
-        Stmnt::Use(Use { ident: _, .. }) => {}
-
-        Stmnt::Fn(func) => {
-            let ty = infer_fn(func, env, scope)?;
-            let type_id = env.types.intern(ty);
-            let def_id = env.definitions.intern(type_id);
-            scope.define(&func.ident, def_id);
+        Stmnt::Expr(expr) => {
+            infer(expr, env, scope)?;
         }
-
-        Stmnt::StructDef(StructDef { ident, fields, .. }) => {
-            let field_tys: Box<[(Ident, TypeId)]> = fields
-                .iter()
-                .map(|(ident, ty)| Ok((ident.to_owned(), env.type_from_ast_ty(ty, scope)?)))
-                .collect::<Result<Vec<_>>>()?
-                .into();
-            let ty = Type::Struct {
-                ident: ident.to_owned().boxed(),
-                fields: field_tys,
-            };
-            let type_id = env.types.intern(ty);
-            let def_id = env.definitions.intern(type_id);
-            scope.define(ident, def_id);
-        }
-
-        Stmnt::Impl(Impl {
-            ident: _, body: _, ..
-        }) => todo!("check impl block"),
     }
 
     Ok(())
 }
 
-pub fn check_node(node: &Node, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
-    match node {
-        Node::Expr(expr) => {
-            infer(expr, env, scope)?;
-            Ok(())
-        }
-        Node::Stmnt(stmnt) => check_stmnt(stmnt, env, scope),
+pub fn check_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    let mut scope = scope.new_child();
+
+    for (ident, ty) in func.params.iter() {
+        let type_id = env.type_from_ast_ty(ty, &scope)?;
+        let def_id = env.definitions.intern(type_id);
+        scope.define(ident, def_id);
+    }
+
+    let type_id = infer_fn(func, env, &scope)?;
+    let def_id = env.definitions.intern(type_id);
+    scope.define(&func.ident, def_id);
+
+    if func.is_extern {
+        return Ok(());
+    }
+
+    let body = func
+        .body
+        .as_ref()
+        .expect("function body for non-extern def"); // TODO: error handling
+
+    check_stmnts(&body.nodes, env, &mut scope)
+}
+
+pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    for item in imp.items.iter() {
+        check_fn(item, env, scope)?;
+    }
+
+    Ok(())
+}
+
+pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    match item {
+        Item::Fn(func) => check_fn(func, env, scope),
+        Item::Impl(imp) => check_imp(imp, env, scope),
+        _ => Ok(()),
+        // Item::Use(Use { .. }) => {}
+        // Item::StructDef(StructDef { .. }) => {}
     }
 }
 
-pub fn check_nodes(nodes: &[Node], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
-    for node in nodes {
-        check_node(node, env, scope)?;
+pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    for stmnt in stmnts {
+        check_stmnt(stmnt, env, scope)?;
     }
+    Ok(())
+}
+
+pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    let mut inventory = collect(&module.items)?;
+
+    for struct_def in inventory.take_structs() {
+        let field_tys = struct_def
+            .fields
+            .iter()
+            .map(|(ident, ty)| Ok((ident.to_owned(), env.type_from_ast_ty(ty, scope)?)))
+            .collect::<Result<Vec<_>>>()?
+            .into();
+        let _impls = inventory.take_impls(&struct_def.name); // TODO:
+
+        let ty = Type::Struct {
+            name: struct_def.name.to_owned().boxed(),
+            fields: field_tys,
+        };
+        let type_id = env.types.intern(ty);
+        let def_id = env.definitions.intern(type_id);
+        scope.define(struct_def.name.as_str(), def_id);
+    }
+
+    for func in inventory.take_fns() {
+        let type_id = infer_fn(func, env, scope)?;
+        let def_id = env.definitions.intern(type_id);
+        scope.define(&func.ident, def_id);
+    }
+
+    for item in module.items.iter() {
+        check_item(item, env, scope)?;
+    }
+
     Ok(())
 }

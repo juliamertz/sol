@@ -35,7 +35,7 @@ impl Default for TypeInterner {
 }
 
 impl interner::Strategy<TypeId, Type> for TypeInterner {
-    fn id_for(&mut self, value: &Type) -> TypeId {
+    fn key_for(&mut self, value: &Type) -> TypeId {
         match value {
             Type::None => TypeId::NONE,
             Type::Int(int_ty) => match int_ty {
@@ -54,5 +54,25 @@ impl interner::Strategy<TypeId, Type> for TypeInterner {
             Type::Str => TypeId::STR,
             Type::List(..) | Type::Ptr(_) | Type::Fn { .. } | Type::Struct { .. } => self.next(),
         }
+    }
+
+    fn default_values() -> Option<std::collections::HashMap<TypeId, Type>> {
+        Some(
+            [
+                (TypeId::NONE, Type::None),
+                (TypeId::I8, Type::Int(IntTy::I8)),
+                (TypeId::U8, Type::UInt(UIntTy::U8)),
+                (TypeId::I16, Type::Int(IntTy::I16)),
+                (TypeId::U16, Type::UInt(UIntTy::U16)),
+                (TypeId::I32, Type::Int(IntTy::I32)),
+                (TypeId::U32, Type::UInt(UIntTy::U32)),
+                (TypeId::I64, Type::Int(IntTy::I64)),
+                (TypeId::U64, Type::UInt(UIntTy::U64)),
+                (TypeId::BOOL, Type::Bool),
+                (TypeId::STR, Type::Str),
+            ]
+            .into_iter()
+            .collect(),
+        )
     }
 }

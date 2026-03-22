@@ -1,38 +1,70 @@
 module.exports = grammar({
 	name: "sol",
-	extras: ($) => [/\s/, $.comment],
+	extras: ($) => [/[ \t\r]/, $.comment],
+
+	precedences: ($) => [
+		[
+			"chain",
+			"index",
+			"construct",
+			"call",
+			"prefix",
+			"product",
+			"sum",
+			"cmp",
+			"eq",
+			"and_or",
+		],
+	],
+
 	rules: {
-		source_file: ($) => repeat($._statement),
+		source_file: ($) => repeat(choice($._item, $._newline)),
 
-		_statement: ($) =>
-			choice(
-				$.use_stmt,
-				$.function_def,
-				$.struct_def,
-				$.let_stmt,
-				$.return_stmt,
-				$.expression_stmt,
-				$.if_stmt,
-				$.comment,
-			),
+		_newline: ($) => /\n/,
 
-		use_stmt: ($) => seq("use", $.identifier, ";"),
+		_item: ($) =>
+			choice($.use_stmt, $.function_def, $.struct_def, $.impl_def),
+
+		use_stmt: ($) => seq("use", optional("extern"), $.identifier),
 
 		function_def: ($) =>
+			choice(
+				seq(
+					"extern",
+					"func",
+					$.identifier,
+					$.param_list,
+					"->",
+					$.type,
+				),
+				seq(
+					"func",
+					$.identifier,
+					$.param_list,
+					"->",
+					$.type,
+					repeat(choice($._statement, $._newline)),
+					"end",
+				),
+			),
+
+		struct_def: ($) =>
 			seq(
-				optional("extern"),
-				"func",
+				"struct",
 				$.identifier,
-				$.param_list,
-				"->",
-				$.type,
-				$.block,
+				"=",
+				repeat(choice($.field, $._newline)),
 				"end",
 			),
 
-		struct_def: ($) => seq("struct", $.identifier, "=", $.field_list, "end"),
-
-		field_list: ($) => repeat1(seq($.field, ",")),
+		impl_def: ($) =>
+			seq(
+				"impl",
+				$.identifier,
+				"=",
+				repeat(choice($.function_def, $._newline)),
+				"end",
+			),
 
 		field: ($) => seq($.identifier, ":", $.type),
 
@@ -40,36 +72,106 @@ module.exports = grammar({
 
 		param: ($) => seq($.identifier, ":", $.type),
 
-		type: ($) => $.identifier,
+		type: ($) => seq($.identifier, optional($.array_suffix)),
 
-		block: ($) => repeat1($._statement),
+		array_suffix: ($) => token.immediate("[]"),
 
-		if_stmt: ($) =>
-			seq("if", $.expression, "then", $.block, "end", optional(";")),
+		_statement: ($) =>
+			choice($.let_stmt, $.return_stmt, $.expression_stmt, $.comment),
 
 		let_stmt: ($) =>
-			seq("let", $.identifier, optional(seq(":", $.type)), "=", $.expression),
+			seq(
+				"let",
+				$.identifier,
+				optional(seq(":", $.type)),
+				"=",
+				$._expression,
+				$._newline,
+			),
 
-		return_stmt: ($) => seq("return", $.expression, ";"),
+		return_stmt: ($) => seq("return", $._expression, $._newline),
 
-		expression_stmt: ($) => seq($.expression, ";"),
+		expression_stmt: ($) => seq($._expression, $._newline),
 
-		expression: ($) =>
-			choice($.call, $.binary_expr, $.identifier, $.number, $.string),
+		_expression: ($) =>
+			choice(
+				$.binary_expr,
+				$.prefix_expr,
+				$.call_expr,
+				$.index_expr,
+				$.member_access,
+				$.constructor,
+				$.if_expr,
+				$.list,
+				$.identifier,
+				$.number,
+				$.string,
+			),
 
 		binary_expr: ($) =>
-			prec.left(
-				seq(
-					$.expression,
-					choice("<", "+", "-", "*", "/", "and", "or", "=="),
-					$.expression,
+			choice(
+				prec.left(
+					"and_or",
+					seq($._expression, choice("and", "or"), $._expression),
+				),
+				prec.left("eq", seq($._expression, "==", $._expression)),
+				prec.left(
+					"cmp",
+					seq($._expression, choice("<", ">"), $._expression),
+				),
+				prec.left(
+					"sum",
+					seq($._expression, choice("+", "-"), $._expression),
+				),
+				prec.left(
+					"product",
+					seq($._expression, choice("*", "/"), $._expression),
 				),
 			),
 
-		call: ($) => seq($.identifier, "(", optional(commaSep($.expression)), ")"),
+		prefix_expr: ($) =>
+			prec("prefix", seq(choice("-", "!"), $._expression)),
+
+		call_expr: ($) =>
+			prec(
+				"call",
+				seq($._expression, "(", optional(commaSep($._expression)), ")"),
+			),
+
+		index_expr: ($) =>
+			prec("index", seq($._expression, "[", $._expression, "]")),
+
+		member_access: ($) =>
+			prec("chain", seq($._expression, ".", $.identifier)),
+
+		constructor: ($) =>
+			prec(
+				"construct",
+				seq(
+					$.identifier,
+					"{",
+					repeat(choice($.value_field, $._newline)),
+					"}",
+				),
+			),
+
+		value_field: ($) => seq($.identifier, ":", $._expression),
+
+		if_expr: ($) =>
+			seq(
+				"if",
+				$._expression,
+				"then",
+				repeat(choice($._statement, $._newline)),
+				optional(
+					seq("else", repeat(choice($._statement, $._newline))),
+				),
+				"end",
+			),
+
+		list: ($) => seq("[", optional(commaSep($._expression)), "]"),
 
 		identifier: ($) => /[a-zA-Z_][a-zA-Z0-9_]*/,
-
 		number: ($) => /\d+/,
 		string: ($) => /"[^"]*"/,
 		comment: ($) => /--[^\n]*/,

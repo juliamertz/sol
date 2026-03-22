@@ -7,7 +7,7 @@ use crate::lexer::source::Span;
 
 id!(NodeId);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Ident {
     pub id: NodeId,
     pub span: Span,
@@ -39,6 +39,30 @@ impl Hash for Ident {
     }
 }
 
+impl PartialEq for Ident {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+#[derive(Debug, Clone, Eq)]
+pub struct Name {
+    pub span: Span,
+    pub inner: Arc<str>,
+}
+
+impl PartialEq for Name {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl Name {
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum OpKind {
     /// num == 10
@@ -63,7 +87,6 @@ pub enum OpKind {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Op {
-    pub id: NodeId,
     pub span: Span,
     pub kind: OpKind,
 }
@@ -130,7 +153,7 @@ pub enum TyKind {
 pub struct Block {
     pub id: NodeId,
     pub span: Span,
-    pub nodes: Arc<[Node]>,
+    pub nodes: Arc<[Stmnt]>,
 }
 
 #[derive(Debug, Clone)]
@@ -151,7 +174,6 @@ pub struct List {
 
 #[derive(Debug, Clone)]
 pub struct Let {
-    pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
     pub ty: Option<Ty>,
@@ -160,7 +182,6 @@ pub struct Let {
 
 #[derive(Debug, Clone)]
 pub struct Ret {
-    pub id: NodeId,
     pub span: Span,
     pub val: Expr,
 }
@@ -200,7 +221,6 @@ pub struct IndexExpr {
 
 #[derive(Debug, Clone)]
 pub struct Fn {
-    pub id: NodeId,
     pub span: Span,
     pub is_extern: bool,
     pub ident: Ident,
@@ -211,7 +231,6 @@ pub struct Fn {
 
 #[derive(Debug, Clone)]
 pub struct Use {
-    pub id: NodeId,
     pub span: Span,
     pub is_extern: bool,
     pub ident: Ident,
@@ -219,18 +238,16 @@ pub struct Use {
 
 #[derive(Debug, Clone)]
 pub struct StructDef {
-    pub id: NodeId,
     pub span: Span,
-    pub ident: Ident,
+    pub name: Name,
     pub fields: Arc<[(Ident, Ty)]>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Impl {
-    pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
-    pub body: Block,
+    pub items: Arc<[Fn]>,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +322,21 @@ impl Expr {
 pub enum Stmnt {
     Let(Let),
     Ret(Ret),
+    Expr(Expr),
+}
+
+impl Stmnt {
+    pub fn span(&self) -> Span {
+        match self {
+            Stmnt::Let(inner) => inner.span,
+            Stmnt::Ret(inner) => inner.span,
+            Stmnt::Expr(inner) => inner.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Item {
     Use(Use),
     Fn(Fn),
     StructDef(StructDef),
@@ -312,12 +344,6 @@ pub enum Stmnt {
 }
 
 #[derive(Debug, Clone)]
-pub enum Node {
-    Expr(Expr),
-    Stmnt(Stmnt),
-}
-
-#[derive(Debug, Clone)]
 pub struct Module {
-    pub nodes: Arc<[Node]>,
+    pub items: Arc<[Item]>,
 }
