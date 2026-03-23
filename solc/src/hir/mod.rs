@@ -9,7 +9,7 @@ pub use lower::*;
 
 id!(HirId);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ident<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -17,14 +17,14 @@ pub struct Ident<'ast> {
     pub inner: &'ast str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Name<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
     pub inner: &'ast str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Literal<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -32,7 +32,7 @@ pub struct Literal<'ast> {
     pub kind: &'ast ast::LiteralKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -40,7 +40,7 @@ pub struct Block<'ast> {
     pub nodes: Box<[Stmnt<'ast>]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinOp<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -50,7 +50,7 @@ pub struct BinOp<'ast> {
     pub rhs: Box<Expr<'ast>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Prefix<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -59,7 +59,7 @@ pub struct Prefix<'ast> {
     pub rhs: Box<Expr<'ast>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Call<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -68,7 +68,7 @@ pub struct Call<'ast> {
     pub params: Box<[Expr<'ast>]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Index<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -77,7 +77,7 @@ pub struct Index<'ast> {
     pub idx: Box<Expr<'ast>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfElse<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -87,7 +87,7 @@ pub struct IfElse<'ast> {
     pub alternative: Option<Block<'ast>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct List<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -95,7 +95,7 @@ pub struct List<'ast> {
     pub items: Box<[Expr<'ast>]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Constructor<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -104,7 +104,7 @@ pub struct Constructor<'ast> {
     pub fields: Box<[(Ident<'ast>, Expr<'ast>)]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemberAccess<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -113,7 +113,7 @@ pub struct MemberAccess<'ast> {
     pub ident: Ident<'ast>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr<'ast> {
     Ident(Ident<'ast>),
     Literal(Literal<'ast>),
@@ -129,7 +129,7 @@ pub enum Expr<'ast> {
     Ref(Box<Expr<'ast>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Let<'ast> {
     pub id: HirId,
     pub ty: TypeId,
@@ -138,15 +138,15 @@ pub struct Let<'ast> {
     pub val: Expr<'ast>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ret<'ast> {
     pub id: HirId,
     pub ty: TypeId,
-    pub span: &'ast Span,
+    pub span: Span,
     pub val: Expr<'ast>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Use<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
@@ -154,7 +154,7 @@ pub struct Use<'ast> {
     pub ident: Ident<'ast>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fn<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
@@ -165,7 +165,7 @@ pub struct Fn<'ast> {
     pub body: Option<Block<'ast>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructDef<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
@@ -174,21 +174,21 @@ pub struct StructDef<'ast> {
     pub impls: Box<[&'ast ast::Impl]>, // TODO: This should probably also be lowered...
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmnt<'ast> {
     Let(Let<'ast>),
     Ret(Ret<'ast>),
     Expr(Expr<'ast>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Item<'ast> {
     Use(Use<'ast>),
     Fn(Fn<'ast>),
     StructDef(StructDef<'ast>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Module<'ast> {
     pub items: Box<[Item<'ast>]>,
 }
@@ -220,6 +220,23 @@ impl Expr<'_> {
             Expr::Constructor(constructor) => &constructor.ty,
             Expr::MemberAccess(member_access) => &member_access.ty,
             Expr::Ref(expr) => expr.type_id(),
+        }
+    }
+
+    pub fn span(&self) -> &Span {
+        match self {
+            Expr::Ident(ident) => &ident.span,
+            Expr::Literal(literal) => &literal.span,
+            Expr::Block(block) => &block.span,
+            Expr::BinOp(bin_op) => &bin_op.span,
+            Expr::Prefix(prefix) => &prefix.span,
+            Expr::Call(call) => &call.span,
+            Expr::Index(index) => &index.span,
+            Expr::IfElse(if_else) => &if_else.span,
+            Expr::List(list) => &list.span,
+            Expr::Constructor(constructor) => &constructor.span,
+            Expr::MemberAccess(member_access) => &member_access.span,
+            Expr::Ref(expr) => expr.span(),
         }
     }
 }

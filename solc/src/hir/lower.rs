@@ -102,7 +102,23 @@ pub fn lower_block<'ast>(block: &'ast ast::Block, env: &mut TypeEnv) -> Result<h
     let stmnts = block
         .nodes
         .iter()
-        .map(|stmnt| lower_stmnt(stmnt, env))
+        .enumerate()
+        .map(|(idx, stmnt)| {
+            let lowered = lower_stmnt(stmnt, env)?;
+            if idx != block.nodes.len() - 1 {
+                return Ok(lowered);
+            }
+            let hir::Stmnt::Expr(expr) = lowered else {
+                return Ok(lowered);
+            };
+
+            Ok(hir::Stmnt::Ret(hir::Ret {
+                id: HirId::DUMMY,
+                ty: *expr.type_id(),
+                span: *expr.span(),
+                val: expr,
+            }))
+        })
         .collect::<Result<Vec<_>>>()?;
 
     Ok(hir::Block {
@@ -263,7 +279,7 @@ pub fn lower_stmnt<'ast>(stmnt: &'ast ast::Stmnt, env: &mut TypeEnv) -> Result<h
             hir::Stmnt::Ret(hir::Ret {
                 id: HirId::DUMMY,
                 ty,
-                span: &inner.span,
+                span: inner.span,
                 val,
             })
         }
