@@ -7,15 +7,15 @@ use std::process::Stdio;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::{LiteralKind, Op, OpKind};
+use crate::ast::{LiteralKind, OpKind};
+use crate::codegen::c::ast::*;
 use crate::codegen::c::compiler::{CcOpts, cc};
-use crate::codegen::{BuildOpts, Compiler, Emitter, quote};
-use crate::hir::{
-    BinOp, Block, Call, Expr, Fn, Ident, Item, List, MemberAccess, Module, Prefix, Stmnt,
-};
+use crate::codegen::{BuildOpts, Compiler, Emitter};
+use crate::hir;
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
 use crate::type_checker::{TypeEnv, TypeId};
 
+pub mod ast;
 mod compiler;
 
 const GC_HEADERS: &str = include_str!("include/gc.h");
@@ -32,49 +32,41 @@ pub enum CodegenError {
 
 pub type Result<T, E = CodegenError> = core::result::Result<T, E>;
 
-#[derive(Default)]
-struct InsertMarker {
-    pos: Option<usize>,
-    emit: String,
-}
-
 pub struct C {
-    node_marker: InsertMarker,
     tempdir: PathBuf,
 }
 
 impl Default for C {
     fn default() -> Self {
         Self {
-            node_marker: Default::default(),
             tempdir: std::env::temp_dir(),
         }
     }
 }
 
 impl Emitter for C {
-    fn emit(&mut self, env: TypeEnv, hir: &Module<'_>) -> String {
-        let mut buf = String::new();
+    fn emit(&mut self, env: TypeEnv, hir: &hir::Module<'_>) -> String {
+        let mut tu = CTranslationUnit::default();
 
         let includes = [("gc.h", GC_HEADERS), ("list.h", LIST_HEADERS)];
-
         for (filename, contents) in includes {
             let path = self.tempdir.join(filename);
             fs::write(&path, contents).unwrap();
-            buf.push_str(&format!("#include \"{}\"\n", path.to_str().unwrap()));
+            tu.push(CItem::include_local(path.to_str().unwrap()));
         }
 
         for item in hir.items.iter() {
-            self.emit_item(&mut buf, &env, item);
+            if let Some(c_item) = self.lower_item(&env, item) {
+                tu.push(c_item);
+            }
         }
 
-        buf
+        tu.to_string()
     }
 }
 
 impl C {
-    // namespace prefix to be used for identifiers
-    fn prefix(&self, ident: &Ident) -> String {
+    fn prefix(&self, ident: &hir::Ident) -> String {
         format!(
             "__{prefix}_{ident}",
             prefix = env!("CARGO_PKG_NAME"),
@@ -82,8 +74,33 @@ impl C {
         )
     }
 
-    fn emit_op(&mut self, buf: &mut String, op: &Op) {
-        let text = match op.kind {
+    fn lower_type(&self, env: &TypeEnv, type_id: &TypeId) -> CType {
+        let ty = env.types.get(type_id).expect("type to be defined");
+        match ty {
+            Type::Int(kind) => match kind {
+                IntTy::I8 => CType::Int8,
+                IntTy::I16 => CType::Int16,
+                IntTy::I32 => CType::Int32,
+                IntTy::I64 => CType::Int64,
+            },
+            Type::UInt(kind) => match kind {
+                UIntTy::U8 => CType::UInt8,
+                UIntTy::U16 => CType::UInt16,
+                UIntTy::U32 => CType::UInt32,
+                UIntTy::U64 => CType::UInt64,
+            },
+            Type::Str => CType::CharPtr,
+            Type::Bool => CType::Bool,
+            Type::List(..) => CType::named("List"),
+            Type::Struct { name, .. } => CType::named(&*name.inner),
+            Type::Ptr(_) => todo!(),
+            Type::Fn { .. } => todo!(),
+            Type::None => CType::named("__NONE__"),
+        }
+    }
+
+    fn lower_op(kind: &OpKind) -> &'static str {
+        match kind {
             OpKind::Eq => "==",
             OpKind::Add => "+",
             OpKind::Sub => "-",
@@ -93,273 +110,181 @@ impl C {
             OpKind::Gt => ">",
             OpKind::And => "&&",
             OpKind::Or => "||",
-        };
-        buf.push_str(text);
-    }
-
-    fn emit_binop_expr(&mut self, buf: &mut String, env: &TypeEnv, binop: &BinOp) {
-        self.emit_expr(buf, env, binop.lhs.as_ref());
-        self.emit_op(buf, binop.op);
-        self.emit_expr(buf, env, binop.rhs.as_ref());
-    }
-
-    fn emit_expr_list(&mut self, buf: &mut String, env: &TypeEnv, list: &[Expr<'_>]) {
-        for (idx, arg) in list.iter().enumerate() {
-            self.emit_expr(buf, env, arg);
-            if idx != list.len() - 1 {
-                buf.push(',');
-            }
         }
     }
 
-    fn emit_call_expr(&mut self, buf: &mut String, env: &TypeEnv, call_expr: &Call) {
-        self.emit_expr(buf, env, &call_expr.func);
-        buf.push('(');
-        self.emit_expr_list(buf, env, &call_expr.params);
-        buf.push(')');
+    fn lower_ident(&self, env: &TypeEnv, ident: &hir::Ident) -> CExpr {
+        let ty = env.types.get(&ident.ty);
+        let name = if let Some(Type::Fn {
+            is_extern: true, ..
+        }) = ty
+        {
+            ident.as_str().to_owned()
+        } else {
+            self.prefix(ident)
+        };
+        CExpr::ident(name)
     }
 
-    fn emit_item(&mut self, buf: &mut String, env: &TypeEnv, item: &Item) {
-        self.node_marker.pos = Some(buf.len());
+    fn lower_expr(&self, env: &TypeEnv, expr: &hir::Expr) -> CExpr {
+        match expr {
+            hir::Expr::Ident(ident) => self.lower_ident(env, ident),
 
+            hir::Expr::Literal(literal) => match &literal.kind {
+                LiteralKind::Str(s) => CExpr::str(s.as_ref()),
+                LiteralKind::Int(n) => CExpr::int(*n),
+            },
+
+            hir::Expr::Prefix(prefix) => {
+                CExpr::prefix(Self::lower_op(&prefix.op.kind), self.lower_expr(env, &prefix.rhs))
+            }
+
+            hir::Expr::BinOp(binop) => self
+                .lower_expr(env, &binop.lhs)
+                .binop(Self::lower_op(&binop.op.kind), self.lower_expr(env, &binop.rhs)),
+
+            hir::Expr::Call(call) => CExpr::call(
+                self.lower_expr(env, &call.func),
+                call.params.iter().map(|p| self.lower_expr(env, p)).collect(),
+            ),
+
+            hir::Expr::IfElse(if_else) => {
+                let cond = self.lower_expr(env, &if_else.condition);
+                let then = self.lower_block(env, &if_else.consequence);
+                let else_ = if_else
+                    .alternative
+                    .as_ref()
+                    .map(|alt| self.lower_block(env, alt));
+                let stmts = vec![match else_ {
+                    Some(else_stmts) => CStmt::if_else(cond, then, else_stmts),
+                    None => CStmt::if_(cond, then),
+                }];
+
+                CExpr::stmt_expr(stmts)
+            }
+
+            hir::Expr::Constructor(ctor) => CExpr::compound_lit(
+                ctor.ident.as_str(),
+                ctor.fields
+                    .iter()
+                    .map(|(ident, expr)| (self.prefix(ident), self.lower_expr(env, expr)))
+                    .collect(),
+            ),
+
+            hir::Expr::MemberAccess(access) => self
+                .lower_expr(env, &access.lhs)
+                .member(self.lower_ident(env, &access.ident).to_string()),
+
+            hir::Expr::Block(block) => {
+                let stmts = self.lower_block(env, block);
+                CExpr::stmt_expr(stmts)
+            }
+
+            hir::Expr::List(list) => {
+                let tmp_name = "inner"; // TODO: naming conflict avoidance
+                let elem_ty = self.lower_type(env, &list.ty);
+
+                let mut stmts = vec![CStmt::var(
+                    CType::named("List"),
+                    tmp_name,
+                    CExpr::call(
+                        CExpr::ident("list_alloc"),
+                        vec![CExpr::sizeof(elem_ty), CExpr::int(8)], // TODO: smart sizing
+                    ),
+                )];
+
+                for item in list.items.iter() {
+                    stmts.push(CStmt::expr(CExpr::call(
+                        CExpr::ident("list_push_rval"),
+                        vec![CExpr::ident(tmp_name).addr_of(), self.lower_expr(env, item)],
+                    )));
+                }
+
+                stmts.push(CStmt::expr(CExpr::ident(tmp_name)));
+                CExpr::stmt_expr(stmts)
+            }
+
+            hir::Expr::Ref(inner) => self.lower_expr(env, inner).addr_of(),
+
+            hir::Expr::Index(idx) => CExpr::call(
+                CExpr::ident("list_get_deref"),
+                vec![
+                    self.lower_expr(env, &idx.expr),
+                    CExpr::ident(self.lower_type(env, &idx.ty).to_string()),
+                    self.lower_expr(env, &idx.idx),
+                ],
+            ),
+        }
+    }
+
+    fn lower_stmnt(&self, env: &TypeEnv, stmnt: &hir::Stmnt) -> CStmt {
+        match stmnt {
+            hir::Stmnt::Let(binding) => {
+                let ty = self.lower_type(env, binding.val.type_id());
+                CStmt::var(ty, self.prefix(&binding.ident), self.lower_expr(env, &binding.val))
+            }
+            hir::Stmnt::Ret(ret) => CStmt::ret(self.lower_expr(env, &ret.val)),
+            hir::Stmnt::Expr(expr) => CStmt::expr(self.lower_expr(env, expr)),
+        }
+    }
+
+    fn lower_block(&self, env: &TypeEnv, block: &hir::Block) -> Vec<CStmt> {
+        block.nodes.iter().map(|s| self.lower_stmnt(env, s)).collect()
+    }
+
+    fn lower_item(&self, env: &TypeEnv, item: &hir::Item) -> Option<CItem> {
         match item {
-            Item::Fn(func) => self.emit_fn(buf, env, func),
-            Item::Use(r#use) => {
+            hir::Item::Fn(func) => {
+                if func.is_extern {
+                    return None;
+                }
+
+                let ret = self.lower_type(env, &func.return_ty);
+                let name = if func.ident.as_str() == "main" {
+                    "main".to_owned()
+                } else {
+                    self.prefix(&func.ident)
+                };
+
+                let params: Vec<_> = func
+                    .params
+                    .iter()
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
+                    .collect();
+
+                let mut body = func
+                    .body
+                    .as_ref()
+                    .map(|b| self.lower_block(env, b))
+                    .unwrap_or_default();
+
+                if func.ident.as_str() == "main" {
+                    let needs_return = !matches!(body.last(), Some(CStmt::Return(_)));
+                    if needs_return {
+                        body.push(CStmt::ret(CExpr::int(0)));
+                    }
+                }
+
+                Some(CItem::fn_def(ret, name, params, body))
+            }
+
+            hir::Item::Use(r#use) => {
                 assert!(
                     r#use.is_extern,
                     "non extern `use` statements are not supported yet"
                 );
-                buf.push_str(format!("#include <{}.h>\n", r#use.ident.inner).as_str());
+                Some(CItem::include_system(format!("{}.h", r#use.ident.inner)))
             }
-            Item::StructDef(strct) => {
-                buf.push_str("typedef struct ");
-                buf.push_str(strct.name.as_str());
-                buf.push('{');
-                for (ident, ty) in strct.fields.iter() {
-                    buf.push_str(&self.emit_type(env, ty));
-                    buf.push(' ');
-                    buf.push_str(&self.prefix(ident));
-                    buf.push(';');
-                }
-                buf.push('}');
-                buf.push_str(strct.name.as_str());
-                buf.push(';');
+
+            hir::Item::StructDef(strct) => {
+                let fields = strct
+                    .fields
+                    .iter()
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
+                    .collect();
+                Some(CItem::typedef_struct(strct.name.as_str(), fields))
             }
         }
-
-        if let Some(pos) = self.node_marker.pos {
-            buf.insert_str(pos, &self.node_marker.emit);
-            self.node_marker = InsertMarker::default();
-        }
-    }
-
-    fn emit_type(&mut self, env: &TypeEnv, type_id: &TypeId) -> String {
-        let ty = env.types.get(type_id).expect("type to be defined");
-        match ty {
-            Type::Int(kind) => match kind {
-                IntTy::I8 => "int8_t",
-                IntTy::I16 => "int16_t",
-                IntTy::I32 => "int32_t",
-                IntTy::I64 => "int64_t",
-            },
-            Type::UInt(kind) => match kind {
-                UIntTy::U8 => "uint8_t",
-                UIntTy::U16 => "uint16_t",
-                UIntTy::U32 => "uint32_t",
-                UIntTy::U64 => "uint64_t",
-            },
-            Type::Str => "char *",
-            Type::Bool => "bool",
-            Type::List(..) => "List",
-            Type::Struct { name, .. } => name.as_str(),
-            Type::Ptr(_) => todo!(),
-            Type::Fn { .. } => todo!(),
-            Type::None => "__NONE__",
-        }
-        .into()
-    }
-
-    fn emit_block(&mut self, buf: &mut String, env: &TypeEnv, block: &Block) {
-        for stmnt in block.nodes.iter() {
-            self.emit_stmnt(buf, env, stmnt);
-        }
-    }
-
-    fn emit_ident(&mut self, buf: &mut String, env: &TypeEnv, ident: &Ident) {
-        let ty = env.types.get(&ident.ty);
-        let ident = if let Some(Type::Fn {
-            is_extern: true, ..
-        }) = ty
-        {
-            ident.as_str()
-        } else {
-            &self.prefix(ident)
-        };
-        buf.push_str(ident);
-    }
-
-    fn emit_list_expr(&mut self, buf: &mut String, env: &TypeEnv, list: &List<'_>) {
-        let tmp_name = "inner"; // TODO: implement some system to avoid naming conflicts
-        buf.push_str("({");
-        buf.push_str("List");
-        buf.push(' ');
-        buf.push_str(tmp_name);
-        buf.push('=');
-        buf.push_str("list_alloc");
-        buf.push_str("(sizeof(");
-        buf.push_str(&self.emit_type(env, &list.ty));
-        buf.push(')');
-        buf.push(',');
-        buf.push('8'); // TODO: smart list sizing
-        buf.push(')');
-        buf.push(';');
-
-        for item in list.items.iter() {
-            buf.push_str("list_push_rval");
-            buf.push('(');
-            buf.push('&');
-            buf.push_str(tmp_name);
-            buf.push(',');
-            self.emit_expr(buf, env, item);
-            buf.push(')');
-            buf.push(';');
-        }
-
-        buf.push_str(tmp_name);
-        buf.push(';');
-
-        buf.push_str("})");
-    }
-
-    fn emit_expr(&mut self, buf: &mut String, env: &TypeEnv, expr: &Expr) {
-        match expr {
-            Expr::Ident(ident) => self.emit_ident(buf, env, ident),
-            // Expr::RawIdent(ident) => buf.push_str(ident.as_ref()),
-            Expr::Literal(literal) => match &literal.kind {
-                LiteralKind::Str(str) => buf.push_str(&quote(str)),
-                LiteralKind::Int(int) => buf.push_str(&int.to_string()),
-            },
-            Expr::Prefix(Prefix { op, rhs, .. }) => {
-                self.emit_op(buf, op);
-                self.emit_expr(buf, env, rhs);
-            }
-            Expr::BinOp(binop) => self.emit_binop_expr(buf, env, binop),
-            Expr::Call(call_expr) => self.emit_call_expr(buf, env, call_expr),
-            Expr::IfElse(r#if) => {
-                buf.push_str("if(");
-                self.emit_expr(buf, env, &r#if.condition);
-                buf.push_str("){");
-                for stmnt in r#if.consequence.nodes.iter() {
-                    self.emit_stmnt(buf, env, stmnt);
-                }
-                buf.push('}');
-                if let Some(ref alternative) = r#if.alternative {
-                    buf.push_str("else{");
-                    for stmnt in alternative.nodes.iter() {
-                        self.emit_stmnt(buf, env, stmnt);
-                    }
-                    buf.push('}');
-                }
-            }
-
-            Expr::Constructor(constructor) => {
-                buf.push('(');
-                buf.push_str(constructor.ident.as_str());
-                buf.push(')');
-                buf.push('{');
-                for (ident, expr) in constructor.fields.iter() {
-                    buf.push('.');
-                    buf.push_str(&self.prefix(ident));
-                    buf.push('=');
-                    self.emit_expr(buf, env, expr);
-                    buf.push(',');
-                }
-                buf.push('}');
-            }
-
-            Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
-                self.emit_expr(buf, env, lhs);
-                buf.push('.');
-                self.emit_ident(buf, env, ident);
-            }
-
-            Expr::Block(block) => self.emit_block(buf, env, block),
-
-            Expr::List(list) => self.emit_list_expr(buf, env, list),
-
-            Expr::Ref(inner) => {
-                buf.push('&');
-                self.emit_expr(buf, env, inner);
-            }
-
-            Expr::Index(expr) => {
-                buf.push_str("list_get_deref(");
-                self.emit_expr(buf, env, &expr.expr);
-                buf.push(',');
-                buf.push_str(&self.emit_type(env, &expr.ty));
-                buf.push(',');
-                self.emit_expr(buf, env, &expr.idx);
-                buf.push(')');
-            }
-        };
-    }
-
-    fn emit_stmnt(&mut self, buf: &mut String, env: &TypeEnv, stmnt: &Stmnt) {
-        match stmnt {
-            Stmnt::Let(binding) => {
-                let type_id = binding.val.type_id();
-                buf.push_str(self.emit_type(env, type_id).as_str());
-                buf.push(' ');
-                buf.push_str(&self.prefix(&binding.ident));
-                buf.push('=');
-                self.emit_expr(buf, env, &binding.val);
-                buf.push(';');
-            }
-            Stmnt::Ret(ret) => {
-                buf.push_str("return");
-                buf.push(' ');
-                self.emit_expr(buf, env, &ret.val);
-                buf.push(';');
-            }
-            Stmnt::Expr(expr) => {
-                self.emit_expr(buf, env, expr);
-                buf.push(';');
-            }
-        }
-    }
-
-    fn emit_fn(&mut self, buf: &mut String, env: &TypeEnv, func: &Fn) {
-        if func.is_extern {
-            return;
-        }
-
-        buf.push_str(&self.emit_type(env, &func.return_ty));
-        buf.push(' ');
-        if func.ident.as_str() != "main" {
-            buf.push_str(&self.prefix(&func.ident));
-        } else {
-            buf.push_str(func.ident.as_str());
-        }
-        buf.push('(');
-        buf.push_str(
-            func.params
-                .iter()
-                .map(|(ident, ty)| format!("{} {}", self.emit_type(env, ty), self.prefix(ident)))
-                .collect::<Vec<_>>()
-                .join(",")
-                .as_str(),
-        );
-        buf.push(')');
-        buf.push('{');
-
-        if let Some(ref body) = func.body {
-            self.emit_block(buf, env, body);
-            if func.ident.as_str() == "main" && !matches!(body.nodes.last(), Some(Stmnt::Ret(_))) {
-                buf.push_str("return 0;");
-            }
-        }
-
-        buf.push('}');
     }
 }
 
