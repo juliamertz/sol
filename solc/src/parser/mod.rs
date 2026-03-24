@@ -66,7 +66,7 @@ pub enum Prec {
     Cmp,       // > or <
     Sum,       // +
     Product,   // *
-    Prefix,    // -a, !a or &a
+    Unary,    // -a, !a or &a
     Call,      // func()
     Construct, // Point { x : 10, y : 5 }
     Index,     // list[0]
@@ -85,7 +85,7 @@ impl From<&Token<'_>> for Prec {
             TokenKind::Asterisk => Self::Product,
             TokenKind::And | TokenKind::Or => Self::AndOr,
             TokenKind::Dot => Self::Chain,
-            TokenKind::Bang | TokenKind::Ampersand => Self::Prefix,
+            TokenKind::Bang | TokenKind::Ampersand => Self::Unary,
             _ => Self::Lowest,
         }
     }
@@ -486,34 +486,14 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn prefix_expr(&mut self, op: Op) -> Result<PrefixExpr> {
-        let rhs = self.expr(Prec::default())?;
-        let id = self.ctx.next_id();
-        let span = op.span.enclosing_to(&rhs.span());
-
-        Ok(PrefixExpr {
-            op,
-            rhs: Arc::from(rhs),
-            id,
-            span,
-        })
-    }
-
-    fn op(&mut self) -> Result<(Op, Prec)> {
+    fn unary_op(&mut self) -> Result<(Op<UnaryOpKind>, Prec)> {
         let token = self.curr.to_owned();
         let prec = Prec::from(&token);
         let span = token.span;
 
         let kind = match token.kind {
-            TokenKind::Add => Ok(OpKind::Add),
-            TokenKind::Sub => Ok(OpKind::Sub),
-            TokenKind::Eq => Ok(OpKind::Eq),
-            TokenKind::Asterisk => Ok(OpKind::Mul),
-            TokenKind::Slash => Ok(OpKind::Div),
-            TokenKind::LAngle => Ok(OpKind::Lt),
-            TokenKind::RAngle => Ok(OpKind::Gt),
-            TokenKind::And => Ok(OpKind::And),
-            TokenKind::Or => Ok(OpKind::Or),
+            TokenKind::Sub => Ok(UnaryOpKind::Negate),
+            TokenKind::Bang => Ok(UnaryOpKind::Not),
             _ => Err(ParseError::InvalidOperator {
                 src: self.lex.source(),
                 span: token.span(),
@@ -527,8 +507,50 @@ impl<'src> Parser<'src> {
         Ok((op, prec))
     }
 
+    fn unary(&mut self, op: Op<UnaryOpKind>) -> Result<Unary> {
+        let rhs = self.expr(Prec::default())?;
+        let id = self.ctx.next_id();
+        let span = op.span.enclosing_to(&rhs.span());
+
+        Ok(Unary {
+            op,
+            rhs: Arc::from(rhs),
+            id,
+            span,
+        })
+    }
+
+    fn bin_op(&mut self) -> Result<(Op<BinOpKind>, Prec)> {
+        let token = self.curr.to_owned();
+        let prec = Prec::from(&token);
+        let span = token.span;
+
+        let kind = match token.kind {
+            TokenKind::Add => Ok(BinOpKind::Add),
+            TokenKind::Sub => Ok(BinOpKind::Sub),
+            TokenKind::Eq => Ok(BinOpKind::Eq),
+            TokenKind::Asterisk => Ok(BinOpKind::Mul),
+            TokenKind::Slash => Ok(BinOpKind::Div),
+            TokenKind::LAngle => Ok(BinOpKind::Lt),
+            TokenKind::RAngle => Ok(BinOpKind::Gt),
+            TokenKind::And => Ok(BinOpKind::And),
+            TokenKind::Or => Ok(BinOpKind::Or),
+            _ => Err(ParseError::InvalidOperator {
+                src: self.lex.source(),
+                span: token.span(),
+                help: None,
+            }),
+        }?;
+
+        self.advance()?;
+
+        let op = Op { span, kind };
+        Ok((op, prec))
+    }
+
+
     fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
-        let (op, prec) = self.op()?;
+        let (op, prec) = self.bin_op()?;
         let rhs = self.expr(prec)?;
         let id = self.ctx.next_id();
         let span = lhs.span().enclosing_to(&rhs.span());
@@ -630,10 +652,10 @@ impl<'src> Parser<'src> {
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
-            tok if tok.is_prefix_operator() => {
-                let (op, _prec) = self.op()?;
-                let prefix_expr = self.prefix_expr(op)?;
-                Expr::Prefix(prefix_expr)
+            tok if tok.is_unary_op() => {
+                let (op, _prec) = self.unary_op()?;
+                let unary = self.unary(op)?;
+                Expr::Unary(unary)
             }
 
             _ => {

@@ -5,8 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, BinOp, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Item, Let,
-    List, Literal, LiteralKind, MemberAccess, Module, NodeId, OpKind, PrefixExpr, Ret, Stmnt,
+    self, BinOp, BinOpKind, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, NodeId, Ret, Stmnt, Unary, UnaryOpKind
 };
 use crate::ext::Boxed;
 use crate::id;
@@ -226,7 +225,7 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         match last {
             Stmnt::Expr(expr) => env.nodes.get(&expr.id()).copied().unwrap(),
             Stmnt::Ret(Ret { val, .. }) => env.nodes.get(&val.id()).copied().unwrap(),
-            _ => env.types.intern(Type::None),
+            _ => env.types.intern(Type::Unit),
         }
     } else {
         TypeId::NONE
@@ -269,7 +268,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let rhs_ty = infer(rhs.as_ref(), env, scope)?;
 
             match op.kind {
-                OpKind::Eq | OpKind::Lt | OpKind::Gt => {
+                BinOpKind::Eq | BinOpKind::Lt | BinOpKind::Gt => {
                     if lhs_ty != rhs_ty {
                         Err(TypeError::ComparisonMismatch {
                             src: scope.src.clone(),
@@ -284,7 +283,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     }
                 }
 
-                OpKind::And | OpKind::Or => {
+                BinOpKind::And | BinOpKind::Or => {
                     if lhs_ty != TypeId::BOOL {
                         Err(TypeError::InvalidType {
                             expected: Type::Bool,
@@ -308,7 +307,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     let lhs_type = env.types.get(&lhs_ty).unwrap();
                     match lhs_type {
                         Type::Int(_) => match op.kind {
-                            OpKind::Add | OpKind::Sub | OpKind::Mul | OpKind::Div => Ok(lhs_ty),
+                            BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => Ok(lhs_ty),
                             _ => todo!(),
                         },
                         _ => todo!(),
@@ -317,10 +316,10 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             }
         }
 
-        Expr::Prefix(PrefixExpr { op, rhs, .. }) => {
+        Expr::Unary(Unary { op, rhs, .. }) => {
             let ty = infer(rhs, env, scope)?;
             match (&op.kind, env.types.get(&ty).unwrap()) {
-                (OpKind::Sub, Type::Int(_)) => Ok(ty),
+                (UnaryOpKind::Negate, Type::Int(_)) => Ok(ty),
                 _ => todo!(),
             }
         }

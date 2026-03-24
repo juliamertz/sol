@@ -7,7 +7,7 @@ use std::process::Stdio;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::{LiteralKind, OpKind};
+use crate::ast::{BinOpKind, LiteralKind, UnaryOpKind};
 use crate::codegen::c::ast::*;
 use crate::codegen::c::compiler::{CcOpts, cc};
 use crate::codegen::{BuildOpts, Compiler, Emitter};
@@ -66,10 +66,10 @@ impl Emitter for C {
 }
 
 impl C {
-    fn prefix(&self, ident: &hir::Ident) -> String {
+    fn unary(&self, ident: &hir::Ident) -> String {
         format!(
-            "__{prefix}_{ident}",
-            prefix = env!("CARGO_PKG_NAME"),
+            "__{unary}_{ident}",
+            unary = env!("CARGO_PKG_NAME"),
             ident = ident.as_str()
         )
     }
@@ -95,21 +95,28 @@ impl C {
             Type::Struct { name, .. } => CType::named(&*name.inner),
             Type::Ptr(_) => todo!(),
             Type::Fn { .. } => todo!(),
-            Type::None => CType::named("__NONE__"),
+            Type::Unit => todo!(),
         }
     }
 
-    fn lower_op(kind: &OpKind) -> &'static str {
+    fn lower_bin_op(kind: &BinOpKind) -> &'static str {
         match kind {
-            OpKind::Eq => "==",
-            OpKind::Add => "+",
-            OpKind::Sub => "-",
-            OpKind::Mul => "*",
-            OpKind::Div => "/",
-            OpKind::Lt => "<",
-            OpKind::Gt => ">",
-            OpKind::And => "&&",
-            OpKind::Or => "||",
+            BinOpKind::Eq => "==",
+            BinOpKind::Add => "+",
+            BinOpKind::Sub => "-",
+            BinOpKind::Mul => "*",
+            BinOpKind::Div => "/",
+            BinOpKind::Lt => "<",
+            BinOpKind::Gt => ">",
+            BinOpKind::And => "&&",
+            BinOpKind::Or => "||",
+        }
+    }
+
+    fn lower_unary_op(kind: &UnaryOpKind) -> &'static str {
+        match kind {
+            UnaryOpKind::Negate => "-",
+            UnaryOpKind::Not => "!",
         }
     }
 
@@ -121,7 +128,7 @@ impl C {
         {
             ident.as_str().to_owned()
         } else {
-            self.prefix(ident)
+            self.unary(ident)
         };
         CExpr::ident(name)
     }
@@ -136,13 +143,13 @@ impl C {
                 LiteralKind::Bool(val) => CExpr::bool(*val),
             },
 
-            hir::Expr::Prefix(prefix) => {
-                CExpr::prefix(Self::lower_op(&prefix.op.kind), self.lower_expr(env, &prefix.rhs))
+            hir::Expr::Unary(unary) => {
+                CExpr::unary(Self::lower_unary_op(&unary.op.kind), self.lower_expr(env, &unary.rhs))
             }
 
             hir::Expr::BinOp(binop) => self
                 .lower_expr(env, &binop.lhs)
-                .binop(Self::lower_op(&binop.op.kind), self.lower_expr(env, &binop.rhs)),
+                .binop(Self::lower_bin_op(&binop.op.kind), self.lower_expr(env, &binop.rhs)),
 
             hir::Expr::Call(call) => CExpr::call(
                 self.lower_expr(env, &call.func),
@@ -168,7 +175,7 @@ impl C {
                 ctor.ident.as_str(),
                 ctor.fields
                     .iter()
-                    .map(|(ident, expr)| (self.prefix(ident), self.lower_expr(env, expr)))
+                    .map(|(ident, expr)| (self.unary(ident), self.lower_expr(env, expr)))
                     .collect(),
             ),
 
@@ -222,7 +229,7 @@ impl C {
         match stmnt {
             hir::Stmnt::Let(binding) => {
                 let ty = self.lower_type(env, binding.val.type_id());
-                CStmt::var(ty, self.prefix(&binding.ident), self.lower_expr(env, &binding.val))
+                CStmt::var(ty, self.unary(&binding.ident), self.lower_expr(env, &binding.val))
             }
             hir::Stmnt::Ret(ret) => CStmt::ret(self.lower_expr(env, &ret.val)),
             hir::Stmnt::Expr(expr) => CStmt::expr(self.lower_expr(env, expr)),
@@ -244,13 +251,13 @@ impl C {
                 let name = if func.ident.as_str() == "main" {
                     "main".to_owned()
                 } else {
-                    self.prefix(&func.ident)
+                    self.unary(&func.ident)
                 };
 
                 let params: Vec<_> = func
                     .params
                     .iter()
-                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.unary(ident)))
                     .collect();
 
                 let mut body = func
@@ -281,7 +288,7 @@ impl C {
                 let fields = strct
                     .fields
                     .iter()
-                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.unary(ident)))
                     .collect();
                 Some(CItem::typedef_struct(strct.name.as_str(), fields))
             }

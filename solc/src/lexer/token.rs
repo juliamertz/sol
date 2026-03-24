@@ -113,7 +113,7 @@ impl TokenKind {
         )
     }
 
-    pub fn is_prefix_operator(&self) -> bool {
+    pub fn is_unary_op(&self) -> bool {
         matches!(self, TokenKind::Bang | TokenKind::Sub)
     }
 }

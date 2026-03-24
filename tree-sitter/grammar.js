@@ -8,7 +8,7 @@ module.exports = grammar({
 			"index",
 			"construct",
 			"call",
-			"prefix",
+			"unary",
 			"product",
 			"sum",
 			"cmp",
@@ -96,7 +96,7 @@ module.exports = grammar({
 		_expression: ($) =>
 			choice(
 				$.binary_expr,
-				$.prefix_expr,
+				$.unary,
 				$.call_expr,
 				$.index_expr,
 				$.member_access,
@@ -129,8 +129,8 @@ module.exports = grammar({
 				),
 			),
 
-		prefix_expr: ($) =>
-			prec("prefix", seq(choice("-", "!"), $._expression)),
+		unary: ($) =>
+			prec("unary", seq(choice("-", "!"), $._expression)),
 
 		call_expr: ($) =>
 			prec(

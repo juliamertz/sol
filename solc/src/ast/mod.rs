@@ -64,7 +64,7 @@ impl Name {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum OpKind {
+pub enum BinOpKind {
     /// num == 10
     Eq,
     /// 4 + 2
@@ -86,9 +86,15 @@ pub enum OpKind {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Op {
+pub enum UnaryOpKind {
+    Negate,
+    Not,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Op<K> {
     pub span: Span,
-    pub kind: OpKind,
+    pub kind: K,
 }
 
 /// A literal value within the source code
@@ -187,10 +193,10 @@ pub struct Ret {
 }
 
 #[derive(Debug, Clone)]
-pub struct PrefixExpr {
+pub struct Unary {
     pub id: NodeId,
     pub span: Span,
-    pub op: Op,
+    pub op: Op<UnaryOpKind>,
     pub rhs: Arc<Expr>,
 }
 
@@ -199,7 +205,7 @@ pub struct BinOp {
     pub id: NodeId,
     pub span: Span,
     pub lhs: Arc<Expr>,
-    pub op: Op,
+    pub op: Op<BinOpKind>,
     pub rhs: Arc<Expr>,
 }
 
@@ -272,7 +278,7 @@ pub enum Expr {
     Literal(Literal),
     Block(Block),
     BinOp(BinOp),
-    Prefix(PrefixExpr),
+    Unary(Unary),
     Call(CallExpr),
     Index(IndexExpr),
     IfElse(IfElse),
@@ -289,7 +295,7 @@ impl Expr {
             Expr::Literal(literal) => literal.span,
             Expr::Block(block) => block.span,
             Expr::BinOp(bin_op) => bin_op.span,
-            Expr::Prefix(prefix_expr) => prefix_expr.span,
+            Expr::Unary(unary) => unary.span,
             Expr::Call(call_expr) => call_expr.span,
             Expr::Index(index_expr) => index_expr.span,
             Expr::IfElse(if_else) => if_else.span,
@@ -306,7 +312,7 @@ impl Expr {
             Expr::Literal(literal) => literal.id,
             Expr::Block(block) => block.id,
             Expr::BinOp(bin_op) => bin_op.id,
-            Expr::Prefix(prefix_expr) => prefix_expr.id,
+            Expr::Unary(unary) => unary.id,
             Expr::Call(call_expr) => call_expr.id,
             Expr::Index(index_expr) => index_expr.id,
             Expr::IfElse(if_else) => if_else.id,

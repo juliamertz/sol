@@ -180,12 +180,12 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             op: &bin_op.op,
             rhs: lower_expr(&bin_op.rhs, env)?.boxed(),
         }),
-        ast::Expr::Prefix(prefix_expr) => hir::Expr::Prefix(hir::Prefix {
+        ast::Expr::Unary(unary) => hir::Expr::Unary(hir::Unary {
             id: HirId::DUMMY,
             ty,
-            span: &prefix_expr.span,
-            op: &prefix_expr.op,
-            rhs: lower_expr(&prefix_expr.rhs, env)?.boxed(),
+            span: &unary.span,
+            op: &unary.op,
+            rhs: lower_expr(&unary.rhs, env)?.boxed(),
         }),
         ast::Expr::Call(call_expr) => hir::Expr::Call(hir::Call {
             id: HirId::DUMMY,

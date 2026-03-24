@@ -1,7 +1,7 @@
-use crate::ast::OpKind;
+use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::type_checker::DefId;
 
-pub mod builder;
+mod builder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TempId(usize);
@@ -14,6 +14,7 @@ pub enum Constant {
     Int(i128),
     Bool(bool),
     Str(String),
+    Unit,
 }
 
 #[derive(Debug)]
@@ -30,8 +31,13 @@ pub enum Instruction {
     },
     BinOp {
         dest: TempId,
-        op: OpKind,
+        op: BinOpKind,
         lhs: Operand,
+        rhs: Operand,
+    },
+    UnaryOp {
+        dest: TempId,
+        op: UnaryOpKind,
         rhs: Operand,
     },
     Call {
@@ -39,24 +45,6 @@ pub enum Instruction {
         def: DefId,
         operands: Vec<Operand>,
     },
-}
-
-impl Instruction {
-    fn copy(dest: TempId, val: Operand) -> Self {
-        Self::Copy { dest, val }
-    }
-
-    fn bin_op(dest: TempId, op: OpKind, lhs: Operand, rhs: Operand) -> Self {
-        Self::BinOp { dest, op, lhs, rhs }
-    }
-
-    fn call(dest: TempId, def: DefId, operands: Vec<Operand>) -> Self {
-        Self::Call {
-            dest,
-            def,
-            operands,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -68,6 +56,45 @@ pub enum Terminator {
         consequence: BlockId,
         alternative: BlockId,
     },
+}
+
+#[derive(Debug)]
+pub struct Block {
+    body: Vec<Instruction>,
+    term: Terminator,
+}
+
+#[derive(Debug)]
+pub struct Proc {
+    temps: Vec<TempId>,
+    blocks: Vec<Block>,
+}
+
+#[derive(Debug)]
+pub struct Module {
+    procs: Vec<Proc>,
+}
+
+impl Instruction {
+    fn copy(dest: TempId, val: Operand) -> Self {
+        Self::Copy { dest, val }
+    }
+
+    fn bin_op(dest: TempId, op: BinOpKind, lhs: Operand, rhs: Operand) -> Self {
+        Self::BinOp { dest, op, lhs, rhs }
+    }
+
+    fn unary_op(dest: TempId, op: UnaryOpKind, rhs: Operand) -> Self {
+        Self::UnaryOp { dest, op, rhs }
+    }
+
+    fn call(dest: TempId, def: DefId, operands: Vec<Operand>) -> Self {
+        Self::Call {
+            dest,
+            def,
+            operands,
+        }
+    }
 }
 
 impl Terminator {
@@ -86,20 +113,4 @@ impl Terminator {
             alternative,
         }
     }
-}
-
-#[derive(Debug)]
-pub struct Block {
-    body: Vec<Instruction>,
-    term: Terminator,
-}
-
-#[derive(Debug)]
-pub struct Proc {
-    temps: Vec<TempId>,
-    blocks: Vec<Block>,
-}
-
-pub struct Module {
-    procs: Vec<Proc>,
 }

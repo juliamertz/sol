@@ -41,7 +41,7 @@ impl From<&ast::UIntTy> for UIntTy {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
-    None,
+    Unit,
     Int(IntTy),
     UInt(UIntTy),
     Bool,

@@ -113,7 +113,7 @@ fn boolean_operators() {
 }
 
 #[test]
-fn prefix_operators() {
+fn unary_operators() {
     let tokens = lex! {
         !x -y &z
     };

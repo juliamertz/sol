@@ -46,16 +46,16 @@ pub struct BinOp<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub lhs: Box<Expr<'ast>>,
-    pub op: &'ast ast::Op,
+    pub op: &'ast ast::Op<ast::BinOpKind>,
     pub rhs: Box<Expr<'ast>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Prefix<'ast> {
+pub struct Unary<'ast> {
     pub id: HirId,
     pub ty: TypeId,
     pub span: &'ast Span,
-    pub op: &'ast ast::Op,
+    pub op: &'ast ast::Op<ast::UnaryOpKind>,
     pub rhs: Box<Expr<'ast>>,
 }
 
@@ -119,7 +119,7 @@ pub enum Expr<'ast> {
     Literal(Literal<'ast>),
     Block(Block<'ast>),
     BinOp(BinOp<'ast>),
-    Prefix(Prefix<'ast>),
+    Unary(Unary<'ast>),
     Call(Call<'ast>),
     Index(Index<'ast>),
     IfElse(IfElse<'ast>),
@@ -212,7 +212,7 @@ impl Expr<'_> {
             Expr::Literal(literal) => &literal.ty,
             Expr::Block(block) => &block.ty,
             Expr::BinOp(bin_op) => &bin_op.ty,
-            Expr::Prefix(prefix) => &prefix.ty,
+            Expr::Unary(unary) => &unary.ty,
             Expr::Call(call) => &call.ty,
             Expr::Index(index) => &index.ty,
             Expr::IfElse(if_else) => &if_else.ty,
@@ -229,7 +229,7 @@ impl Expr<'_> {
             Expr::Literal(literal) => &literal.span,
             Expr::Block(block) => &block.span,
             Expr::BinOp(bin_op) => &bin_op.span,
-            Expr::Prefix(prefix) => &prefix.span,
+            Expr::Unary(unary) => &unary.span,
             Expr::Call(call) => &call.span,
             Expr::Index(index) => &index.span,
             Expr::IfElse(if_else) => &if_else.span,

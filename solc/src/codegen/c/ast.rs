@@ -60,7 +60,7 @@ pub enum CExpr {
         op: &'static str,
         rhs: Box<CExpr>,
     },
-    Prefix {
+    Unary {
         op: &'static str,
         expr: Box<CExpr>,
     },
@@ -120,8 +120,8 @@ impl CExpr {
         }
     }
 
-    pub fn prefix(op: &'static str, expr: CExpr) -> Self {
-        Self::Prefix {
+    pub fn unary(op: &'static str, expr: CExpr) -> Self {
+        Self::Unary {
             op,
             expr: expr.boxed(),
         }
@@ -155,7 +155,7 @@ impl fmt::Display for CExpr {
             Self::IntLit(val) => write!(f, "{val}"),
             Self::StrLit(val) => write!(f, "\"{val}\""),
             Self::BinOp { lhs, op, rhs } => write!(f, "{lhs}{op}{rhs}"),
-            Self::Prefix { op, expr } => write!(f, "{op}{expr}"),
+            Self::Unary { op, expr } => write!(f, "{op}{expr}"),
             Self::Call { func, args } => {
                 write!(f, "{func}(")?;
                 for (i, arg) in args.iter().enumerate() {

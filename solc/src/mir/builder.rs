@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::ast;
 use crate::hir::{self};
-use crate::mir::{Block, BlockId, Instruction, Operand, TempId, Terminator};
+use crate::mir::{Block, BlockId, Constant, Instruction, Operand, TempId, Terminator};
 
 #[derive(Debug, Default)]
 struct BlockBuilder {
@@ -34,6 +36,7 @@ pub struct Builder {
     temp_idx: usize,
     block_idx: usize,
     blocks: Vec<BlockBuilder>,
+    locals: HashMap<String, Operand>,
 }
 
 impl Builder {
@@ -59,7 +62,37 @@ impl Builder {
         hir_block: &hir::Block<'_>,
         block: BlockId,
     ) -> (Operand, BlockId) {
-        todo!()
+        let mut last_val = None;
+        let mut last_block = block;
+
+        for stmnt in hir_block.nodes.iter() {
+            if let hir::Stmnt::Expr(expr) = stmnt {
+                let (val, block) = self.lower_expr(expr, last_block);
+                last_val = Some(val);
+                last_block = block;
+            } else {
+                last_block = self.lower_stmnt(stmnt, last_block);
+            }
+        }
+
+        let val = last_val.unwrap_or(Operand::Constant(Constant::Unit));
+        (val, last_block)
+    }
+
+    fn lower_stmnt(&mut self, stmnt: &hir::Stmnt<'_>, block: BlockId) -> BlockId {
+        match stmnt {
+            hir::Stmnt::Let(binding) => todo!(),
+            hir::Stmnt::Ret(ret) => {
+                let (val, block) = self.lower_expr(&ret.val, block);
+                self.get_block_mut(&block)
+                    .terminate(Terminator::Return(val));
+                block
+            }
+            hir::Stmnt::Expr(expr) => {
+                let (_val, block) = self.lower_expr(expr, block);
+                block
+            }
+        }
     }
 
     fn lower_expr(&mut self, expr: &hir::Expr<'_>, block: BlockId) -> (Operand, BlockId) {
@@ -102,18 +135,44 @@ impl Builder {
                 (Operand::Temporary(dest), join_block)
             }
 
-            hir::Expr::Literal(literal) => {
-                match literal.kind {
-                    ast::LiteralKind::Str(str) => todo!(),
-                    ast::LiteralKind::Int(int) => todo!(),
-                    ast::LiteralKind::Bool(int) => todo!(),
-                }
-            },
+            hir::Expr::Literal(literal) => (
+                Operand::Constant(match literal.kind {
+                    ast::LiteralKind::Str(val) => Constant::Str(val.to_string()),
+                    ast::LiteralKind::Int(val) => Constant::Int(*val),
+                    ast::LiteralKind::Bool(val) => Constant::Bool(*val),
+                }),
+                block,
+            ),
+
+            hir::Expr::Unary(hir::Unary { op, rhs, .. }) => {
+                let (rhs, block) = self.lower_expr(&rhs, block);
+                let dest = self.new_temp();
+
+                self.get_block_mut(&block)
+                    .push_instr(Instruction::unary_op(dest, op.kind, rhs));
+
+                (Operand::Temporary(dest), block)
+            }
+
+            hir::Expr::Call(call) => {
+                let (params, block) = call
+                    .params
+                    .iter()
+                    .fold((vec![], block), |(mut acc, block), expr| {
+                        let (val, block) = self.lower_expr(expr, block);
+                        acc.push(val);
+                        (acc, block)
+                    });
+
+                let dest = self.new_temp();
+                // TODO: hir call needs defid
+                // self.get_block_mut(block).push_instr(Instruction::call(dest, call.))
+                todo!();
+            }
+
+            hir::Expr::Block(hir_block) => self.lower_hir_block(hir_block, block),
 
             hir::Expr::Ident(ident) => todo!(),
-            hir::Expr::Block(block) => todo!(),
-            hir::Expr::Prefix(prefix) => todo!(),
-            hir::Expr::Call(call) => todo!(),
             hir::Expr::Index(index) => todo!(),
             hir::Expr::List(list) => todo!(),
             hir::Expr::Constructor(constructor) => todo!(),
