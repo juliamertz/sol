@@ -602,6 +602,17 @@ impl<'src> Parser<'src> {
         Ok(Literal { id, span, kind })
     }
 
+    fn bool_lit(&mut self) -> Result<Literal> {
+        let span = self.curr.span;
+        let val = if self.at(TokenKind::True) {true} else if self.at(TokenKind::False) {false} else {
+            todo!();
+        };
+        let kind = LiteralKind::Bool(val);
+        self.advance()?;
+        let id = self.ctx.next_id();
+        Ok(Literal { id, span, kind })
+    }
+
     fn str_lit(&mut self) -> Result<Literal> {
         let text = self.curr.text;
         let span = self.curr.span;
@@ -614,6 +625,7 @@ impl<'src> Parser<'src> {
     pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
             TokenKind::Int => Expr::Literal(self.int_lit()?),
+            TokenKind::True | TokenKind::False => Expr::Literal(self.bool_lit()?),
             TokenKind::String => Expr::Literal(self.str_lit()?),
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),

@@ -52,6 +52,7 @@ impl fmt::Display for CType {
 #[derive(Debug, Clone)]
 pub enum CExpr {
     Ident(String),
+    Bool(bool),
     IntLit(i128),
     StrLit(String),
     BinOp {
@@ -81,6 +82,10 @@ pub enum CExpr {
 }
 
 impl CExpr {
+    pub fn bool(val: bool) -> Self {
+        Self::Bool(val)
+    }
+
     pub fn ident(name: impl Into<String>) -> Self {
         Self::Ident(name.into())
     }
@@ -145,6 +150,7 @@ impl CExpr {
 impl fmt::Display for CExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Bool(val) => f.write_str(if *val { "true" } else { "false" }),
             Self::Ident(name) => f.write_str(name),
             Self::IntLit(val) => write!(f, "{val}"),
             Self::StrLit(val) => write!(f, "\"{val}\""),

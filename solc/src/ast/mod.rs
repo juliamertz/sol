@@ -96,7 +96,7 @@ pub struct Op {
 pub enum LiteralKind {
     Str(Arc<str>),
     Int(i128),
-    // Bool(bool),
+    Bool(bool),
 }
 
 #[derive(Debug, Clone)]

@@ -252,6 +252,11 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 env.nodes.insert(*id, type_id);
                 Ok(type_id)
             }
+            LiteralKind::Bool(_) => {
+                let type_id = TypeId::BOOL;
+                env.nodes.insert(*id, type_id);
+                Ok(type_id)
+            }
         },
 
         Expr::Block(block) => {

@@ -106,6 +106,7 @@ impl Builder {
                 match literal.kind {
                     ast::LiteralKind::Str(str) => todo!(),
                     ast::LiteralKind::Int(int) => todo!(),
+                    ast::LiteralKind::Bool(int) => todo!(),
                 }
             },
 

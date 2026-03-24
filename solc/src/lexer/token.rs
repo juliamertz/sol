@@ -15,6 +15,8 @@ pub enum TokenKind {
     Int,
     String,
     Ident,
+    True,
+    False,
 
     LParen,
     RParen,
@@ -72,6 +74,8 @@ impl TokenKind {
                 | TokenKind::Extern
                 | TokenKind::Struct
                 | TokenKind::Impl
+                | TokenKind::True
+                | TokenKind::False
         )
     }
 
@@ -135,6 +139,8 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock
         ("extern", TokenKind::Extern),
         ("struct", TokenKind::Struct),
         ("impl", TokenKind::Impl),
+        ("true", TokenKind::True),
+        ("false", TokenKind::False),
     ]
     .into_iter()
     .collect()

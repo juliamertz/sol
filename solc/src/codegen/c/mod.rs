@@ -131,8 +131,9 @@ impl C {
             hir::Expr::Ident(ident) => self.lower_ident(env, ident),
 
             hir::Expr::Literal(literal) => match &literal.kind {
-                LiteralKind::Str(s) => CExpr::str(s.as_ref()),
-                LiteralKind::Int(n) => CExpr::int(*n),
+                LiteralKind::Str(str) => CExpr::str(str.as_ref()),
+                LiteralKind::Int(int) => CExpr::int(*int),
+                LiteralKind::Bool(val) => CExpr::bool(*val),
             },
 
             hir::Expr::Prefix(prefix) => {
