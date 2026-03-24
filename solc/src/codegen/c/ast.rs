@@ -52,7 +52,7 @@ impl fmt::Display for CType {
 #[derive(Debug, Clone)]
 pub enum CExpr {
     Ident(String),
-    IntLit(i64),
+    IntLit(i128),
     StrLit(String),
     BinOp {
         lhs: Box<CExpr>,
@@ -85,7 +85,7 @@ impl CExpr {
         Self::Ident(name.into())
     }
 
-    pub fn int(val: i64) -> Self {
+    pub fn int(val: i128) -> Self {
         Self::IntLit(val)
     }
 
