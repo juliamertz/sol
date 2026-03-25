@@ -16,3 +16,4 @@ clap = { version = "4", default-features = false, features = [
   "help",
 ] }
 strum = { version = "0.28.0", features = ["derive"] }
+either = "1.15.0"

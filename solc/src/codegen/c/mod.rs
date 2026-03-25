@@ -11,6 +11,7 @@ use crate::ast::{BinOpKind, LiteralKind, UnaryOpKind};
 use crate::codegen::c::ast::*;
 use crate::codegen::c::compiler::{CcOpts, cc};
 use crate::codegen::{BuildOpts, Compiler, Emitter};
+use crate::ext::AsStr;
 use crate::hir;
 use crate::type_checker::ty::{IntTy, Type, UIntTy};
 use crate::type_checker::{TypeEnv, TypeId};
@@ -66,7 +67,7 @@ impl Emitter for C {
 }
 
 impl C {
-    fn unary(&self, ident: &hir::Ident) -> String {
+    fn prefix(&self, ident: &impl AsStr) -> String {
         format!(
             "__{unary}_{ident}",
             unary = env!("CARGO_PKG_NAME"),
@@ -92,7 +93,7 @@ impl C {
             Type::Str => CType::CharPtr,
             Type::Bool => CType::Bool,
             Type::List(..) => CType::named("List"),
-            Type::Struct { name, .. } => CType::named(&*name.inner),
+            Type::Struct { ident: name, .. } => CType::named(&*name.inner),
             Type::Ptr(_) => todo!(),
             Type::Fn { .. } => todo!(),
             Type::Unit => todo!(),
@@ -128,7 +129,7 @@ impl C {
         {
             ident.as_str().to_owned()
         } else {
-            self.unary(ident)
+            self.prefix(ident)
         };
         CExpr::ident(name)
     }
@@ -143,17 +144,22 @@ impl C {
                 LiteralKind::Bool(val) => CExpr::bool(*val),
             },
 
-            hir::Expr::Unary(unary) => {
-                CExpr::unary(Self::lower_unary_op(&unary.op.kind), self.lower_expr(env, &unary.rhs))
-            }
+            hir::Expr::Unary(unary) => CExpr::unary(
+                Self::lower_unary_op(&unary.op.kind),
+                self.lower_expr(env, &unary.rhs),
+            ),
 
-            hir::Expr::BinOp(binop) => self
-                .lower_expr(env, &binop.lhs)
-                .binop(Self::lower_bin_op(&binop.op.kind), self.lower_expr(env, &binop.rhs)),
+            hir::Expr::BinOp(binop) => self.lower_expr(env, &binop.lhs).binop(
+                Self::lower_bin_op(&binop.op.kind),
+                self.lower_expr(env, &binop.rhs),
+            ),
 
             hir::Expr::Call(call) => CExpr::call(
                 self.lower_expr(env, &call.func),
-                call.params.iter().map(|p| self.lower_expr(env, p)).collect(),
+                call.params
+                    .iter()
+                    .map(|p| self.lower_expr(env, p))
+                    .collect(),
             ),
 
             hir::Expr::IfElse(if_else) => {
@@ -175,7 +181,7 @@ impl C {
                 ctor.ident.as_str(),
                 ctor.fields
                     .iter()
-                    .map(|(ident, expr)| (self.unary(ident), self.lower_expr(env, expr)))
+                    .map(|(ident, expr)| (self.prefix(ident), self.lower_expr(env, expr)))
                     .collect(),
             ),
 
@@ -229,7 +235,11 @@ impl C {
         match stmnt {
             hir::Stmnt::Let(binding) => {
                 let ty = self.lower_type(env, binding.val.type_id());
-                CStmt::var(ty, self.unary(&binding.ident), self.lower_expr(env, &binding.val))
+                CStmt::var(
+                    ty,
+                    self.prefix(&binding.ident),
+                    self.lower_expr(env, &binding.val),
+                )
             }
             hir::Stmnt::Ret(ret) => CStmt::ret(self.lower_expr(env, &ret.val)),
             hir::Stmnt::Expr(expr) => CStmt::expr(self.lower_expr(env, expr)),
@@ -237,36 +247,36 @@ impl C {
     }
 
     fn lower_block(&self, env: &TypeEnv, block: &hir::Block) -> Vec<CStmt> {
-        block.nodes.iter().map(|s| self.lower_stmnt(env, s)).collect()
+        block
+            .nodes
+            .iter()
+            .map(|s| self.lower_stmnt(env, s))
+            .collect()
     }
 
     fn lower_item(&self, env: &TypeEnv, item: &hir::Item) -> Option<CItem> {
         match item {
-            hir::Item::Fn(func) => {
-                if func.is_extern {
-                    return None;
-                }
-
-                let ret = self.lower_type(env, &func.return_ty);
-                let name = if func.ident.as_str() == "main" {
+            hir::Item::Fn(hir::Fn {
+                ident,
+                kind: hir::FnKind::Local { params, body },
+                return_ty,
+                ..
+            }) => {
+                let ret = self.lower_type(env, return_ty);
+                let name = if ident.as_str() == "main" {
                     "main".to_owned()
                 } else {
-                    self.unary(&func.ident)
+                    self.prefix(&ident)
                 };
 
-                let params: Vec<_> = func
-                    .params
+                let params: Vec<_> = params
                     .iter()
-                    .map(|(ident, ty)| (self.lower_type(env, ty), self.unary(ident)))
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
                     .collect();
 
-                let mut body = func
-                    .body
-                    .as_ref()
-                    .map(|b| self.lower_block(env, b))
-                    .unwrap_or_default();
+                let mut body = self.lower_block(env, body);
 
-                if func.ident.as_str() == "main" {
+                if ident.as_str() == "main" {
                     let needs_return = !matches!(body.last(), Some(CStmt::Return(_)));
                     if needs_return {
                         body.push(CStmt::ret(CExpr::int(0)));
@@ -276,21 +286,23 @@ impl C {
                 Some(CItem::fn_def(ret, name, params, body))
             }
 
+            hir::Item::Fn(_) => None,
+
             hir::Item::Use(r#use) => {
                 assert!(
                     r#use.is_extern,
                     "non extern `use` statements are not supported yet"
                 );
-                Some(CItem::include_system(format!("{}.h", r#use.ident.inner)))
+                Some(CItem::include_system(format!("{}.h", r#use.name.inner)))
             }
 
             hir::Item::StructDef(strct) => {
                 let fields = strct
                     .fields
                     .iter()
-                    .map(|(ident, ty)| (self.lower_type(env, ty), self.unary(ident)))
+                    .map(|(ident, ty)| (self.lower_type(env, ty), self.prefix(ident)))
                     .collect();
-                Some(CItem::typedef_struct(strct.name.as_str(), fields))
+                Some(CItem::typedef_struct(strct.ident.as_str(), fields))
             }
         }
     }

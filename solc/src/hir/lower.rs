@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::ast;
 use crate::ext::Boxed;
 use crate::hir::{self, HirId};
+use crate::lexer::source::{SourceInfo, Span};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
@@ -13,8 +14,17 @@ pub enum LowerError {
     #[diagnostic(transparent)]
     Type(#[from] TypeError),
     #[error(transparent)]
-    // #[diagnostic(transparent)]
+    #[diagnostic(transparent)]
     Collect(#[from] CollectError),
+    #[error("failed to resolve definition")]
+    #[diagnostic(code(solc::hir::lower))]
+    MissingDef {
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("here")]
+        span: Span,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, LowerError>;
@@ -29,47 +39,48 @@ pub fn lower_item<'ast>(
             id: HirId::DUMMY,
             span: &inner.span,
             is_extern: inner.is_extern,
-            ident: if inner.is_extern {
-                lower_untyped_ident(&inner.ident)
-            } else {
-                lower_ident(&inner.ident, env)?
-            },
+            name: lower_name(&inner.name),
         })),
         ast::Item::Fn(func) => {
-            let param_ids: Vec<_> = func
-                .params
-                .iter()
-                .map(|(ident, ty)| {
-                    let type_id = env.type_of(&ty.id);
-                    (lower_typed_ident(ident, type_id), type_id)
-                })
-                .collect::<Vec<_>>();
+            let kind = match &func.kind {
+                ast::FnKind::Local { params, body } => hir::FnKind::Local {
+                    params: params
+                        .iter()
+                        .map(|(ident, ty)| {
+                            Ok((lower_ident(ident, env)?, env.type_of(&ty.id, &ty.span)?))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into(),
+                    body: lower_block(body, env)?,
+                },
+                ast::FnKind::Extern { params } => hir::FnKind::Extern {
+                    params: params
+                        .iter()
+                        .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
+                        .collect::<Result<Vec<_>>>()?
+                        .into(),
+                },
+            };
 
             Some(hir::Item::Fn(hir::Fn {
                 id: HirId::DUMMY,
                 span: &func.span,
-                is_extern: func.is_extern,
-                ident: lower_untyped_ident(&func.ident),
-                params: param_ids.into(),
-                return_ty: env.type_of(&func.return_ty.id),
-                body: func
-                    .body
-                    .as_ref()
-                    .map(|body| lower_block(body, env))
-                    .transpose()?,
+                ident: lower_ident(&func.ident, env)?,
+                kind,
+                return_ty: env.type_of(&func.return_ty.id, &func.span)?,
             }))
         }
         ast::Item::StructDef(def) => Some(hir::Item::StructDef(hir::StructDef {
             id: HirId::DUMMY,
             span: &def.span,
-            name: lower_name(&def.name),
+            ident: lower_ident(&def.ident, env)?,
             fields: def
                 .fields
                 .iter()
-                .map(|(ident, ty)| Ok((lower_untyped_ident(ident), env.type_of(&ty.id))))
+                .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
-            impls: inventory.take_impls(&def.name).into(),
+            impls: inventory.take_impls(&def.ident).into(),
         })),
         ast::Item::Impl(_) => None,
     })
@@ -99,33 +110,16 @@ pub fn lower_module<'ast>(
 }
 
 pub fn lower_block<'ast>(block: &'ast ast::Block, env: &mut TypeEnv) -> Result<hir::Block<'ast>> {
-    let stmnts = block
-        .nodes
-        .iter()
-        .enumerate()
-        .map(|(idx, stmnt)| {
-            let lowered = lower_stmnt(stmnt, env)?;
-            if idx != block.nodes.len() - 1 {
-                return Ok(lowered);
-            }
-            let hir::Stmnt::Expr(expr) = lowered else {
-                return Ok(lowered);
-            };
-
-            Ok(hir::Stmnt::Ret(hir::Ret {
-                id: HirId::DUMMY,
-                ty: *expr.type_id(),
-                span: *expr.span(),
-                val: expr,
-            }))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
     Ok(hir::Block {
         id: HirId::DUMMY,
         ty: TypeId::NONE,
         span: &block.span,
-        nodes: stmnts.into(),
+        nodes: block
+            .nodes
+            .iter()
+            .map(|stmnt| lower_stmnt(stmnt, env))
+            .collect::<Result<Vec<_>>>()?
+            .into(),
     })
 }
 
@@ -137,32 +131,59 @@ pub fn lower_name<'ast>(name: &'ast ast::Name) -> hir::Name<'ast> {
     }
 }
 
-pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &mut TypeEnv) -> Result<hir::Ident<'ast>> {
+pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &TypeEnv) -> Result<hir::Ident<'ast>> {
+    let def_id = env
+        .node_defs
+        .get(&ident.id)
+        .copied()
+        .ok_or_else(|| LowerError::MissingDef {
+            span: ident.span,
+            src: env.src.clone(),
+        })?;
+
     Ok(hir::Ident {
         id: HirId::DUMMY,
-        ty: env.type_of(&ident.id),
+        def_id,
+        ty: env.type_of(&ident.id, &ident.span)?,
         span: &ident.span,
         inner: &ident.inner,
     })
 }
 
 /// lower ident with a predetermined type
-pub fn lower_typed_ident<'ast>(ident: &'ast ast::Ident, ty: TypeId) -> hir::Ident<'ast> {
-    hir::Ident {
+pub fn lower_typed_ident<'ast>(
+    ident: &'ast ast::Ident,
+    ty: TypeId,
+    env: &TypeEnv,
+) -> Result<hir::Ident<'ast>> {
+    let def_id = env
+        .node_defs
+        .get(&ident.id)
+        .copied()
+        .ok_or_else(|| LowerError::MissingDef {
+            span: ident.span,
+            src: env.src.clone(),
+        })?;
+
+    Ok(hir::Ident {
         id: HirId::DUMMY,
+        def_id,
         ty,
         span: &ident.span,
         inner: &ident.inner,
-    }
+    })
 }
 
 /// lower identifier without inferring it's type.
-pub fn lower_untyped_ident<'ast>(ident: &'ast ast::Ident) -> hir::Ident<'ast> {
-    lower_typed_ident(ident, TypeId::NONE)
+pub fn lower_untyped_ident<'ast>(
+    ident: &'ast ast::Ident,
+    env: &TypeEnv,
+) -> Result<hir::Ident<'ast>> {
+    lower_typed_ident(ident, TypeId::NONE, env)
 }
 
 pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir::Expr<'ast>> {
-    let ty = env.type_of(&expr.id());
+    let ty = env.type_of(&expr.id(), &expr.span())?;
     let lowered = match expr {
         ast::Expr::Ident(ident) => hir::Expr::Ident(lower_ident(ident, env)?),
         ast::Expr::Literal(literal) => hir::Expr::Literal(hir::Literal {
@@ -187,18 +208,26 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             op: &unary.op,
             rhs: lower_expr(&unary.rhs, env)?.boxed(),
         }),
-        ast::Expr::Call(call_expr) => hir::Expr::Call(hir::Call {
-            id: HirId::DUMMY,
-            ty,
-            span: &call_expr.span,
-            func: lower_expr(&call_expr.func, env)?.boxed(),
-            params: call_expr
-                .params
-                .iter()
-                .map(|param| lower_expr(param, env))
-                .collect::<Result<Vec<_>>>()?
-                .into(),
-        }),
+        ast::Expr::Call(call_expr) => {
+            let def_id = env
+                .node_defs
+                .get(&call_expr.func.id())
+                .copied()
+                .expect("call target should have a resolved DefId");
+            hir::Expr::Call(hir::Call {
+                id: HirId::DUMMY,
+                def_id,
+                ty,
+                span: &call_expr.span,
+                func: lower_expr(&call_expr.func, env)?.boxed(),
+                params: call_expr
+                    .params
+                    .iter()
+                    .map(|param| lower_expr(param, env))
+                    .collect::<Result<Vec<_>>>()?
+                    .into(),
+            })
+        }
         ast::Expr::Index(index_expr) => hir::Expr::Index(hir::Index {
             id: HirId::DUMMY,
             ty,
@@ -237,7 +266,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             fields: constructor
                 .fields
                 .iter()
-                .map(|(ident, expr)| Ok((lower_untyped_ident(ident), lower_expr(expr, env)?)))
+                .map(|(ident, expr)| Ok((lower_untyped_ident(ident, env)?, lower_expr(expr, env)?)))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
@@ -246,7 +275,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             ty,
             span: &member_access.span,
             lhs: lower_expr(&member_access.lhs, env)?.boxed(),
-            ident: lower_typed_ident(&member_access.ident, ty),
+            ident: lower_typed_ident(&member_access.ident, ty, env)?,
         }),
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env)?.into()),
     };
@@ -261,8 +290,14 @@ pub fn lower_stmnt<'ast>(stmnt: &'ast ast::Stmnt, env: &mut TypeEnv) -> Result<h
                 .get(&inner.val.id())
                 .copied()
                 .unwrap_or(TypeId::NONE);
+            let def_id = env
+                .node_defs
+                .get(&inner.ident.id)
+                .copied()
+                .expect("call target should have a resolved DefId");
             hir::Stmnt::Let(hir::Let {
                 id: HirId::DUMMY,
+                def_id,
                 span: &inner.span,
                 ident: lower_ident(&inner.ident, env)?,
                 ty,

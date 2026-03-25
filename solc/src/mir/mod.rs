@@ -1,7 +1,12 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::type_checker::DefId;
 
+mod lower;
 mod builder;
+mod fmt;
+
+use builder::{Builder, BlockBuilder};
+pub use lower::lower_module;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TempId(usize);
@@ -9,7 +14,7 @@ pub struct TempId(usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockId(usize);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Constant {
     Int(i128),
     Bool(bool),
@@ -17,7 +22,7 @@ pub enum Constant {
     Unit,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operand {
     Temporary(TempId),
     Constant(Constant),
@@ -65,14 +70,14 @@ pub struct Block {
 }
 
 #[derive(Debug)]
-pub struct Proc {
+pub struct Procedure {
     temps: Vec<TempId>,
     blocks: Vec<Block>,
 }
 
 #[derive(Debug)]
 pub struct Module {
-    procs: Vec<Proc>,
+    procs: Vec<Procedure>,
 }
 
 impl Instruction {

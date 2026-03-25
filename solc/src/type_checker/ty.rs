@@ -54,9 +54,27 @@ pub enum Type {
         returns: TypeId,
     },
     Struct {
-        name: Box<ast::Name>, // TODO: this field should probably be removed but we're still using it in places to pass around the name
-        fields: Box<[(ast::Ident, TypeId)]>,
+        ident: Box<ast::Ident>, // TODO: this field should probably be removed but we're still using it in places to pass around the name
+        fields: Box<[(ast::Name, TypeId)]>,
     },
+}
+
+impl Type {
+    pub fn func(params: impl Into<Box<[TypeId]>>, returns: TypeId) -> Self {
+        Self::Fn {
+            is_extern: false,
+            params: params.into(),
+            returns,
+        }
+    }
+
+    pub fn extern_func(params: impl Into<Box<[TypeId]>>, returns: TypeId) -> Self {
+        Self::Fn {
+            is_extern: true,
+            params: params.into(),
+            returns,
+        }
+    }
 }
 
 impl std::fmt::Display for Type {

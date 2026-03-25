@@ -4,7 +4,7 @@ use std::mem;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::{Fn, Impl, Item, Name, StructDef};
+use crate::{ast::{Fn, Impl, Item, Name, StructDef}, ext::AsStr};
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::type_checker::collect))]
@@ -20,7 +20,7 @@ pub struct Inventory<'ast> {
 }
 
 impl<'ast> Inventory<'ast> {
-    pub fn take_impls(&mut self, name: &'ast Name) -> Vec<&'ast Impl> {
+    pub fn take_impls(&mut self, name: impl AsStr) -> Vec<&'ast Impl> {
         self.impls.remove(name.as_str()).unwrap_or_default()
     }
 

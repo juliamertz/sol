@@ -9,7 +9,7 @@ use miette::{IntoDiagnostic, Result};
 
 use solc::{
     codegen::{self, Compiler, Emitter},
-    hir, lexer, parser,
+    hir, lexer, mir, parser,
     type_checker::{self, Scope, TypeEnv},
 };
 
@@ -74,6 +74,9 @@ enum Command {
     DumpHir {
         file_path: PathBuf,
     },
+    DumpMir {
+        file_path: PathBuf,
+    },
 }
 
 fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
@@ -83,8 +86,8 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
     let module = parser.parse()?;
 
-    let mut env = TypeEnv::default();
-    let mut scope = Scope::new(parser.lex.source());
+    let mut env = TypeEnv::new(parser.lex.source());
+    let mut scope = Scope::default();
 
     type_checker::check_module(&module, &mut env, &mut scope)?;
 
@@ -199,11 +202,27 @@ fn main() -> Result<()> {
             let mut parser = parser::Parser::new(file_path, &content)?;
             let module = parser.parse()?;
 
-            let mut env = TypeEnv::default();
-            let mut scope = Scope::new(parser.lex.source());
+            let mut env = TypeEnv::new(parser.lex.source());
+            let mut scope = Scope::default();
             type_checker::check_module(&module, &mut env, &mut scope)?;
             let hir = hir::lower_module(&module, &mut env)?;
             dbg!(&hir);
+        }
+        Command::DumpMir { file_path } => {
+            let content = std::fs::read_to_string(&file_path).unwrap();
+            let mut parser = parser::Parser::new(file_path, &content)?;
+            let module = parser.parse()?;
+
+            let mut env = TypeEnv::new(parser.lex.source());
+            let mut scope = Scope::default();
+            type_checker::check_module(&module, &mut env, &mut scope)?;
+            let hir = hir::lower_module(&module, &mut env)?;
+            let mir = mir::lower_module(&hir, &env)?;
+            
+            let mut stdout = std::io::stdout();
+            stdout.write_all(mir.to_string().as_bytes()).unwrap();
+
+            // dbg!(&mir);
         }
     }
 

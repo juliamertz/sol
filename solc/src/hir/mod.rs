@@ -1,5 +1,6 @@
+use crate::ext::AsStr;
 use crate::lexer::source::Span;
-use crate::type_checker::TypeId;
+use crate::type_checker::{DefId, TypeId};
 use crate::{ast, id};
 
 mod lower;
@@ -12,6 +13,7 @@ id!(HirId);
 #[derive(Debug, Clone)]
 pub struct Ident<'ast> {
     pub id: HirId,
+    pub def_id: DefId,
     pub ty: TypeId,
     pub span: &'ast Span,
     pub inner: &'ast str,
@@ -62,6 +64,7 @@ pub struct Unary<'ast> {
 #[derive(Debug, Clone)]
 pub struct Call<'ast> {
     pub id: HirId,
+    pub def_id: DefId,
     pub ty: TypeId,
     pub span: &'ast Span,
     pub func: Box<Expr<'ast>>,
@@ -132,6 +135,7 @@ pub enum Expr<'ast> {
 #[derive(Debug, Clone)]
 pub struct Let<'ast> {
     pub id: HirId,
+    pub def_id: DefId,
     pub ty: TypeId,
     pub span: &'ast Span,
     pub ident: Ident<'ast>,
@@ -151,26 +155,35 @@ pub struct Use<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
     pub is_extern: bool,
-    pub ident: Ident<'ast>,
+    pub name: Name<'ast>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FnKind<'ast> {
+    Local {
+        params: Box<[(Ident<'ast>, TypeId)]>,
+        body: Block<'ast>,
+    },
+    Extern {
+        params: Box<[(Name<'ast>, TypeId)]>,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct Fn<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
-    pub is_extern: bool,
     pub ident: Ident<'ast>,
-    pub params: Box<[(Ident<'ast>, TypeId)]>,
+    pub kind: FnKind<'ast>,
     pub return_ty: TypeId,
-    pub body: Option<Block<'ast>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct StructDef<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
-    pub name: Name<'ast>,
-    pub fields: Box<[(Ident<'ast>, TypeId)]>,
+    pub ident: Ident<'ast>,
+    pub fields: Box<[(Name<'ast>, TypeId)]>,
     pub impls: Box<[&'ast ast::Impl]>, // TODO: This should probably also be lowered...
 }
 
@@ -193,14 +206,26 @@ pub struct Module<'ast> {
     pub items: Box<[Item<'ast>]>,
 }
 
-impl Ident<'_> {
-    pub fn as_str(&self) -> &str {
+impl AsStr for &Ident<'_> {
+    fn as_str(&self) -> &str {
         self.inner
     }
 }
 
-impl Name<'_> {
-    pub fn as_str(&self) -> &str {
+impl AsStr for &Name<'_> {
+    fn as_str(&self) -> &str {
+        self.inner
+    }
+}
+
+impl AsStr for Ident<'_> {
+    fn as_str(&self) -> &str {
+        self.inner
+    }
+}
+
+impl AsStr for Name<'_> {
+    fn as_str(&self) -> &str {
         self.inner
     }
 }

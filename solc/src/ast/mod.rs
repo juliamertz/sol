@@ -2,6 +2,9 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use either::Either;
+
+use crate::ext::AsStr;
 use crate::id;
 use crate::lexer::source::Span;
 
@@ -15,15 +18,15 @@ pub struct Ident {
     pub is_extern: bool,
 }
 
-impl Ident {
-    pub fn as_str(&self) -> &str {
+impl AsStr for Ident {
+    fn as_str(&self) -> &str {
         &self.inner
     }
 }
 
-impl From<&Ident> for Arc<str> {
-    fn from(val: &Ident) -> Self {
-        val.inner.clone()
+impl AsStr for &Ident {
+    fn as_str(&self) -> &str {
+        &self.inner
     }
 }
 
@@ -57,8 +60,14 @@ impl PartialEq for Name {
     }
 }
 
-impl Name {
-    pub fn as_str(&self) -> &str {
+impl AsStr for Name {
+    fn as_str(&self) -> &str {
+        &self.inner
+    }
+}
+
+impl AsStr for &Name {
+    fn as_str(&self) -> &str {
         &self.inner
     }
 }
@@ -226,28 +235,66 @@ pub struct IndexExpr {
 }
 
 #[derive(Debug, Clone)]
+pub enum FnKind {
+    Local {
+        params: Arc<[(Ident, Ty)]>,
+        body: Block,
+    },
+    Extern {
+        params: Arc<[(Name, Ty)]>,
+    },
+}
+
+pub enum Params<'a> {
+    Local(&'a [(Ident, Ty)]),
+    Extern(&'a [(Name, Ty)]),
+}
+
+impl Params<'_> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Ty)> {
+        match self {
+            Params::Local(s) => Either::Left(s.iter().map(|(id, ty)| (id.as_str(), ty))),
+            Params::Extern(s) => Either::Right(s.iter().map(|(n, ty)| (n.as_str(), ty))),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Fn {
     pub span: Span,
-    pub is_extern: bool,
     pub ident: Ident,
-    pub params: Arc<[(Ident, Ty)]>,
+    pub kind: FnKind,
     pub return_ty: Ty,
-    pub body: Option<Block>,
+}
+
+impl Fn {
+    pub fn params(&self) -> Params<'_> {
+        match self.kind {
+            FnKind::Local { ref params, .. } => Params::Local(params),
+            FnKind::Extern { ref params } => Params::Extern(params),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Use {
     pub span: Span,
     pub is_extern: bool,
-    pub ident: Ident,
+    pub name: Name,
 }
 
 #[derive(Debug, Clone)]
 pub struct StructDef {
     pub span: Span,
-    pub name: Name,
-    pub fields: Arc<[(Ident, Ty)]>,
+    pub ident: Ident,
+    pub fields: Arc<[(Name, Ty)]>,
 }
+
+// TODO:
+// #[derive(Debug, Clone)]
+// pub enum AssocItem {
+//     Fn(Fn),
+// }
 
 #[derive(Debug, Clone)]
 pub struct Impl {

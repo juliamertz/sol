@@ -5,6 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::*;
+use crate::ext::AsStr;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
@@ -66,7 +67,7 @@ pub enum Prec {
     Cmp,       // > or <
     Sum,       // +
     Product,   // *
-    Unary,    // -a, !a or &a
+    Unary,     // -a, !a or &a
     Call,      // func()
     Construct, // Point { x : 10, y : 5 }
     Index,     // list[0]
@@ -207,7 +208,8 @@ impl<'src> Parser<'src> {
 
     pub fn item(&mut self) -> Result<Item> {
         let item = match self.curr.kind {
-            TokenKind::Fn | TokenKind::Extern => Item::Fn(self.func()?),
+            TokenKind::Fn => Item::Fn(self.func()?),
+            TokenKind::Extern => Item::Fn(self.extern_func()?),
             TokenKind::Use => Item::Use(self.r#use()?),
             TokenKind::Struct => Item::StructDef(self.struct_def()?),
             TokenKind::Impl => Item::Impl(self.imp()?),
@@ -303,17 +305,12 @@ impl<'src> Parser<'src> {
 
     fn func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
-        let is_extern = self.at(TokenKind::Extern);
-        if is_extern {
-            self.advance()?;
-        }
-
         self.consume(TokenKind::Fn)?;
         let ident = self.ident()?;
         self.consume(TokenKind::LParen)?;
         let mut params = vec![];
         while self.curr.kind != TokenKind::RParen {
-            params.push(self.typed_param()?);
+            params.push(self.ident_type_param()?);
             if self.at(TokenKind::Comma) {
                 self.advance()?;
             }
@@ -324,9 +321,7 @@ impl<'src> Parser<'src> {
         let return_ty = self.ty()?;
         self.skip_whitespace()?;
 
-        let body = if is_extern || self.curr.kind.is_terminator() {
-            None
-        } else {
+        let body = {
             let span = self.curr.span;
             let mut nodes = vec![];
             while self.curr.kind != TokenKind::End {
@@ -338,18 +333,45 @@ impl<'src> Parser<'src> {
             let nodes = Arc::from(nodes);
             let id = self.ctx.next_id();
             let span = span.enclosing_to(&self.curr.span);
-            Some(Block { nodes, id, span })
+            Block { nodes, id, span }
         };
 
         let params = Arc::from(params);
         let span = span.enclosing_to(&self.curr.span);
         Ok(Fn {
-            is_extern,
-            ident,
-            params,
-            return_ty,
-            body,
             span,
+            ident,
+            kind: FnKind::Local { params, body },
+            return_ty,
+        })
+    }
+
+    fn extern_func(&mut self) -> Result<Fn> {
+        let span = self.curr.span;
+        self.consume(TokenKind::Extern);
+        self.consume(TokenKind::Fn)?;
+        let ident = self.ident()?;
+        self.consume(TokenKind::LParen)?;
+        let mut params = vec![];
+        while self.curr.kind != TokenKind::RParen {
+            params.push(self.name_type_param()?);
+            if self.at(TokenKind::Comma) {
+                self.advance()?;
+            }
+        }
+        self.consume(TokenKind::RParen)?;
+
+        self.consume(TokenKind::Arrow)?;
+        let return_ty = self.ty()?;
+        self.skip_whitespace()?;
+
+        let params = Arc::from(params);
+        let span = span.enclosing_to(&self.curr.span);
+        Ok(Fn {
+            span,
+            ident,
+            kind: FnKind::Extern { params },
+            return_ty,
         })
     }
 
@@ -357,20 +379,23 @@ impl<'src> Parser<'src> {
         let span = self.curr.span;
         self.consume(TokenKind::Use)?;
         let is_extern = self.accept(TokenKind::Extern)?.is_some();
-        let ident = if is_extern {
-            self.extern_ident()?
-        } else {
-            self.ident()?
-        };
+        let name = self.name()?;
         let span = span.enclosing_to(&self.curr.span);
         Ok(Use {
             span,
             is_extern,
-            ident,
+            name,
         })
     }
 
-    fn typed_param(&mut self) -> Result<(Ident, Ty)> {
+    fn name_type_param(&mut self) -> Result<(Name, Ty)> {
+        let name = self.name()?;
+        self.consume(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        Ok((name, ty))
+    }
+
+    fn ident_type_param(&mut self) -> Result<(Ident, Ty)> {
         let ident = self.ident()?;
         self.consume(TokenKind::Colon)?;
         let ty = self.ty()?;
@@ -388,7 +413,7 @@ impl<'src> Parser<'src> {
         Ok((ident, expr))
     }
 
-    fn typed_params(&mut self) -> Result<Vec<(Ident, Ty)>> {
+    fn name_type_params(&mut self) -> Result<Vec<(Name, Ty)>> {
         let mut args = vec![];
 
         loop {
@@ -397,7 +422,7 @@ impl<'src> Parser<'src> {
                 break;
             }
 
-            args.push(self.typed_param()?);
+            args.push(self.name_type_param()?);
         }
 
         Ok(args)
@@ -548,7 +573,6 @@ impl<'src> Parser<'src> {
         Ok((op, prec))
     }
 
-
     fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
         let (op, prec) = self.bin_op()?;
         let rhs = self.expr(prec)?;
@@ -626,7 +650,11 @@ impl<'src> Parser<'src> {
 
     fn bool_lit(&mut self) -> Result<Literal> {
         let span = self.curr.span;
-        let val = if self.at(TokenKind::True) {true} else if self.at(TokenKind::False) {false} else {
+        let val = if self.at(TokenKind::True) {
+            true
+        } else if self.at(TokenKind::False) {
+            false
+        } else {
             todo!();
         };
         let kind = LiteralKind::Bool(val);
@@ -741,16 +769,16 @@ impl<'src> Parser<'src> {
     fn struct_def(&mut self) -> Result<StructDef> {
         let span = self.curr.span();
         self.consume(TokenKind::Struct)?;
-        let name = self.name()?;
+        let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
         self.skip_whitespace()?;
-        let fields = self.typed_params()?;
+        let fields = self.name_type_params()?;
         let tok = self.consume(TokenKind::End)?;
 
         let fields = Arc::from(fields);
         let span = span.enclosing_to(&tok.span());
         Ok(StructDef {
-            name,
+            ident,
             fields,
             span,
         })

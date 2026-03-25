@@ -5,9 +5,11 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, BinOp, BinOpKind, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, NodeId, Ret, Stmnt, Unary, UnaryOpKind
+    self, BinOp, BinOpKind, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr,
+    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, NodeId, Ret, Stmnt, Unary,
+    UnaryOpKind,
 };
-use crate::ext::Boxed;
+use crate::ext::{AsStr, Boxed};
 use crate::id;
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
@@ -96,6 +98,17 @@ pub enum TypeError {
         help: Option<String>,
     },
 
+    #[error("type not found for node")]
+    UntypedNode {
+        node_id: NodeId,
+
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("this node")]
+        span: Span,
+    },
+
     #[error("internal type checker error")]
     Internal,
 }
@@ -105,24 +118,15 @@ pub type Result<T, E = TypeError> = core::result::Result<T, E>;
 id!(DefId);
 id!(TypeId);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Scope<'a> {
-    src: SourceInfo,
     parent: Option<&'a Scope<'a>>,
     definitions: HashMap<Arc<str>, DefId>,
 }
 
 impl Scope<'_> {
-    pub fn new(src: SourceInfo) -> Self {
-        Self {
-            src,
-            parent: None,
-            definitions: Default::default(),
-        }
-    }
-
-    pub fn define(&mut self, ident: impl Into<Arc<str>>, def_id: DefId) {
-        self.definitions.insert(ident.into(), def_id);
+    pub fn define(&mut self, name: impl AsStr, def_id: DefId) {
+        self.definitions.insert(name.as_str().into(), def_id);
     }
 
     pub fn get_definition(&self, ident: &Ident) -> Option<&DefId> {
@@ -135,26 +139,41 @@ impl Scope<'_> {
 
     pub fn new_child(&self) -> Scope<'_> {
         Scope {
-            src: self.src.clone(),
             parent: Some(self),
             definitions: Default::default(),
         }
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TypeEnv {
+    pub src: SourceInfo,
     pub types: Interner<TypeId, Type, TypeInterner>,
     pub definitions: Interner<DefId, TypeId>,
     pub nodes: Interner<NodeId, TypeId>,
+    pub node_defs: HashMap<NodeId, DefId>,
 }
 
 impl TypeEnv {
-    pub fn type_of(&self, node_id: &NodeId) -> TypeId {
+    pub fn new(src: SourceInfo) -> Self {
+        Self {
+            src,
+            types: Default::default(),
+            definitions: Default::default(),
+            nodes: Default::default(),
+            node_defs: Default::default(),
+        }
+    }
+
+    pub fn type_of(&self, node_id: &NodeId, span: &Span) -> Result<TypeId> {
         self.nodes
             .get(node_id)
             .copied()
-            .unwrap_or_else(|| panic!("untyped node, id: {}", node_id.0))
+            .ok_or_else(|| TypeError::UntypedNode {
+                node_id: *node_id,
+                src: self.src.clone(),
+                span: *span,
+            })
     }
 
     pub fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
@@ -165,13 +184,13 @@ impl TypeEnv {
             ast::TyKind::Str => Type::Str,
             ast::TyKind::Var(ident) => {
                 let def_id = scope.get_definition(ident).ok_or(TypeError::NotFound {
-                    src: scope.src.clone(),
+                    src: self.src.clone(),
                     ident: ident.to_owned(),
                     span: ident.span,
                 })?;
-                let type_id = self.definitions.get(def_id).copied().unwrap(); // TODO: handle error
-                self.nodes.insert(ast_ty.id, type_id);
-                return Ok(type_id);
+                let ty_id = self.definitions.get(def_id).copied().unwrap(); // TODO: handle error
+                self.nodes.insert(ast_ty.id, ty_id);
+                return Ok(ty_id);
             }
             ast::TyKind::List { inner, size } => {
                 let inner_id = self.type_from_ast_ty(inner, scope)?;
@@ -196,9 +215,9 @@ impl TypeEnv {
             }
         };
 
-        let type_id = self.types.intern(ty);
-        self.nodes.insert(ast_ty.id, type_id);
-        Ok(type_id)
+        let ty_id = self.types.intern(ty);
+        self.nodes.insert(ast_ty.id, ty_id);
+        Ok(ty_id)
     }
 }
 
@@ -206,22 +225,23 @@ pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     let def_id = scope
         .get_definition(ident)
         .ok_or_else(|| TypeError::NotFound {
-            src: scope.src.clone(),
+            src: env.src.clone(),
             ident: ident.to_owned(),
             span: ident.span,
         })?;
-    let type_id = env
+    env.node_defs.insert(ident.id, *def_id);
+    let ty_id = env
         .definitions
         .get(def_id)
         .copied()
         .ok_or(TypeError::Internal)?;
-    Ok(type_id)
+    Ok(ty_id)
 }
 
 pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     check_stmnts(&block.nodes, env, scope)?;
 
-    let type_id = if let Some(last) = block.nodes.last() {
+    let ty_id = if let Some(last) = block.nodes.last() {
         match last {
             Stmnt::Expr(expr) => env.nodes.get(&expr.id()).copied().unwrap(),
             Stmnt::Ret(Ret { val, .. }) => env.nodes.get(&val.id()).copied().unwrap(),
@@ -231,9 +251,9 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
         TypeId::NONE
     };
 
-    env.nodes.insert(block.id, type_id);
+    env.nodes.insert(block.id, ty_id);
 
-    Ok(type_id)
+    Ok(ty_id)
 }
 
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
@@ -242,19 +262,19 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
         Expr::Literal(Literal { id, kind, .. }) => match kind {
             LiteralKind::Str(_) => {
-                let type_id = TypeId::STR;
-                env.nodes.insert(*id, type_id);
-                Ok(type_id)
+                let ty_id = TypeId::STR;
+                env.nodes.insert(*id, ty_id);
+                Ok(ty_id)
             }
             LiteralKind::Int(_) => {
-                let type_id = TypeId::I32; // TODO: infer the correct size
-                env.nodes.insert(*id, type_id);
-                Ok(type_id)
+                let ty_id = TypeId::I32; // TODO: infer the correct size
+                env.nodes.insert(*id, ty_id);
+                Ok(ty_id)
             }
             LiteralKind::Bool(_) => {
-                let type_id = TypeId::BOOL;
-                env.nodes.insert(*id, type_id);
-                Ok(type_id)
+                let ty_id = TypeId::BOOL;
+                env.nodes.insert(*id, ty_id);
+                Ok(ty_id)
             }
         },
 
@@ -271,7 +291,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 BinOpKind::Eq | BinOpKind::Lt | BinOpKind::Gt => {
                     if lhs_ty != rhs_ty {
                         Err(TypeError::ComparisonMismatch {
-                            src: scope.src.clone(),
+                            src: env.src.clone(),
                             lhs_span: lhs.span(),
                             lhs_ty: env.types.get(&lhs_ty).unwrap().clone(),
                             rhs_span: rhs.span(),
@@ -288,14 +308,14 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                         Err(TypeError::InvalidType {
                             expected: Type::Bool,
                             actual: env.types.get(&lhs_ty).unwrap().clone(),
-                            src: scope.src.clone(),
+                            src: env.src.clone(),
                             span: lhs.span(),
                         })
                     } else if rhs_ty != TypeId::BOOL {
                         Err(TypeError::InvalidType {
                             expected: Type::Bool,
                             actual: env.types.get(&rhs_ty).unwrap().clone(),
-                            src: scope.src.clone(),
+                            src: env.src.clone(),
                             span: rhs.span(),
                         })
                     } else {
@@ -307,7 +327,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     let lhs_type = env.types.get(&lhs_ty).unwrap();
                     match lhs_type {
                         Type::Int(_) => match op.kind {
-                            BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => Ok(lhs_ty),
+                            BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
+                                Ok(lhs_ty)
+                            }
                             _ => todo!(),
                         },
                         _ => todo!(),
@@ -325,9 +347,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::Call(CallExpr { func, params, .. }) => {
-            let func_type_id = infer(func, env, scope)?;
+            let func_ty_id = infer(func, env, scope)?;
             let returns = {
-                let func_ty = env.types.get(&func_type_id).unwrap();
+                let func_ty = env.types.get(&func_ty_id).unwrap();
                 let Type::Fn { returns, .. } = func_ty else {
                     todo!("cannot call a non fn var");
                 };
@@ -343,14 +365,14 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::Index(IndexExpr { id, expr, idx, .. }) => {
-            let val_type_id = infer(expr, env, scope)?;
-            env.nodes.insert(expr.id(), val_type_id);
+            let val_ty_id = infer(expr, env, scope)?;
+            env.nodes.insert(expr.id(), val_ty_id);
 
-            let idx_type_id = infer(idx, env, scope)?;
-            env.nodes.insert(idx.id(), idx_type_id);
+            let idx_ty_id = infer(idx, env, scope)?;
+            env.nodes.insert(idx.id(), idx_ty_id);
 
             let inner = {
-                let ty = env.types.get(&val_type_id).unwrap();
+                let ty = env.types.get(&val_ty_id).unwrap();
                 if let Type::List(inner, _) = ty {
                     *inner
                 } else {
@@ -371,7 +393,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let condition_ty = infer(condition, env, scope)?;
             if condition_ty != TypeId::BOOL {
                 return Err(TypeError::InvalidType {
-                    src: scope.src.clone(),
+                    src: env.src.clone(),
                     span: condition.span(),
                     expected: Type::Bool,
                     actual: env.types.get(&condition_ty).unwrap().clone(),
@@ -390,7 +412,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 && alternative_ty != consequence_ty
             {
                 return Err(TypeError::ComparisonMismatch {
-                    src: scope.src.clone(),
+                    src: env.src.clone(),
                     lhs_span: consequence.span,
                     lhs_ty: env.types.get(&consequence_ty).unwrap().clone(),
                     rhs_span: alternative.span,
@@ -417,7 +439,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 let ty = infer(item, env, scope)?;
                 if ty != inner_type {
                     return Err(TypeError::HeterogeneousList {
-                        src: scope.src.clone(),
+                        src: env.src.clone(),
                         first_ty: env.types.get(&inner_type).unwrap().clone(),
                         first_span: first_item.span(),
                         other_ty: env.types.get(&ty).unwrap().clone(),
@@ -427,8 +449,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
             }
             let ty = Type::List(inner_type, None); // TODO: fixed sized lists
-            let type_id = env.types.intern(ty);
-            Ok(type_id)
+            let ty_id = env.types.intern(ty);
+            Ok(ty_id)
         }
 
         Expr::Constructor(Constructor {
@@ -437,11 +459,11 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let def_id = scope
                 .get_definition(ident)
                 .ok_or_else(|| TypeError::NotFound {
-                    src: scope.src.clone(),
+                    src: env.src.clone(),
                     ident: ident.to_owned(),
                     span: ident.span,
                 })?;
-            let type_id = *env
+            let ty_id = *env
                 .definitions
                 .get(def_id)
                 .expect("constructor type to be defined");
@@ -451,23 +473,23 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 // TODO: validate fields
             }
 
-            env.nodes.insert(*id, type_id);
-            env.nodes.insert(ident.id, type_id);
+            env.nodes.insert(*id, ty_id);
+            env.nodes.insert(ident.id, ty_id);
 
-            Ok(type_id)
+            Ok(ty_id)
         }
 
         Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
-            let lhs_type_id = infer(lhs, env, scope)?;
+            let lhs_ty_id = infer(lhs, env, scope)?;
             let field_ty_id = {
-                let lhs_ty = env.types.get(&lhs_type_id).unwrap();
+                let lhs_ty = env.types.get(&lhs_ty_id).unwrap();
                 if let Type::Struct { fields, .. } = lhs_ty {
                     fields
                         .iter()
-                        .find(|(field, _)| field == ident)
+                        .find(|(field, _)| field.as_str() == ident.as_str()) // TODO: this is hacky D:
                         .map(|(_, ty_id)| *ty_id)
                         .ok_or_else(|| TypeError::NoSuchField {
-                            src: scope.src.clone(),
+                            src: env.src.clone(),
                             ident: ident.clone(),
                             ty: lhs_ty.clone(),
                             span: lhs.span().enclosing_to(&ident.span),
@@ -480,8 +502,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::Ref(expr) => {
-            let inner_type_id = infer(expr, env, scope)?;
-            Ok(env.types.intern(Type::Ptr(inner_type_id)))
+            let inner_ty_id = infer(expr, env, scope)?;
+            Ok(env.types.intern(Type::Ptr(inner_ty_id)))
         }
     }?;
 
@@ -491,64 +513,62 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 }
 
 pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeId> {
-    let params = func
-        .params
-        .iter()
-        .map(|(ident, ty)| {
-            let type_id = env.type_from_ast_ty(ty, scope)?;
-            env.nodes.insert(ident.id, type_id);
-            Ok(type_id)
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into();
+    match &func.kind {
+        ast::FnKind::Local { params, body } => {
+            let param_tys = params
+                .iter()
+                .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
+                .collect::<Result<Vec<_>>>()?;
+            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+            let fn_ty_id = env.types.intern(Type::func(param_tys, returns));
 
-    let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+            let mut scope = scope.new_child();
+            for (name, ty) in params.iter() {
+                let ty_id = env.type_from_ast_ty(ty, &scope)?;
+                let def_id = env.definitions.intern(ty_id);
+                scope.define(name, def_id);
+            }
+            let def_id = env.definitions.intern(fn_ty_id);
+            scope.define(&func.ident, def_id);
 
-    let fn_type = Type::Fn {
-        is_extern: func.is_extern,
-        params,
-        returns,
-    };
-    let fn_type_id = env.types.intern(fn_type);
+            let ty_id = infer_block(body, env, &mut scope)?;
+            env.nodes.insert(body.id, ty_id);
 
-    if !func.is_extern {
-        let body = func.body.as_ref().unwrap();
-        let mut scope = scope.new_child();
-        for (ident, _) in func.params.iter() {
-            let type_id = env.nodes.get(&ident.id).unwrap();
-            let def_id = env.definitions.intern(*type_id);
-            scope.define(ident, def_id);
+            Ok(fn_ty_id)
         }
-        let def_id = env.definitions.intern(fn_type_id);
-        scope.define(&func.ident, def_id);
-
-        let type_id = infer_block(body, env, &mut scope)?;
-        env.nodes.insert(body.id, type_id)
+        ast::FnKind::Extern { params } => {
+            let param_tys = params
+                .iter()
+                .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
+                .collect::<Result<Vec<_>>>()?;
+            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+            let ty_id = env.types.intern(Type::extern_func(param_tys, returns));
+            Ok(ty_id)
+        }
     }
-
-    Ok(fn_type_id)
 }
 
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let { ident, ty, val, .. }) => {
-            let type_id = infer(val, env, scope)?;
-            env.nodes.insert(ident.id, type_id);
-            env.nodes.insert(val.id(), type_id);
+            let ty_id = infer(val, env, scope)?;
+            env.nodes.insert(ident.id, ty_id);
+            env.nodes.insert(val.id(), ty_id);
 
             if let Some(declared_ty) = ty {
-                let declared_type_id = env.type_from_ast_ty(declared_ty, scope)?;
-                if declared_type_id != type_id {
+                let declared_ty_id = env.type_from_ast_ty(declared_ty, scope)?;
+                if declared_ty_id != ty_id {
                     return Err(TypeError::InvalidType {
-                        src: scope.src.clone(),
+                        src: env.src.clone(),
                         span: val.span(),
-                        expected: env.types.get(&declared_type_id).unwrap().clone(),
-                        actual: env.types.get(&type_id).unwrap().clone(),
+                        expected: env.types.get(&declared_ty_id).unwrap().clone(),
+                        actual: env.types.get(&ty_id).unwrap().clone(),
                     });
                 }
             }
 
-            let def_id = env.definitions.intern(type_id);
+            let def_id = env.definitions.intern(ty_id);
+            env.node_defs.insert(ident.id, def_id);
             scope.define(ident, def_id);
         }
 
@@ -564,34 +584,44 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(())
 }
 
-pub fn check_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+pub fn check_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     let mut scope = scope.new_child();
 
-    for (ident, ty) in func.params.iter() {
-        let type_id = env.type_from_ast_ty(ty, &scope)?;
-        let def_id = env.definitions.intern(type_id);
-        scope.define(ident, def_id);
+    // TODO: clean this up
+    match &func.kind {
+        ast::FnKind::Local { params, .. } => {
+            for (ident, ty) in params.iter() {
+                let ty_id = env.type_from_ast_ty(ty, &scope)?;
+                let def_id = env.definitions.intern(ty_id);
+                env.nodes.insert(ident.id, ty_id);
+                env.node_defs.insert(ident.id, def_id);
+                scope.define(ident, def_id);
+            }
+        }
+        ast::FnKind::Extern { params } => {
+            for (ident, ty) in params.iter() {
+                let ty_id = env.type_from_ast_ty(ty, &scope)?;
+                let def_id = env.definitions.intern(ty_id);
+                scope.define(ident, def_id);
+            }
+        }
     }
 
-    let type_id = infer_fn(func, env, &scope)?;
-    let def_id = env.definitions.intern(type_id);
+    let ty_id = infer_fn(func, env, &scope)?;
+    let def_id = env.definitions.intern(ty_id);
+    env.node_defs.insert(func.ident.id, def_id);
+    env.nodes.insert(func.ident.id, ty_id);
     scope.define(&func.ident, def_id);
 
-    if func.is_extern {
-        return Ok(());
+    match &func.kind {
+        ast::FnKind::Local { body, .. } => check_stmnts(&body.nodes, env, &mut scope),
+        ast::FnKind::Extern { .. } => Ok(()),
     }
-
-    let body = func
-        .body
-        .as_ref()
-        .expect("function body for non-extern def"); // TODO: error handling
-
-    check_stmnts(&body.nodes, env, &mut scope)
 }
 
 pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     for item in imp.items.iter() {
-        check_fn(item, env, scope)?;
+        check_func(item, env, scope)?;
     }
 
     Ok(())
@@ -599,7 +629,7 @@ pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()>
 
 pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match item {
-        Item::Fn(func) => check_fn(func, env, scope),
+        Item::Fn(func) => check_func(func, env, scope),
         Item::Impl(imp) => check_imp(imp, env, scope),
         _ => Ok(()),
         // Item::Use(Use { .. }) => {}
@@ -621,23 +651,23 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
         let field_tys = struct_def
             .fields
             .iter()
-            .map(|(ident, ty)| Ok((ident.to_owned(), env.type_from_ast_ty(ty, scope)?)))
+            .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
             .collect::<Result<Vec<_>>>()?
             .into();
-        let _impls = inventory.take_impls(&struct_def.name); // TODO:
+        let _impls = inventory.take_impls(&struct_def.ident); // TODO:
 
         let ty = Type::Struct {
-            name: struct_def.name.to_owned().boxed(),
+            ident: struct_def.ident.to_owned().boxed(),
             fields: field_tys,
         };
-        let type_id = env.types.intern(ty);
-        let def_id = env.definitions.intern(type_id);
-        scope.define(struct_def.name.as_str(), def_id);
+        let ty_id = env.types.intern(ty);
+        let def_id = env.definitions.intern(ty_id);
+        scope.define(&struct_def.ident, def_id);
     }
 
     for func in inventory.take_fns() {
-        let type_id = infer_fn(func, env, scope)?;
-        let def_id = env.definitions.intern(type_id);
+        let ty_id = infer_fn(func, env, scope)?;
+        let def_id = env.definitions.intern(ty_id);
         scope.define(&func.ident, def_id);
     }
 
