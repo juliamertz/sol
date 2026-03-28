@@ -5,8 +5,8 @@ use thiserror::Error;
 
 use crate::ast::BinOpKind;
 use crate::codegen::qbe::{
-    AbiTy, BaseTy, Block, Definition, Function, Ident, Instruction, InstructionKind, Jump, Module,
-    Operand, Param, RegularParam, SubWordTy,
+    AbiTy, BaseTy, Block, Const, Data, DataItem, DataValue, Definition, ExtTy, Function, Ident,
+    Instruction, InstructionKind, Jump, Module, Operand, Param, RegularParam, SubWordTy,
 };
 use crate::mir::{self, BlockId};
 use crate::type_checker::ty::{self, Type};
@@ -35,6 +35,12 @@ fn block_name<'a>(block_id: &mir::BlockId) -> Ident<'a> {
     Ident::block(format!("bb{}", block_id.inner()))
 }
 
+fn data_name<'a>(data_id: mir::DataId) -> Ident<'a> {
+    let idx = data_id.inner();
+    let name = format!("dat_{idx}");
+    Ident::global(name)
+}
+
 pub struct Builder<'env> {
     pub env: &'env TypeEnv,
 }
@@ -44,9 +50,25 @@ impl<'env> Builder<'env> {
         Self { env }
     }
 
+    pub fn lower_data<'a>(&self, data: &'a mir::Data) -> Result<Data<'a>> {
+        Ok(Data {
+            linkage: None,
+            ident: data_name(data.id), // TODO: unique idents
+            align: None,
+            value: DataValue::Data(match &data.value {
+                mir::DataValue::Bytes(items) => todo!(),
+                mir::DataValue::String(str) => vec![
+                    (ExtTy::Byte, DataItem::String(str.into())),
+                    (ExtTy::Byte, DataItem::Const(Const::int(0 as i128))),
+                ],
+            }),
+        })
+    }
+
     pub fn lower_def<'a>(&self, def: &'a mir::Definition) -> Result<Definition<'a>> {
         Ok(match def {
             mir::Definition::Ty(_) => todo!(),
+            mir::Definition::Data(data) => Definition::Data(self.lower_data(data)?),
             mir::Definition::Fn(func) => Definition::Fn(self.lower_func(func)?),
         })
     }
@@ -101,7 +123,6 @@ impl<'env> Builder<'env> {
                 def,
                 operands,
             } => {
-                dbg!(&self.env.def_names, &def);
                 let name = self.env.def_names.get(def).expect("def name");
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
                 let operands = operands
@@ -119,10 +140,19 @@ impl<'env> Builder<'env> {
         }
     }
 
+    fn lower_const<'a>(&self, constant: &'a mir::Constant) -> Const<'a> {
+        match constant {
+            mir::Constant::Int(val) => Const::int(*val),
+            mir::Constant::Bool(_) => todo!(),
+            mir::Constant::Unit => todo!(),
+        }
+    }
+
     fn lower_operand<'a>(&self, operand: &'a mir::Operand) -> Operand<'a> {
         match operand {
-            mir::Operand::Temporary(id) => Operand::Temp(temp_name(*id)),
-            mir::Operand::Constant(c) => Operand::Const(c.clone()),
+            mir::Operand::Temporary(id) => Operand::Var(temp_name(*id)),
+            mir::Operand::Data(id) => Operand::Var(data_name(*id)),
+            mir::Operand::Constant(constant) => Operand::Const(self.lower_const(constant)),
         }
     }
 
@@ -200,7 +230,7 @@ impl<'env> Builder<'env> {
                 .map(|type_id| {
                     Ok(Param::Regular(RegularParam(
                         self.lower_ty(type_id)?,
-                        Operand::Temp(Ident::temp("a")),
+                        Operand::Var(Ident::temp("a")),
                     )))
                 })
                 .collect::<Result<Vec<_>>>()?,

@@ -7,6 +7,8 @@ pub mod fmt;
 pub mod lower;
 
 pub type Alignment = usize;
+pub type Size = usize;
+pub type Offset = usize;
 
 pub enum Ident<'a> {
     Ty(Cow<'a, str>),
@@ -90,7 +92,7 @@ pub enum Ty<'a> {
     Opaque {
         ident: Ident<'a>,
         align: Alignment,
-        size: usize,
+        size: Size,
     },
 }
 
@@ -103,7 +105,7 @@ impl Ty<'_> {
         }
     }
 
-    pub fn align(&self) -> Option<usize> {
+    pub fn align(&self) -> Option<Alignment> {
         match self {
             Ty::Aggregate { align, .. } => *align,
             Ty::Union { align, .. } => *align,
@@ -135,9 +137,40 @@ pub enum Param<'a> {
     VariadicMarker,
 }
 
+pub enum Sign {
+    Minus,
+    None,
+}
+
+pub enum Precision {
+    Single,
+    Double,
+}
+
+// CONST :=
+//     ['-'] NUMBER  # Decimal integer
+//   | 's_' FP       # Single-precision float
+//   | 'd_' FP       # Double-precision float
+//   | $IDENT        # Global symbol
+pub enum Const<'a> {
+    Int(Sign, i128),
+    Float(Precision, f64),
+    Ident(Ident<'a>),
+}
+
+impl Const<'_> {
+    pub fn int(val: i128) -> Self {
+        Self::Int(Sign::None, val)
+    }
+
+    pub fn neg_int(val: i128) -> Self {
+        Self::Int(Sign::Minus, val)
+    }
+}
+
 pub enum Operand<'a> {
-    Temp(Ident<'a>),
-    Const(mir::Constant), // TODO: it's not nice to leak mir types here but im lazy :)
+    Var(Ident<'a>),
+    Const(Const<'a>),
 }
 
 pub enum InstructionKind<'a> {
@@ -188,9 +221,27 @@ pub struct Function<'a> {
     pub blocks: Vec<Block<'a>>,
 }
 
+pub enum DataItem<'a> {
+    Ident(Ident<'a>, Option<Offset>),
+    String(Cow<'a, str>),
+    Const(Const<'a>),
+}
+
+pub enum DataValue<'a> {
+    Data(Vec<(ExtTy, DataItem<'a>)>),
+    Zeroed(Size),
+}
+
+pub struct Data<'a> {
+    pub linkage: Option<Linkage>,
+    pub ident: Ident<'a>,
+    pub align: Option<Alignment>,
+    pub value: DataValue<'a>,
+}
+
 pub enum Definition<'a> {
     Ty(Ty<'a>),
-    // Data,
+    Data(Data<'a>),
     Fn(Function<'a>),
 }
 

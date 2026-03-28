@@ -1,7 +1,7 @@
 use crate::ext::AsStr;
 use crate::hir;
 use crate::mir::builder::{Builder, BuilderError};
-use crate::mir::{Definition, Fn, Module, Operand, Terminator};
+use crate::mir::{Data, DataValue, Definition, Fn, Module, Operand, Terminator};
 use crate::type_checker::{TypeEnv, TypeId};
 
 fn lower_func(
@@ -10,7 +10,7 @@ fn lower_func(
     params: &[(hir::Ident<'_>, TypeId)],
     body: &hir::Block<'_>,
     env: &TypeEnv,
-) -> Result<Fn, BuilderError> {
+) -> Result<(Fn, Vec<Data>), BuilderError> {
     let mut builder = Builder::new(env);
     let entry = builder.new_block();
 
@@ -30,27 +30,29 @@ fn lower_func(
     builder.build(ident.as_str(), return_ty, param_tys)
 }
 
-pub fn lower_item(item: &hir::Item<'_>, env: &TypeEnv) -> Result<Option<Definition>, BuilderError> {
-    let def = match item {
+pub fn lower_item(
+    item: &hir::Item<'_>,
+    env: &TypeEnv,
+) -> Result<Option<Vec<Definition>>, BuilderError> {
+    let defs = match item {
         hir::Item::Use(_) => None,
         hir::Item::Fn(func) => match &func.kind {
-            hir::FnKind::Local { params, body } => Some(Definition::Fn(lower_func(
-                &func.ident,
-                func.return_ty,
-                params,
-                body,
-                env,
-            )?)),
+            hir::FnKind::Local { params, body } => {
+                let (func, data) = lower_func(&func.ident, func.return_ty, params, body, env)?;
+                let mut defs = vec![Definition::Fn(func)];
+                defs.extend(data.into_iter().map(Definition::Data));
+                Some(defs)
+            }
             hir::FnKind::Extern { params: _ } => None, // TODO:
         },
         hir::Item::StructDef(struct_def) => {
             let ty = env.type_by_id(&struct_def.ident.ty).unwrap(); // TODO: kind of weird that we resolve this type by ident
             let def = Definition::Ty(ty.clone());
-            Some(def)
+            Some(vec![def])
         }
     };
 
-    Ok(def)
+    Ok(defs)
 }
 
 pub fn lower_module(module: &hir::Module<'_>, env: &TypeEnv) -> Result<Module, BuilderError> {
@@ -61,7 +63,8 @@ pub fn lower_module(module: &hir::Module<'_>, env: &TypeEnv) -> Result<Module, B
         .collect::<Result<Vec<_>, BuilderError>>()?
         .into_iter()
         .flatten()
-        .collect();
+        .flatten()
+        .collect::<Vec<_>>();
 
     Ok(Module { defs })
 }

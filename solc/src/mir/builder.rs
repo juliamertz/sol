@@ -4,7 +4,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::lexer::source::{SourceInfo, Span};
-use crate::mir::{Block, BlockId, Constant, Fn, Instruction, Operand, TempId, Terminator};
+use crate::mir::{
+    Block, BlockId, Constant, Data, DataId, DataValue, Fn, Instruction, Operand, TempId, Terminator,
+};
 use crate::type_checker::{DefId, TypeEnv, TypeId};
 use crate::{ast, hir};
 
@@ -74,9 +76,9 @@ pub struct Builder<'tcx> {
     env: &'tcx TypeEnv,
     temp_idx: usize,
     temp_tys: Vec<TypeId>,
-    block_idx: usize,
     blocks: Vec<BlockBuilder>,
     locals: HashMap<DefId, Operand>,
+    data: Vec<Data>,
 }
 
 impl<'tcx> Builder<'tcx> {
@@ -85,9 +87,9 @@ impl<'tcx> Builder<'tcx> {
             env,
             temp_idx: 0,
             temp_tys: vec![],
-            block_idx: 0,
             blocks: vec![],
             locals: HashMap::default(),
+            data: Vec::default(),
         }
     }
 
@@ -99,9 +101,14 @@ impl<'tcx> Builder<'tcx> {
     }
 
     pub(super) fn new_block(&mut self) -> BlockId {
-        let id = BlockId(self.block_idx);
+        let id = BlockId(self.blocks.len());
         self.blocks.push(BlockBuilder::default());
-        self.block_idx += 1;
+        id
+    }
+
+    pub(super) fn new_data(&mut self, value: DataValue) -> DataId {
+        let id = DataId(self.data.len());
+        self.data.push(Data { id, value });
         id
     }
 
@@ -118,7 +125,7 @@ impl<'tcx> Builder<'tcx> {
         name: impl ToString,
         return_ty: TypeId,
         params: impl Iterator<Item = TypeId>,
-    ) -> Result<Fn> {
+    ) -> Result<(Fn, Vec<Data>)> {
         let name = name.to_string();
         let blocks = self
             .blocks
@@ -127,13 +134,16 @@ impl<'tcx> Builder<'tcx> {
             .collect::<Result<Vec<_>, BlockBuilderError>>()?;
         let temps = self.temp_tys;
         let params = params.into_iter().collect();
-        Ok(Fn {
-            name,
-            return_ty,
-            params,
-            temps,
-            blocks,
-        })
+        Ok((
+            Fn {
+                name,
+                return_ty,
+                params,
+                temps,
+                blocks,
+            },
+            self.data,
+        ))
     }
 
     pub(super) fn lower_hir_block(
@@ -228,11 +238,14 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Literal(literal) => Ok((
-                Operand::Constant(match literal.kind {
-                    ast::LiteralKind::Str(val) => Constant::Str(val.to_string()),
-                    ast::LiteralKind::Int(val) => Constant::Int(*val),
-                    ast::LiteralKind::Bool(val) => Constant::Bool(*val),
-                }),
+                match literal.kind {
+                    ast::LiteralKind::Int(val) => Operand::Constant(Constant::Int(*val)),
+                    ast::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(*val)),
+                    ast::LiteralKind::Str(val) => {
+                        let data_id = self.new_data(DataValue::String(val.to_string()));
+                        Operand::Data(data_id)
+                    }
+                },
                 block,
             )),
 

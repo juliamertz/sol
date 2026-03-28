@@ -8,6 +8,12 @@ impl Display for TempId {
     }
 }
 
+impl Display for DataId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_data_{}", self.0)
+    }
+}
+
 impl Display for BlockId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "bb{}", self.0)
@@ -19,7 +25,6 @@ impl Display for Constant {
         match self {
             Constant::Int(v) => write!(f, "{v}"),
             Constant::Bool(v) => write!(f, "{v}"),
-            Constant::Str(v) => write!(f, "\"{v}\""),
             Constant::Unit => f.write_str("()"),
         }
     }
@@ -29,6 +34,7 @@ impl Display for Operand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Operand::Temporary(t) => write!(f, "{t}"),
+            Operand::Data(d) => write!(f, "{d}"),
             Operand::Constant(c) => write!(f, "{c}"),
         }
     }
@@ -119,6 +125,7 @@ impl Display for Definition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Definition::Ty(_) => todo!(), // TODO:
+            Definition::Data(_) => todo!(),
             Definition::Fn(func) => func.fmt(f),
         }
     }

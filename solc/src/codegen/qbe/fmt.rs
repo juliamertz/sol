@@ -143,16 +143,40 @@ impl Display for Param<'_> {
     }
 }
 
+impl Display for Sign {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Sign::Minus => f.write_char('-'),
+            Sign::None => Ok(()),
+        }
+    }
+}
+
+impl Display for Precision {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_char(match self {
+            Precision::Single => 's',
+            Precision::Double => 'd',
+        })?;
+        f.write_char('_')
+    }
+}
+
+impl Display for Const<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Const::Int(sign, val) => write!(f, "{sign}{val}"),
+            Const::Float(precision, val) => write!(f, "{precision}{val}"),
+            Const::Ident(ident) => ident.fmt(f),
+        }
+    }
+}
+
 impl Display for Operand<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Operand::Temp(name) => name.fmt(f),
-            Operand::Const(constant) => f.write_str(&match constant {
-                mir::Constant::Int(int) => int.to_string(),
-                mir::Constant::Bool(val) => val.to_string(),
-                mir::Constant::Str(str) => format!("\"{str}\""),
-                mir::Constant::Unit => "()".to_string(),
-            }),
+            Operand::Var(name) => name.fmt(f),
+            Operand::Const(constant) => constant.fmt(f),
         }
     }
 }
@@ -201,6 +225,42 @@ impl Display for Block<'_> {
     }
 }
 
+impl Display for DataItem<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            DataItem::Ident(ident, _) => todo!(),
+            DataItem::String(val) => write!(f, "\"{val}\""),
+            DataItem::Const(val) => val.fmt(f),
+        }
+    }
+}
+
+impl Display for DataValue<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            DataValue::Data(items) => f.write_str(
+                &items
+                    .iter()
+                    .map(|(ty, item)| format!("{ty} {item}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            DataValue::Zeroed(_) => todo!(),
+        }
+    }
+}
+
+impl Display for Data<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        writeln!(
+            f,
+            "data {ident} = {{{val}}}",
+            ident = self.ident,
+            val = self.value
+        )
+    }
+}
+
 impl Display for Function<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(linkage) = self.linkage.as_ref() {
@@ -233,6 +293,7 @@ impl Display for Definition<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Definition::Ty(ty) => ty.fmt(f),
+            Definition::Data(data) => data.fmt(f),
             Definition::Fn(function) => function.fmt(f),
         }
     }

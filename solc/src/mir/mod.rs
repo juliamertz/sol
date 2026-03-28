@@ -18,6 +18,15 @@ impl TempId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DataId(usize);
+
+impl DataId {
+    pub fn inner(&self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockId(usize);
 
 impl BlockId {
@@ -34,13 +43,13 @@ impl BlockId {
 pub enum Constant {
     Int(i128),
     Bool(bool),
-    Str(String),
     Unit,
 }
 
 #[derive(Debug, Clone)]
 pub enum Operand {
     Temporary(TempId),
+    Data(DataId),
     Constant(Constant),
 }
 
@@ -101,8 +110,21 @@ impl Fn {
 }
 
 #[derive(Debug)]
+pub enum DataValue {
+    Bytes(Vec<u8>),
+    String(String),
+}
+
+#[derive(Debug)]
+pub struct Data {
+    pub id: DataId,
+    pub value: DataValue,
+}
+
+#[derive(Debug)]
 pub enum Definition {
     Ty(Type),
+    Data(Data),
     Fn(Fn),
 }
 
