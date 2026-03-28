@@ -64,6 +64,7 @@
             ++ (with pkgs; [
               gcc
               clang-tools
+              qbe
             ]);
         };
       }

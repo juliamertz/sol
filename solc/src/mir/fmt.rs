@@ -99,7 +99,7 @@ impl Display for Terminator {
     }
 }
 
-impl Display for Procedure {
+impl Display for Fn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (idx, block) in self.blocks.iter().enumerate() {
             writeln!(f, "  bb{idx}:")?;
@@ -108,21 +108,30 @@ impl Display for Procedure {
             }
             writeln!(f, "    {}", block.term)?;
             if idx != self.blocks.len() - 1 {
-                writeln!(f, "")?;
+                writeln!(f)?;
             }
         }
         Ok(())
     }
 }
 
+impl Display for Definition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Definition::Ty(_) => todo!(), // TODO:
+            Definition::Fn(func) => func.fmt(f),
+        }
+    }
+}
+
 impl Display for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (idx, proc) in self.procs.iter().enumerate() {
+        for (idx, def) in self.defs.iter().enumerate() {
             writeln!(f, "proc @{idx} {{")?;
-            write!(f, "{proc}")?;
+            write!(f, "{def}")?;
             writeln!(f, "}}")?;
-            if idx != self.procs.len() - 1 {
-                writeln!(f, "")?;
+            if idx != self.defs.len() - 1 {
+                writeln!(f)?;
             }
         }
         Ok(())

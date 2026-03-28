@@ -4,7 +4,10 @@ use std::mem;
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::{ast::{Fn, Impl, Item, Name, StructDef}, ext::AsStr};
+use crate::{
+    ast::{Fn, Impl, Item, StructDef},
+    ext::AsStr,
+};
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::type_checker::collect))]
@@ -40,7 +43,7 @@ pub fn collect<'ast>(items: &'ast [Item]) -> Result<Inventory<'ast>> {
         match node {
             Item::Impl(inner) => inventory
                 .impls
-                .entry(&inner.ident.as_str())
+                .entry(inner.ident.as_str())
                 .or_insert_with(Vec::new)
                 .push(inner),
             Item::Fn(inner) => inventory.fns.push(inner),

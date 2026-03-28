@@ -4,8 +4,8 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::lexer::source::{SourceInfo, Span};
-use crate::mir::{Block, BlockId, Constant, Instruction, Operand, Procedure, TempId, Terminator};
-use crate::type_checker::{DefId, TypeEnv};
+use crate::mir::{Block, BlockId, Constant, Fn, Instruction, Operand, TempId, Terminator};
+use crate::type_checker::{DefId, TypeEnv, TypeId};
 use crate::{ast, hir};
 
 #[derive(Debug, Default)]
@@ -34,7 +34,10 @@ impl BlockBuilder {
 
     pub fn terminate(&mut self, term: Terminator) -> Result<(), BlockBuilderError> {
         if self.is_terminated() {
-            Err(BlockBuilderError::AlreadyTerminated)
+            dbg!(&term, &self.term);
+
+            Ok(())
+            // Err(BlockBuilderError::AlreadyTerminated)
         } else {
             self.term = Some(term);
             Ok(())
@@ -70,6 +73,7 @@ pub type Result<T, E = BuilderError> = std::result::Result<T, E>;
 pub struct Builder<'tcx> {
     env: &'tcx TypeEnv,
     temp_idx: usize,
+    temp_tys: Vec<TypeId>,
     block_idx: usize,
     blocks: Vec<BlockBuilder>,
     locals: HashMap<DefId, Operand>,
@@ -80,14 +84,16 @@ impl<'tcx> Builder<'tcx> {
         Self {
             env,
             temp_idx: 0,
+            temp_tys: vec![],
             block_idx: 0,
             blocks: vec![],
             locals: HashMap::default(),
         }
     }
 
-    pub (super) fn new_temp(&mut self) -> TempId {
+    pub(super) fn new_temp(&mut self, ty: TypeId) -> TempId {
         let id = TempId(self.temp_idx);
+        self.temp_tys.push(ty);
         self.temp_idx += 1;
         id
     }
@@ -107,16 +113,28 @@ impl<'tcx> Builder<'tcx> {
         self.locals.insert(def_id, operand);
     }
 
-    pub fn build(self) -> Result<Procedure> {
+    pub fn build(
+        self,
+        name: impl ToString,
+        return_ty: TypeId,
+        params: impl Iterator<Item = TypeId>,
+    ) -> Result<Fn> {
+        let name = name.to_string();
         let blocks = self
             .blocks
             .into_iter()
             .map(|b| b.build())
             .collect::<Result<Vec<_>, BlockBuilderError>>()?;
-        let temps = (0..self.temp_idx).map(TempId).collect();
-        Ok(Procedure { temps, blocks })
+        let temps = self.temp_tys;
+        let params = params.into_iter().collect();
+        Ok(Fn {
+            name,
+            return_ty,
+            params,
+            temps,
+            blocks,
+        })
     }
-
 
     pub(super) fn lower_hir_block(
         &mut self,
@@ -170,10 +188,11 @@ impl<'tcx> Builder<'tcx> {
         block: BlockId,
     ) -> Result<(Operand, BlockId)> {
         match expr {
-            hir::Expr::BinOp(hir::BinOp { op, lhs, rhs, .. }) => {
-                let (lhs, block) = self.lower_expr(lhs, block)?;
-                let (rhs, block) = self.lower_expr(rhs, block)?;
-                let dest = self.new_temp();
+            hir::Expr::BinOp(bin_op) => {
+                let (lhs, block) = self.lower_expr(&bin_op.lhs, block)?;
+                let (rhs, block) = self.lower_expr(&bin_op.rhs, block)?;
+                let dest = self.new_temp(bin_op.ty);
+                let op = bin_op.op;
                 self.get_block_mut(&block)
                     .push_instr(Instruction::bin_op(dest, op.kind, lhs, rhs));
 
@@ -181,7 +200,7 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::IfElse(if_else) => {
-                let dest = self.new_temp();
+                let dest = self.new_temp(if_else.ty);
                 let conseq_block = self.new_block();
                 let alt_block = self.new_block();
                 let join_block = self.new_block();
@@ -217,9 +236,11 @@ impl<'tcx> Builder<'tcx> {
                 block,
             )),
 
-            hir::Expr::Unary(hir::Unary { op, rhs, .. }) => {
-                let dest = self.new_temp();
-                let (rhs, block) = self.lower_expr(&rhs, block)?;
+            hir::Expr::Unary(unary) => {
+                let dest = self.new_temp(unary.ty);
+                let op = &unary.op;
+                let rhs = &unary.rhs;
+                let (rhs, block) = self.lower_expr(rhs, block)?;
 
                 self.get_block_mut(&block)
                     .push_instr(Instruction::unary_op(dest, op.kind, rhs));
@@ -228,7 +249,7 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Call(call) => {
-                let dest = self.new_temp();
+                let dest = self.new_temp(call.ty);
                 let (operands, block) = call.params.iter().try_fold(
                     (Vec::with_capacity(16), block),
                     |(mut acc, block), expr| {

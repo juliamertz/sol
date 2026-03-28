@@ -152,6 +152,7 @@ pub struct TypeEnv {
     pub definitions: Interner<DefId, TypeId>,
     pub nodes: Interner<NodeId, TypeId>,
     pub node_defs: HashMap<NodeId, DefId>,
+    pub def_names: HashMap<DefId, Arc<str>>,
 }
 
 impl TypeEnv {
@@ -162,6 +163,7 @@ impl TypeEnv {
             definitions: Default::default(),
             nodes: Default::default(),
             node_defs: Default::default(),
+            def_names: Default::default(),
         }
     }
 
@@ -174,6 +176,10 @@ impl TypeEnv {
                 src: self.src.clone(),
                 span: *span,
             })
+    }
+
+    pub fn type_by_id(&self, type_id: &TypeId) -> Result<&Type> {
+        Ok(self.types.get(type_id).unwrap())
     }
 
     pub fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
@@ -512,7 +518,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeId> {
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
     match &func.kind {
         ast::FnKind::Local { params, body } => {
             let param_tys = params
@@ -521,20 +527,21 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeI
                 .collect::<Result<Vec<_>>>()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
             let fn_ty_id = env.types.intern(Type::func(param_tys, returns));
+            let def_id = env.definitions.intern(fn_ty_id);
 
             let mut scope = scope.new_child();
             for (name, ty) in params.iter() {
                 let ty_id = env.type_from_ast_ty(ty, &scope)?;
-                let def_id = env.definitions.intern(ty_id);
-                scope.define(name, def_id);
+                let param_def_id = env.definitions.intern(ty_id);
+                scope.define(name, param_def_id);
             }
-            let def_id = env.definitions.intern(fn_ty_id);
             scope.define(&func.ident, def_id);
 
             let ty_id = infer_block(body, env, &mut scope)?;
             env.nodes.insert(body.id, ty_id);
+            env.def_names.insert(def_id, func.ident.inner.clone());
 
-            Ok(fn_ty_id)
+            Ok((fn_ty_id, def_id))
         }
         ast::FnKind::Extern { params } => {
             let param_tys = params
@@ -542,8 +549,10 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeI
                 .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
                 .collect::<Result<Vec<_>>>()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let ty_id = env.types.intern(Type::extern_func(param_tys, returns));
-            Ok(ty_id)
+            let fn_ty_id = env.types.intern(Type::extern_func(param_tys, returns));
+            let def_id = env.definitions.intern(fn_ty_id);
+            env.def_names.insert(def_id, func.ident.inner.clone());
+            Ok((fn_ty_id, def_id))
         }
     }
 }
@@ -569,6 +578,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 
             let def_id = env.definitions.intern(ty_id);
             env.node_defs.insert(ident.id, def_id);
+            env.def_names.insert(def_id, ident.inner.clone());
             scope.define(ident, def_id);
         }
 
@@ -587,28 +597,18 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 pub fn check_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     let mut scope = scope.new_child();
 
-    // TODO: clean this up
-    match &func.kind {
-        ast::FnKind::Local { params, .. } => {
-            for (ident, ty) in params.iter() {
-                let ty_id = env.type_from_ast_ty(ty, &scope)?;
-                let def_id = env.definitions.intern(ty_id);
-                env.nodes.insert(ident.id, ty_id);
-                env.node_defs.insert(ident.id, def_id);
-                scope.define(ident, def_id);
-            }
+    for param in func.params() {
+        let ty_id = env.type_from_ast_ty(param.ty, &scope)?;
+        let def_id = env.definitions.intern(ty_id);
+        if let Some(node_id) = param.node_id {
+            env.nodes.insert(node_id, ty_id);
+            env.node_defs.insert(node_id, def_id);
         }
-        ast::FnKind::Extern { params } => {
-            for (ident, ty) in params.iter() {
-                let ty_id = env.type_from_ast_ty(ty, &scope)?;
-                let def_id = env.definitions.intern(ty_id);
-                scope.define(ident, def_id);
-            }
-        }
+        scope.define(param.key, def_id);
     }
 
-    let ty_id = infer_fn(func, env, &scope)?;
-    let def_id = env.definitions.intern(ty_id);
+    let def_id = *scope.get_definition(&func.ident).unwrap();
+    let ty_id = *env.definitions.get(&def_id).unwrap();
     env.node_defs.insert(func.ident.id, def_id);
     env.nodes.insert(func.ident.id, ty_id);
     scope.define(&func.ident, def_id);
@@ -666,8 +666,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     }
 
     for func in inventory.take_fns() {
-        let ty_id = infer_fn(func, env, scope)?;
-        let def_id = env.definitions.intern(ty_id);
+        let (_ty_id, def_id) = infer_fn(func, env, scope)?;
         scope.define(&func.ident, def_id);
     }
 

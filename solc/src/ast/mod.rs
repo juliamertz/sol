@@ -245,18 +245,10 @@ pub enum FnKind {
     },
 }
 
-pub enum Params<'a> {
-    Local(&'a [(Ident, Ty)]),
-    Extern(&'a [(Name, Ty)]),
-}
-
-impl Params<'_> {
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &Ty)> {
-        match self {
-            Params::Local(s) => Either::Left(s.iter().map(|(id, ty)| (id.as_str(), ty))),
-            Params::Extern(s) => Either::Right(s.iter().map(|(n, ty)| (n.as_str(), ty))),
-        }
-    }
+pub struct Param<'a> {
+    pub key: &'a str,
+    pub ty: &'a Ty,
+    pub node_id: Option<NodeId>,
 }
 
 #[derive(Debug, Clone)]
@@ -268,10 +260,20 @@ pub struct Fn {
 }
 
 impl Fn {
-    pub fn params(&self) -> Params<'_> {
+    pub fn params(&self) -> impl Iterator<Item = Param<'_>> {
         match self.kind {
-            FnKind::Local { ref params, .. } => Params::Local(params),
-            FnKind::Extern { ref params } => Params::Extern(params),
+            FnKind::Local { ref params, .. } => {
+                Either::Left(params.iter().map(|(ident, ty)| Param {
+                    key: ident.as_str(),
+                    ty,
+                    node_id: Some(ident.id),
+                }))
+            }
+            FnKind::Extern { ref params } => Either::Right(params.iter().map(|(name, ty)| Param {
+                key: name.as_str(),
+                ty,
+                node_id: None,
+            })),
         }
     }
 }

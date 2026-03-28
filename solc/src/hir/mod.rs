@@ -42,6 +42,20 @@ pub struct Block<'ast> {
     pub nodes: Box<[Stmnt<'ast>]>,
 }
 
+// impl<'ast> Block<'ast> {
+//     pub fn stmnts(&self) -> Vec<Stmnt<'ast>> {
+//         todo!()
+//     }
+//
+//     pub fn returning(&self) -> Option<&Expr<'ast>> {
+//         if let Some(Stmnt::Expr(expr)) = self.nodes.iter().last() {
+//             Some(expr)
+//         } else {
+//             None
+//         }
+//     }
+// }
+
 #[derive(Debug, Clone)]
 pub struct BinOp<'ast> {
     pub id: HirId,
@@ -250,17 +264,17 @@ impl Expr<'_> {
 
     pub fn span(&self) -> &Span {
         match self {
-            Expr::Ident(ident) => &ident.span,
-            Expr::Literal(literal) => &literal.span,
-            Expr::Block(block) => &block.span,
-            Expr::BinOp(bin_op) => &bin_op.span,
-            Expr::Unary(unary) => &unary.span,
-            Expr::Call(call) => &call.span,
-            Expr::Index(index) => &index.span,
-            Expr::IfElse(if_else) => &if_else.span,
-            Expr::List(list) => &list.span,
-            Expr::Constructor(constructor) => &constructor.span,
-            Expr::MemberAccess(member_access) => &member_access.span,
+            Expr::Ident(ident) => ident.span,
+            Expr::Literal(literal) => literal.span,
+            Expr::Block(block) => block.span,
+            Expr::BinOp(bin_op) => bin_op.span,
+            Expr::Unary(unary) => unary.span,
+            Expr::Call(call) => call.span,
+            Expr::Index(index) => index.span,
+            Expr::IfElse(if_else) => if_else.span,
+            Expr::List(list) => list.span,
+            Expr::Constructor(constructor) => constructor.span,
+            Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
         }
     }

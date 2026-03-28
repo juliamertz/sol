@@ -655,7 +655,7 @@ impl<'src> Parser<'src> {
         } else if self.at(TokenKind::False) {
             false
         } else {
-            todo!();
+            unreachable!()
         };
         let kind = LiteralKind::Bool(val);
         self.advance()?;

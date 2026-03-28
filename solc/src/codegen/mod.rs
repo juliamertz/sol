@@ -1,4 +1,5 @@
 pub mod c;
+pub mod qbe;
 
 use crate::hir;
 use crate::type_checker::TypeEnv;

@@ -1,18 +1,34 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
-use crate::type_checker::DefId;
+use crate::type_checker::ty::Type;
+use crate::type_checker::{DefId, TypeId};
 
-mod lower;
 mod builder;
 mod fmt;
+mod lower;
 
-use builder::{Builder, BlockBuilder};
 pub use lower::lower_module;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TempId(usize);
 
+impl TempId {
+    pub fn inner(&self) -> usize {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockId(usize);
+
+impl BlockId {
+    pub fn new(id: usize) -> Self {
+        Self(id)
+    }
+
+    pub fn inner(&self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Constant {
@@ -65,19 +81,34 @@ pub enum Terminator {
 
 #[derive(Debug)]
 pub struct Block {
-    body: Vec<Instruction>,
-    term: Terminator,
+    pub body: Vec<Instruction>,
+    pub term: Terminator,
 }
 
 #[derive(Debug)]
-pub struct Procedure {
-    temps: Vec<TempId>,
-    blocks: Vec<Block>,
+pub struct Fn {
+    pub name: String,
+    pub return_ty: TypeId,
+    pub params: Vec<TypeId>,
+    pub temps: Vec<TypeId>,
+    pub blocks: Vec<Block>,
+}
+
+impl Fn {
+    pub fn temp_ty(&self, id: TempId) -> TypeId {
+        self.temps[id.inner()]
+    }
+}
+
+#[derive(Debug)]
+pub enum Definition {
+    Ty(Type),
+    Fn(Fn),
 }
 
 #[derive(Debug)]
 pub struct Module {
-    procs: Vec<Procedure>,
+    pub defs: Vec<Definition>,
 }
 
 impl Instruction {
