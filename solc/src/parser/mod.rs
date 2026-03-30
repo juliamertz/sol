@@ -348,7 +348,8 @@ impl<'src> Parser<'src> {
 
     fn extern_func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
-        self.consume(TokenKind::Extern);
+        self.consume(TokenKind::Extern)?;
+        let is_variadic = self.accept(TokenKind::Variadic)?.is_some();
         self.consume(TokenKind::Fn)?;
         let ident = self.ident()?;
         self.consume(TokenKind::LParen)?;
@@ -370,7 +371,7 @@ impl<'src> Parser<'src> {
         Ok(Fn {
             span,
             ident,
-            kind: FnKind::Extern { params },
+            kind: FnKind::Extern { params, is_variadic },
             return_ty,
         })
     }

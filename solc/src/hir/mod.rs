@@ -180,6 +180,7 @@ pub enum FnKind<'ast> {
     },
     Extern {
         params: Box<[(Name<'ast>, TypeId)]>,
+        is_variadic: bool,
     },
 }
 

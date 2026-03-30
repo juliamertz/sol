@@ -543,7 +543,7 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Type
 
             Ok((fn_ty_id, def_id))
         }
-        ast::FnKind::Extern { params } => {
+        ast::FnKind::Extern { params, .. } => {
             let param_tys = params
                 .iter()
                 .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))

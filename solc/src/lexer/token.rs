@@ -43,6 +43,7 @@ pub enum TokenKind {
     Extern,
     Struct,
     Impl,
+    Variadic,
 
     // Operators
     Eq,
@@ -76,6 +77,7 @@ impl TokenKind {
                 | TokenKind::Impl
                 | TokenKind::True
                 | TokenKind::False
+                | TokenKind::Variadic
         )
     }
 
@@ -141,6 +143,7 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock
         ("impl", TokenKind::Impl),
         ("true", TokenKind::True),
         ("false", TokenKind::False),
+        ("variadic", TokenKind::Variadic),
     ]
     .into_iter()
     .collect()

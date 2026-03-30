@@ -16,7 +16,6 @@ fn lower_func(
 
     for (ident, ty_id) in params {
         let operand = Operand::Temporary(builder.new_temp(*ty_id));
-        dbg!(&ident);
         builder.define_local(ident.def_id, operand);
     }
 
@@ -43,7 +42,7 @@ pub fn lower_item(
                 defs.extend(data.into_iter().map(Definition::Data));
                 Some(defs)
             }
-            hir::FnKind::Extern { params: _ } => None, // TODO:
+            hir::FnKind::Extern { .. } => None, // TODO:
         },
         hir::Item::StructDef(struct_def) => {
             let ty = env.type_by_id(&struct_def.ident.ty).unwrap(); // TODO: kind of weird that we resolve this type by ident

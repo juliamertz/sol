@@ -242,6 +242,7 @@ pub enum FnKind {
     },
     Extern {
         params: Arc<[(Name, Ty)]>,
+        is_variadic: bool,
     },
 }
 
@@ -269,7 +270,7 @@ impl Fn {
                     node_id: Some(ident.id),
                 }))
             }
-            FnKind::Extern { ref params } => Either::Right(params.iter().map(|(name, ty)| Param {
+            FnKind::Extern { ref params, .. } => Either::Right(params.iter().map(|(name, ty)| Param {
                 key: name.as_str(),
                 ty,
                 node_id: None,
