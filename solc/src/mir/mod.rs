@@ -41,7 +41,7 @@ impl BlockId {
 
 #[derive(Debug, Clone)]
 pub enum Constant {
-    Int(i128),
+    Int(i128, TypeId),
     Bool(bool),
     Unit,
 }
@@ -112,7 +112,11 @@ impl Fn {
         match op {
             Operand::Temporary(id) => self.temp_ty(*id),
             Operand::Data(_) => TypeId::STR, // TODO: for now, all data is strings
-            Operand::Constant(_) => todo!(),
+            Operand::Constant(constant) => match constant {
+                Constant::Int(_, ty_id) => *ty_id,
+                Constant::Bool(_) => todo!(),
+                Constant::Unit => todo!(),
+            },
         }
     }
 }

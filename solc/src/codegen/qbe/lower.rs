@@ -146,7 +146,7 @@ impl<'env> Builder<'env> {
 
     fn lower_const<'a>(&self, constant: &'a mir::Constant) -> Const<'a> {
         match constant {
-            mir::Constant::Int(val) => Const::int(*val),
+            mir::Constant::Int(val, _) => Const::int(*val),
             mir::Constant::Bool(_) => todo!(),
             mir::Constant::Unit => todo!(),
         }
@@ -211,7 +211,7 @@ impl<'env> Builder<'env> {
             // },
             // Type::UInt(uint_ty) => todo!(),
             Type::Bool => AbiTy::Base(BaseTy::Word), // TODO:
-            Type::Str => todo!(),
+            Type::Str => AbiTy::Base(BaseTy::Long), // TODO: not sure if this is correct but it works for data pointers
             Type::List(type_id, _) => todo!(),
             Type::Ptr(type_id) => todo!(),
             Type::Fn {

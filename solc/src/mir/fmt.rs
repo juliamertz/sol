@@ -23,7 +23,7 @@ impl Display for BlockId {
 impl Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Constant::Int(v) => write!(f, "{v}"),
+            Constant::Int(v, _) => write!(f, "{v}"),
             Constant::Bool(v) => write!(f, "{v}"),
             Constant::Unit => f.write_str("()"),
         }
