@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::ast::BinOpKind;
 use crate::codegen::qbe::{
     AbiTy, BaseTy, Block, Const, Data, DataItem, DataValue, Definition, ExtTy, Function, Ident,
-    Instruction, InstructionKind, Jump, Module, Operand, Param, RegularParam, SubWordTy,
+    Instruction, InstructionKind, Jump, Linkage, Module, Operand, Param, RegularParam, SubWordTy,
 };
 use crate::mir::{self, BlockId};
 use crate::type_checker::ty::{self, Type};
@@ -128,9 +128,13 @@ impl<'env> Builder<'env> {
                 let operands = operands
                     .iter()
                     .map(|operand| {
-                        RegularParam(AbiTy::Base(BaseTy::Word), self.lower_operand(operand))
+                        let ty_id = func.operand_ty(operand);
+                        Ok(RegularParam(
+                            self.lower_ty(&ty_id)?,
+                            self.lower_operand(operand),
+                        ))
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(Instruction {
                     ident: temp_name(*dest),
                     return_ty,
@@ -220,8 +224,14 @@ impl<'env> Builder<'env> {
     }
 
     pub fn lower_func<'a>(&self, func: &'a mir::Fn) -> Result<Function<'a>> {
+        let linkage = if &func.name == "main" {
+            Some(Linkage::Export)
+        } else {
+            None
+        };
+
         Ok(Function {
-            linkage: None,
+            linkage,
             ident: Ident::global(&func.name),
             return_ty: Some(self.lower_ty(&func.return_ty)?),
             params: func

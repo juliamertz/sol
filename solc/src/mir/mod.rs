@@ -107,6 +107,14 @@ impl Fn {
     pub fn temp_ty(&self, id: TempId) -> TypeId {
         self.temps[id.inner()]
     }
+
+    pub fn operand_ty(&self, op: &Operand) -> TypeId {
+        match op {
+            Operand::Temporary(id) => self.temp_ty(*id),
+            Operand::Data(_) => TypeId::STR, // TODO: for now, all data is strings
+            Operand::Constant(_) => todo!(),
+        }
+    }
 }
 
 #[derive(Debug)]
