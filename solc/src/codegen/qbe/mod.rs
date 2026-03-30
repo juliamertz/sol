@@ -175,7 +175,7 @@ pub enum Operand<'a> {
 
 pub enum InstructionKind<'a> {
     Basic(&'static str, Vec<Operand<'a>>),
-    Call(Ident<'a>, Vec<RegularParam<'a>>),
+    Call(Ident<'a>, Vec<Param<'a>>),
 }
 
 pub struct Instruction<'a> {

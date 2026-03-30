@@ -50,6 +50,7 @@ pub enum Type {
     Ptr(TypeId),
     Fn {
         is_extern: bool,
+        is_variadic: bool,
         params: Box<[TypeId]>,
         returns: TypeId,
     },
@@ -63,14 +64,16 @@ impl Type {
     pub fn func(params: impl Into<Box<[TypeId]>>, returns: TypeId) -> Self {
         Self::Fn {
             is_extern: false,
+            is_variadic: false,
             params: params.into(),
             returns,
         }
     }
 
-    pub fn extern_func(params: impl Into<Box<[TypeId]>>, returns: TypeId) -> Self {
+    pub fn extern_func(params: impl Into<Box<[TypeId]>>, returns: TypeId, is_variadic: bool) -> Self {
         Self::Fn {
             is_extern: true,
+            is_variadic,
             params: params.into(),
             returns,
         }

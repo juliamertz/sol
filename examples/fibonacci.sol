@@ -1,6 +1,6 @@
 use extern stdio
 
-extern func printf(format: Str) -> i32
+extern variadic func printf(format: Str) -> i32
 
 func fib(n: i32) -> i32
     if n == 0 or n == 1 then

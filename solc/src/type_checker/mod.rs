@@ -215,6 +215,7 @@ impl TypeEnv {
                 let return_id = self.type_from_ast_ty(returns, scope)?;
                 Type::Fn {
                     is_extern: *is_extern,
+                    is_variadic: false, // FIXME:????????
                     params: param_ids,
                     returns: return_id,
                 }
@@ -543,13 +544,18 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Type
 
             Ok((fn_ty_id, def_id))
         }
-        ast::FnKind::Extern { params, .. } => {
+        ast::FnKind::Extern {
+            params,
+            is_variadic,
+        } => {
             let param_tys = params
                 .iter()
                 .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
                 .collect::<Result<Vec<_>>>()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env.types.intern(Type::extern_func(param_tys, returns));
+            let fn_ty_id = env
+                .types
+                .intern(Type::extern_func(param_tys, returns, *is_variadic));
             let def_id = env.definitions.intern(fn_ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
             Ok((fn_ty_id, def_id))

@@ -124,17 +124,39 @@ impl<'env> Builder<'env> {
                 operands,
             } => {
                 let name = self.env.def_names.get(def).expect("def name");
+                let fn_ty = self
+                    .env
+                    .definitions
+                    .get(def)
+                    .and_then(|ty_id| self.env.types.get(ty_id))
+                    .expect("def type");
+
+                let Type::Fn {
+                    is_variadic,
+                    params: param_tys,
+                    ..
+                } = &fn_ty
+                else {
+                    unreachable!("OH NO your function is not a function? 🤯");
+                };
+
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
-                let operands = operands
+                let mut operands = operands
                     .iter()
                     .map(|operand| {
                         let ty_id = func.operand_ty(operand);
-                        Ok(RegularParam(
+                        Ok(Param::Regular(RegularParam(
                             self.lower_ty(&ty_id)?,
                             self.lower_operand(operand),
-                        ))
+                        )))
                     })
                     .collect::<Result<Vec<_>>>()?;
+
+                if *is_variadic {
+                    let idx = param_tys.len();
+                    operands.insert(idx, Param::VariadicMarker);
+                }
+
                 Ok(Instruction {
                     ident: temp_name(*dest),
                     return_ty,
@@ -216,6 +238,7 @@ impl<'env> Builder<'env> {
             Type::Ptr(type_id) => todo!(),
             Type::Fn {
                 is_extern,
+                is_variadic,
                 params,
                 returns,
             } => todo!(),
