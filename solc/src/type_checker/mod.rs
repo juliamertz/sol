@@ -432,6 +432,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
 
         Expr::List(List { items, .. }) => {
+            let size = items.len();
             let mut iter = items.iter();
             let first_item = iter.next();
 
@@ -455,7 +456,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     });
                 }
             }
-            let ty = Type::List(inner_type, None); // TODO: fixed sized lists
+
+
+            let ty = Type::List(inner_type, Some(size));
             let ty_id = env.types.intern(ty);
             Ok(ty_id)
         }

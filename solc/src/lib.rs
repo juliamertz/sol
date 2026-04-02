@@ -12,3 +12,4 @@ pub mod type_checker;
 #[macro_use]
 pub mod interner;
 pub mod mir;
+pub mod num;

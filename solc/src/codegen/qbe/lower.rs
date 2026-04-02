@@ -9,6 +9,7 @@ use crate::codegen::qbe::{
     Instruction, InstructionKind, Jump, Linkage, Module, Operand, Param, RegularParam, SubWordTy,
 };
 use crate::mir::{self, BlockId};
+use crate::num::Signedness;
 use crate::type_checker::ty::{self, Type};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
@@ -99,16 +100,45 @@ impl<'env> Builder<'env> {
             }
             mir::Instruction::BinOp { dest, op, lhs, rhs } => {
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
+                let val_ty = self.env.types.get(&func.operand_ty(lhs)).unwrap();
+                dbg!(&val_ty);
+                use BinOpKind::*;
                 let kind = match op {
-                    BinOpKind::Eq => Instruction::CEQW, // TODO: correct instr for type
-                    BinOpKind::Add => Instruction::ADD,
-                    BinOpKind::Sub => Instruction::SUB,
-                    BinOpKind::Mul => Instruction::MUL,
-                    BinOpKind::Div => Instruction::DIV,
-                    BinOpKind::Lt => todo!(),
-                    BinOpKind::Gt => todo!(),
-                    BinOpKind::And => Instruction::AND,
-                    BinOpKind::Or => Instruction::OR,
+                    Add => Instruction::ADD,
+                    Sub => Instruction::SUB,
+                    Mul => Instruction::MUL,
+                    Div => Instruction::DIV,
+                    And => Instruction::AND,
+                    Or => Instruction::OR,
+                    Eq | Lt | Gt => {
+                        let (signedness, bits) = match val_ty {
+                            Type::Int(int_ty) => (Signedness::Signed, int_ty.bits()),
+                            Type::UInt(uint_ty) => (Signedness::Unsigned, uint_ty.bits()),
+                            _ => unreachable!(),
+                        };
+                        match op {
+                            Eq => {
+                                if bits == 64 {
+                                    Instruction::CEQL
+                                } else {
+                                    Instruction::CEQW
+                                }
+                            }
+                            Lt => match (signedness, bits == 64) {
+                                (Signedness::Signed, false) => Instruction::CSLTW,
+                                (Signedness::Unsigned, false) => Instruction::CULTW,
+                                (Signedness::Signed, true) => Instruction::CSLTL,
+                                (Signedness::Unsigned, true) => Instruction::CULTL,
+                            },
+                            Gt => match (signedness, bits == 64) {
+                                (Signedness::Signed, false) => Instruction::CSGTW,
+                                (Signedness::Unsigned, false) => Instruction::CUGTW,
+                                (Signedness::Signed, true) => Instruction::CSGTL,
+                                (Signedness::Unsigned, true) => Instruction::CUGTL,
+                            },
+                            _ => unreachable!(),
+                        }
+                    }
                 };
                 Ok(Instruction::new(
                     kind,

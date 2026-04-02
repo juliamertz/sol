@@ -239,7 +239,9 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Literal(literal) => Ok((
                 match literal.kind {
-                    ast::LiteralKind::Int(val) => Operand::Constant(Constant::Int(*val, literal.ty)),
+                    ast::LiteralKind::Int(val) => {
+                        Operand::Constant(Constant::Int(*val, literal.ty))
+                    }
                     ast::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(*val)),
                     ast::LiteralKind::Str(val) => {
                         let data_id = self.new_data(DataValue::String(val.to_string()));
@@ -293,6 +295,10 @@ impl<'tcx> Builder<'tcx> {
                     })?;
                 Ok((val.clone(), block))
             }
+
+            // hir::Expr::Index(_) => {
+            //     todo!();
+            // },
 
             // TODO:
             _ => Ok((Operand::Constant(Constant::Unit), block)),

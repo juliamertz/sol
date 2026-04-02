@@ -9,6 +9,17 @@ pub enum IntTy {
     I64,
 }
 
+impl IntTy {
+    pub fn bits(&self) -> u8 {
+        match self {
+            IntTy::I8 => 8,
+            IntTy::I16 => 16,
+            IntTy::I32 => 32,
+            IntTy::I64 => 64,
+        }
+    }
+}
+
 impl From<&ast::IntTy> for IntTy {
     fn from(value: &ast::IntTy) -> Self {
         match value {
@@ -26,6 +37,17 @@ pub enum UIntTy {
     U16,
     U32,
     U64,
+}
+
+impl UIntTy {
+    pub fn bits(&self) -> u8 {
+        match self {
+            UIntTy::U8 => 8,
+            UIntTy::U16 => 16,
+            UIntTy::U32 => 32,
+            UIntTy::U64 => 64,
+        }
+    }
 }
 
 impl From<&ast::UIntTy> for UIntTy {
@@ -70,7 +92,11 @@ impl Type {
         }
     }
 
-    pub fn extern_func(params: impl Into<Box<[TypeId]>>, returns: TypeId, is_variadic: bool) -> Self {
+    pub fn extern_func(
+        params: impl Into<Box<[TypeId]>>,
+        returns: TypeId,
+        is_variadic: bool,
+    ) -> Self {
         Self::Fn {
             is_extern: true,
             is_variadic,
