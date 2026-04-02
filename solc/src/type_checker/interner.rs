@@ -13,6 +13,7 @@ impl TypeId {
     pub const U64: TypeId = TypeId(8);
     pub const BOOL: TypeId = TypeId(9);
     pub const STR: TypeId = TypeId(10);
+    pub const UNIT: TypeId = TypeId(11);
 }
 
 #[derive(Debug)]
@@ -30,14 +31,14 @@ impl TypeInterner {
 
 impl Default for TypeInterner {
     fn default() -> Self {
-        Self { idx: 16 }
+        Self { idx: 12 }
     }
 }
 
 impl interner::Strategy<TypeId, Type> for TypeInterner {
     fn key_for(&mut self, value: &Type) -> TypeId {
         match value {
-            Type::Unit => TypeId::NONE,
+            Type::Unit => TypeId::UNIT,
             Type::Int(int_ty) => match int_ty {
                 IntTy::I8 => TypeId::I8,
                 IntTy::I16 => TypeId::I16,
@@ -59,7 +60,7 @@ impl interner::Strategy<TypeId, Type> for TypeInterner {
     fn default_values() -> Option<std::collections::HashMap<TypeId, Type>> {
         Some(
             [
-                (TypeId::NONE, Type::Unit),
+                (TypeId::UNIT, Type::Unit),
                 (TypeId::I8, Type::Int(IntTy::I8)),
                 (TypeId::U8, Type::UInt(UIntTy::U8)),
                 (TypeId::I16, Type::Int(IntTy::I16)),

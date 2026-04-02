@@ -115,7 +115,7 @@ impl Fn {
             Operand::Constant(constant) => match constant {
                 Constant::Int(_, ty_id) => *ty_id,
                 Constant::Bool(_) => todo!(),
-                Constant::Unit => todo!(),
+                Constant::Unit => TypeId::UNIT,
             },
         }
     }

@@ -107,6 +107,8 @@ impl Display for Terminator {
 
 impl Display for Fn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "func @{}", self.name)?;
+
         for (idx, block) in self.blocks.iter().enumerate() {
             writeln!(f, "  bb{idx}:")?;
             for instr in &block.body {
@@ -121,11 +123,22 @@ impl Display for Fn {
     }
 }
 
+impl Display for Data {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_data_{}: ", self.id.inner())?;
+        match self.value {
+            DataValue::Bytes(_) => write!(f, "<bytes>"),
+            DataValue::String(ref inner) => f.write_str(inner),
+        }?;
+        writeln!(f)
+    }
+}
+
 impl Display for Definition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Definition::Ty(_) => todo!(), // TODO:
-            Definition::Data(_) => todo!(),
+            Definition::Ty(ty) => ty.fmt(f), 
+            Definition::Data(data) => data.fmt(f),
             Definition::Fn(func) => func.fmt(f),
         }
     }
@@ -134,9 +147,7 @@ impl Display for Definition {
 impl Display for Module {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (idx, def) in self.defs.iter().enumerate() {
-            writeln!(f, "proc @{idx} {{")?;
-            write!(f, "{def}")?;
-            writeln!(f, "}}")?;
+            def.fmt(f)?;
             if idx != self.defs.len() - 1 {
                 writeln!(f)?;
             }
