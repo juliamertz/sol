@@ -1,7 +1,7 @@
 use crate::ext::AsStr;
 use crate::hir;
 use crate::mir::builder::{Builder, BuilderError};
-use crate::mir::{Data, DataValue, Definition, Fn, Module, Operand, Terminator};
+use crate::mir::{Data, Definition, Fn, Module, Operand, Terminator};
 use crate::type_checker::{TypeEnv, TypeId};
 
 fn lower_func(

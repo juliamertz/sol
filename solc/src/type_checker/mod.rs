@@ -457,7 +457,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
             }
 
-
             let ty = Type::List(inner_type, Some(size));
             let ty_id = env.types.intern(ty);
             Ok(ty_id)

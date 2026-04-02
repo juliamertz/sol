@@ -1,7 +1,5 @@
 use std::borrow::Cow;
 
-use crate::mir;
-
 pub mod build;
 pub mod fmt;
 pub mod lower;

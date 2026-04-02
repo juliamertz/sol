@@ -137,7 +137,7 @@ impl Display for Data {
 impl Display for Definition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Definition::Ty(ty) => ty.fmt(f), 
+            Definition::Ty(ty) => ty.fmt(f),
             Definition::Data(data) => data.fmt(f),
             Definition::Fn(func) => func.fmt(f),
         }

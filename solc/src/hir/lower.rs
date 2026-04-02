@@ -53,7 +53,10 @@ pub fn lower_item<'ast>(
                         .into(),
                     body: lower_block(body, env)?,
                 },
-                ast::FnKind::Extern { params, is_variadic } => hir::FnKind::Extern {
+                ast::FnKind::Extern {
+                    params,
+                    is_variadic,
+                } => hir::FnKind::Extern {
                     is_variadic: *is_variadic,
                     params: params
                         .iter()

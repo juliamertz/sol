@@ -46,7 +46,10 @@ impl PrettyPrinter {
     }
 
     fn pos(&self, offset: usize) -> Pos {
-        let row = self.line_starts.partition_point(|&s| s <= offset).saturating_sub(1);
+        let row = self
+            .line_starts
+            .partition_point(|&s| s <= offset)
+            .saturating_sub(1);
         let col = offset - self.line_starts[row];
         Pos { row, col }
     }
@@ -81,7 +84,11 @@ impl PrettyPrinter {
                 writeln!(f)?;
                 self.fmt_ty(f, inner, depth + 1)?;
             }
-            TyKind::Fn { params, returns, is_extern } => {
+            TyKind::Fn {
+                params,
+                returns,
+                is_extern,
+            } => {
                 if *is_extern {
                     write!(f, " extern fn")?;
                 } else {
@@ -307,7 +314,10 @@ impl PrettyPrinter {
                 self.fmt_block(f, body, depth + 2)?;
                 write!(f, ")")
             }
-            FnKind::Extern { params, is_variadic } => {
+            FnKind::Extern {
+                params,
+                is_variadic,
+            } => {
                 write!(f, "(extern_function ")?;
                 self.fmt_span(f, func.span)?;
                 writeln!(f, " \"{}\"", func.ident)?;

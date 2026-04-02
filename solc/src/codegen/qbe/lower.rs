@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-
 use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::BinOpKind;
 use crate::codegen::qbe::{
     AbiTy, BaseTy, Block, Const, Data, DataItem, DataValue, Definition, ExtTy, Function, Ident,
-    Instruction, InstructionKind, Jump, Linkage, Module, Operand, Param, RegularParam, SubWordTy,
+    Instruction, InstructionKind, Jump, Linkage, Module, Operand, Param, RegularParam,
 };
 use crate::mir::{self, BlockId};
 use crate::num::Signedness;
-use crate::type_checker::ty::{self, Type};
+use crate::type_checker::ty::Type;
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -57,10 +55,10 @@ impl<'env> Builder<'env> {
             ident: data_name(data.id), // TODO: unique idents
             align: None,
             value: DataValue::Data(match &data.value {
-                mir::DataValue::Bytes(items) => todo!(),
+                mir::DataValue::Bytes(_items) => todo!(),
                 mir::DataValue::String(str) => vec![
                     (ExtTy::Byte, DataItem::String(str.into())),
-                    (ExtTy::Byte, DataItem::Const(Const::int(0 as i128))),
+                    (ExtTy::Byte, DataItem::Const(Const::int(0_i128))),
                 ],
             }),
         })
@@ -147,7 +145,11 @@ impl<'env> Builder<'env> {
                     vec![self.lower_operand(lhs), self.lower_operand(rhs)],
                 ))
             }
-            mir::Instruction::UnaryOp { dest, op, rhs } => todo!(),
+            mir::Instruction::UnaryOp {
+                dest: _,
+                op: _,
+                rhs: _,
+            } => todo!(),
             mir::Instruction::Call {
                 dest,
                 def,
@@ -264,15 +266,18 @@ impl<'env> Builder<'env> {
             // Type::UInt(uint_ty) => todo!(),
             Type::Bool => AbiTy::Base(BaseTy::Word), // TODO:
             Type::Str => AbiTy::Base(BaseTy::Long), // TODO: not sure if this is correct but it works for data pointers
-            Type::List(type_id, _) => todo!(),
-            Type::Ptr(type_id) => todo!(),
+            Type::List(_type_id, _) => todo!(),
+            Type::Ptr(_type_id) => todo!(),
             Type::Fn {
-                is_extern,
-                is_variadic,
-                params,
-                returns,
+                is_extern: _,
+                is_variadic: _,
+                params: _,
+                returns: _,
             } => todo!(),
-            Type::Struct { ident, fields } => todo!(),
+            Type::Struct {
+                ident: _,
+                fields: _,
+            } => todo!(),
         })
     }
 

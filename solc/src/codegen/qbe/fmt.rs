@@ -69,7 +69,7 @@ impl Display for SubTyKind<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             SubTyKind::Extended(ext_ty) => ext_ty.fmt(f),
-            SubTyKind::Ident(ident) => f.write_str(*ident),
+            SubTyKind::Ident(ident) => f.write_str(ident),
         }
     }
 }
@@ -218,9 +218,9 @@ impl Display for Block<'_> {
         self.ident.fmt(f)?;
         f.write_char('\n')?;
         for instruction in self.instructions.iter() {
-            write!(f, "\t{instruction}\n")?;
+            writeln!(f, "\t{instruction}")?;
         }
-        write!(f, "\t{}\n", self.jump)?;
+        writeln!(f, "\t{}", self.jump)?;
         Ok(())
     }
 }
@@ -228,7 +228,7 @@ impl Display for Block<'_> {
 impl Display for DataItem<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            DataItem::Ident(ident, _) => todo!(),
+            DataItem::Ident(_ident, _) => todo!(),
             DataItem::String(val) => write!(f, "\"{val}\""),
             DataItem::Const(val) => val.fmt(f),
         }
