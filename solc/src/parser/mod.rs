@@ -288,12 +288,21 @@ impl<'src> Parser<'src> {
         let span = span.enclosing_to(&self.curr.span);
         let mut ty = Ty { kind, id, span };
 
-        if self.at(TokenKind::LBracket) {
-            self.consume(TokenKind::LBracket)?;
+        if self.accept(TokenKind::LBracket)?.is_some() {
+            let size = if self.at(TokenKind::Int) {
+                let lit = self.int_lit()?;
+                // this is janky 😭
+                let LiteralKind::Int(size) = lit.kind else {
+                    unreachable!();
+                };
+                Some(size as usize)
+            } else {
+                None
+            };
             self.consume(TokenKind::RBracket)?;
             let kind = TyKind::List {
                 inner: Arc::from(ty),
-                size: None,
+                size,
             };
             let id = self.ctx.next_id();
             let span = span.enclosing_to(&self.curr.span);
@@ -371,7 +380,10 @@ impl<'src> Parser<'src> {
         Ok(Fn {
             span,
             ident,
-            kind: FnKind::Extern { params, is_variadic },
+            kind: FnKind::Extern {
+                params,
+                is_variadic,
+            },
             return_ty,
         })
     }
