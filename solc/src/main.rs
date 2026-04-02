@@ -8,7 +8,7 @@ use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
 use solc::{
-    codegen::{self, Compiler, Emitter, qbe},
+    codegen::{self, qbe},
     hir, lexer, mir, parser,
     type_checker::{self, Scope, TypeEnv},
 };
@@ -22,10 +22,6 @@ struct Cli {
 
 #[derive(clap::Args)]
 struct BuildOpts {
-    /// Set release mode enabling all optimizations
-    #[arg(short, long)]
-    release: bool,
-
     /// Path to directory which all build artifacts get written to
     #[arg(short, long, default_value = "out")]
     outdir: PathBuf,
@@ -35,15 +31,6 @@ struct BuildOpts {
     cleanup: bool,
 }
 
-impl From<&BuildOpts> for codegen::BuildOpts {
-    fn from(opts: &BuildOpts) -> Self {
-        Self {
-            release: opts.release,
-            outdir: opts.outdir.clone(),
-            cleanup: opts.cleanup,
-        }
-    }
-}
 
 #[derive(clap::Subcommand)]
 enum Command {
@@ -87,20 +74,23 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let _name = file_path.to_string_lossy();
 
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
-    let module = parser.parse()?;
+    let module_ast = parser.parse()?;
 
     let mut env = TypeEnv::new(parser.lex.source());
     let mut scope = Scope::default();
 
-    type_checker::check_module(&module, &mut env, &mut scope)?;
+    type_checker::check_module(&module_ast, &mut env, &mut scope)?;
 
-    let hir = hir::lower_module(&module, &mut env)?;
+    let module_hir = hir::lower_module(&module_ast, &mut env)?;
+    let module_mir = mir::lower_module(&module_hir, &env)?;
 
-    let mut c = codegen::c::C::default();
-    let out = c.emit(env, &hir);
+    let qbe_builder = codegen::qbe::lower::Builder::new(&env);
+    let qbe_module = qbe_builder.lower_module(&module_mir)?;
 
-    let outpath = c.build_exe(&out, "bin", &codegen::BuildOpts::from(opts))?;
-    Ok(outpath)
+    let qbe_ir_path = codegen::qbe::build::build_ir(&opts.outdir, &qbe_module).unwrap();
+    let out_path = codegen::qbe::build::build_bin(&opts.outdir, &qbe_ir_path).unwrap();
+
+    Ok(out_path)
 }
 
 fn main() -> Result<()> {
