@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::interner::{self, Id};
 use crate::type_checker::{IntTy, Type, TypeId, UIntTy};
 
@@ -19,6 +21,7 @@ impl TypeId {
 #[derive(Debug)]
 pub struct TypeInterner {
     idx: u32,
+    lookup: HashMap<Type, TypeId>,
 }
 
 impl TypeInterner {
@@ -31,7 +34,10 @@ impl TypeInterner {
 
 impl Default for TypeInterner {
     fn default() -> Self {
-        Self { idx: 12 }
+        Self {
+            idx: 12,
+            lookup: HashMap::default(),
+        }
     }
 }
 
@@ -53,7 +59,16 @@ impl interner::Strategy<TypeId, Type> for TypeInterner {
             },
             Type::Bool => TypeId::BOOL,
             Type::Str => TypeId::STR,
-            Type::List(..) | Type::Ptr(_) | Type::Fn { .. } | Type::Struct { .. } => self.next(),
+            Type::List(..) | Type::Ptr(_) | Type::Fn { .. } => {
+                if let Some(id) = self.lookup.get(value).copied() {
+                    id
+                } else {
+                    let id = self.next();
+                    self.lookup.insert(value.clone(), id);
+                    id
+                }
+            }
+            Type::Struct { .. } => self.next(),
         }
     }
 

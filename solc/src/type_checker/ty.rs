@@ -1,7 +1,7 @@
 use crate::ast;
 use crate::type_checker::TypeId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntTy {
     I8,
     I16,
@@ -20,7 +20,7 @@ impl From<&ast::IntTy> for IntTy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UIntTy {
     U8,
     U16,
@@ -39,7 +39,7 @@ impl From<&ast::UIntTy> for UIntTy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Unit,
     Int(IntTy),

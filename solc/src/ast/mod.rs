@@ -75,6 +75,12 @@ impl AsStr for &Name {
     }
 }
 
+impl Hash for Name {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BinOpKind {
     /// num == 10
