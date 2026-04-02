@@ -46,7 +46,7 @@ pub enum Type {
     UInt(UIntTy),
     Bool,
     Str,
-    List(TypeId, Option<usize>),
+    List(TypeId, Option<usize>), // TODO: probably want to just have this be a sized array, then implement lists in the stdlib?
     Ptr(TypeId),
     Fn {
         is_extern: bool,
