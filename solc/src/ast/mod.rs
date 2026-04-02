@@ -1,3 +1,6 @@
+mod fmt;
+pub use fmt::DisplayModule;
+
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;

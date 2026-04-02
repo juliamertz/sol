@@ -198,7 +198,8 @@ fn main() -> Result<()> {
             let content = std::fs::read_to_string(&file_path).unwrap();
             let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
-            dbg!(ast);
+            let display = solc::ast::DisplayModule { module: &ast, source: &content };
+            print!("{display}");
         }
         Command::DumpHir { file_path } => {
             let content = std::fs::read_to_string(&file_path).unwrap();

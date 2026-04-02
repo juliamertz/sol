@@ -572,6 +572,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 
             if let Some(declared_ty) = ty {
                 let declared_ty_id = env.type_from_ast_ty(declared_ty, scope)?;
+                dbg!(&declared_ty_id, &ty_id);
                 if declared_ty_id != ty_id {
                     return Err(TypeError::InvalidType {
                         src: env.src.clone(),
