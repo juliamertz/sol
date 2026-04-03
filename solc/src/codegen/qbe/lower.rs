@@ -195,6 +195,10 @@ impl<'env> Builder<'env> {
                     kind: InstructionKind::Call(Ident::Global(name.to_string().into()), operands),
                 })
             }
+            mir::Instruction::Alloc { dest, ty } => todo!(),
+            mir::Instruction::Load { dest, addr } => todo!(),
+            mir::Instruction::Store { addr, val } => todo!(),
+            mir::Instruction::IndexPtr { dest, base, index, elem_ty } => todo!(),
         }
     }
 

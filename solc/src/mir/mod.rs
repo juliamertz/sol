@@ -87,6 +87,12 @@ pub enum Instruction {
         addr: TempId,
         val: Operand,
     },
+    IndexPtr {
+        dest: TempId,
+        base: Operand,
+        index: Operand,
+        elem_ty: TypeId,
+    },
 }
 
 #[derive(Debug)]

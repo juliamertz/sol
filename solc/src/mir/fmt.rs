@@ -85,6 +85,18 @@ impl Display for Instruction {
                 }
                 f.write_char(')')
             }
+            Instruction::Alloc { dest, ty } => {
+                write!(f, "{dest} = alloc {ty:?}")
+            }
+            Instruction::Store { addr, val } => {
+                write!(f, "store {val} -> {addr}")
+            }
+            Instruction::Load { dest, addr } => {
+                write!(f, "{dest} = load {addr}")
+            }
+            Instruction::IndexPtr { dest, base, index, elem_ty } => {
+                write!(f, "{dest} = index {base} -> {index}")
+            }
         }
     }
 }

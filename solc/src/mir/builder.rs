@@ -296,17 +296,56 @@ impl<'tcx> Builder<'tcx> {
                 Ok((val.clone(), block))
             }
 
-            // hir::Expr::Index(_) => {
-            //     todo!();
-            // },
+            hir::Expr::List(list) => {
+                let dest = self.new_temp(list.ty);
+                self.get_block_mut(&block)
+                    .push_instr(Instruction::Alloc { dest, ty: list.ty });
 
-            // TODO:
-            _ => Ok((Operand::Constant(Constant::Unit), block)),
-            // hir::Expr::Index(index) => todo!(),
-            // hir::Expr::List(list) => todo!(),
+                for (idx, expr) in list.items.iter().enumerate() {
+                    let (val, block) = self.lower_expr(expr, block)?;
+                    let ptr_dest = self.new_temp(list.ty); // TODO: should be ptr type                                                                   
+                    self.get_block_mut(&block)
+                        .push_instr(Instruction::IndexPtr {
+                            dest: ptr_dest,
+                            base: Operand::Temporary(dest),
+                            index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)), // TODO: messy cast
+                            elem_ty: list.ty,
+                        })
+                        .push_instr(Instruction::Store {
+                            addr: ptr_dest,
+                            val,
+                        });
+                }
+
+                Ok((Operand::Temporary(dest), block))
+            }
+
+            hir::Expr::Index(index) => {
+                let dest = self.new_temp(index.ty);
+                let ptr_dest = self.new_temp(index.ty);
+                let (base_val, block) = self.lower_expr(&index.expr, block)?;
+                let (index_val, block) = self.lower_expr(&index.idx, block)?;
+
+                self.get_block_mut(&block)
+                    .push_instr(Instruction::IndexPtr {
+                        dest: ptr_dest,
+                        base: base_val,
+                        index: index_val,
+                        elem_ty: index.ty,
+                    })
+                    .push_instr(Instruction::Load {
+                        dest,
+                        addr: ptr_dest,
+                    });
+
+                Ok((Operand::Temporary(dest), block))
+            }
+
             // hir::Expr::Constructor(constructor) => todo!(),
             // hir::Expr::MemberAccess(member_access) => todo!(),
             // hir::Expr::Ref(expr) => todo!(),
+
+            _ => Ok((Operand::Constant(Constant::Unit), block)),
         }
     }
 }
