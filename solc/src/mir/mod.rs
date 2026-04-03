@@ -75,6 +75,18 @@ pub enum Instruction {
         def: DefId,
         operands: Vec<Operand>,
     },
+    Alloc {
+        dest: TempId,
+        ty: TypeId,
+    },
+    Load {
+        dest: TempId,
+        addr: TempId,
+    },
+    Store {
+        addr: TempId,
+        val: Operand,
+    },
 }
 
 #[derive(Debug)]
