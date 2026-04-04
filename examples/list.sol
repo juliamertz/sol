@@ -1,6 +1,6 @@
 use extern stdio
 
-extern func printf(format: Str) -> i32
+extern variadic func printf(format: Str) -> i32
 
 func main() -> i32
     let items: i32[3] = [10, 250, 450]

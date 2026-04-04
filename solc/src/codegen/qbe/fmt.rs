@@ -49,8 +49,8 @@ impl Display for SubWordTy {
         f.write_str(match self {
             SubWordTy::SignedByte => "sb",
             SubWordTy::UnsignedByte => "ub",
-            SubWordTy::SingedHalf => "sh",
-            SubWordTy::UnsingedHalf => "uh",
+            SubWordTy::SingedHalfWord => "sh",
+            SubWordTy::UnsingedHalfWord => "uh",
         })
     }
 }
@@ -60,7 +60,7 @@ impl Display for AbiTy<'_> {
         match self {
             AbiTy::Base(base_ty) => base_ty.fmt(f),
             AbiTy::SubWord(sub_word_ty) => sub_word_ty.fmt(f),
-            AbiTy::Ident(ident) => f.write_str(ident),
+            AbiTy::Aggregate(ty_def) => ty_def.ident().fmt(f),
         }
     }
 }
@@ -85,7 +85,7 @@ impl Display for SubTy<'_> {
     }
 }
 
-impl Display for Ty<'_> {
+impl Display for TyDef<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "type :{} = ", self.ident())?;
         if let Some(alignment) = self.align() {
@@ -94,13 +94,13 @@ impl Display for Ty<'_> {
 
         f.write_char('{')?;
         match self {
-            Ty::Aggregate { sub_tys, .. } => {
+            TyDef::Regular { sub_tys, .. } => {
                 for sub_ty in sub_tys {
                     sub_ty.fmt(f)?;
                     f.write_char(',')?;
                 }
             }
-            Ty::Union { variants, .. } => {
+            TyDef::Union { variants, .. } => {
                 f.write_char('{')?;
                 for sub_tys in variants {
                     for sub_ty in sub_tys {
@@ -110,7 +110,7 @@ impl Display for Ty<'_> {
                 }
                 f.write_char('}')?;
             }
-            Ty::Opaque { .. } => unimplemented!(),
+            TyDef::Opaque { .. } => unimplemented!(),
         }
         f.write_char('}')
     }
@@ -181,22 +181,134 @@ impl Display for Operand<'_> {
     }
 }
 
-impl Display for Instruction<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let (instr, operands) = match &self.kind {
-            InstructionKind::Basic(kind, operands) => (*kind, join_fmt(operands, ", ")),
-            InstructionKind::Call(ident, params) => (
-                Instruction::CALL,
-                format!("{ident}({})", join_fmt(params, ", ")),
-            ),
-        };
+impl fmt::Display for Instruction<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Add(lhs, rhs) => write!(f, "add {lhs}, {rhs}"),
+            Self::Sub(lhs, rhs) => write!(f, "sub {lhs}, {rhs}"),
+            Self::Mul(lhs, rhs) => write!(f, "mul {lhs}, {rhs}"),
+            Self::Div(lhs, rhs) => write!(f, "div {lhs}, {rhs}"),
+            Self::Rem(lhs, rhs) => write!(f, "rem {lhs}, {rhs}"),
+            Self::Cmp(ty, cmp, lhs, rhs) => {
+                // TODO:!
+                // assert!(
+                //     !matches!(ty, Type::Aggregate(_)),
+                //     "cannot compare aggregate types"
+                // );
 
-        write!(
-            f,
-            "{name} ={ty} {instr} {operands}",
-            name = self.ident,
-            ty = self.return_ty,
-        )
+                write!(
+                    f,
+                    "c{}{} {}, {}",
+                    match cmp {
+                        Cmp::Slt => "slt",
+                        Cmp::Sle => "sle",
+                        Cmp::Sgt => "sgt",
+                        Cmp::Sge => "sge",
+                        Cmp::Eq => "eq",
+                        Cmp::Ne => "ne",
+                        Cmp::O => "o",
+                        Cmp::Uo => "uo",
+                        Cmp::Ult => "ult",
+                        Cmp::Ule => "ule",
+                        Cmp::Ugt => "ugt",
+                        Cmp::Uge => "uge",
+                    },
+                    ty,
+                    lhs,
+                    rhs,
+                )
+            }
+            Self::And(lhs, rhs) => write!(f, "and {lhs}, {rhs}"),
+            Self::Or(lhs, rhs) => write!(f, "or {lhs}, {rhs}"),
+            Self::Xor(lhs, rhs) => write!(f, "xor {lhs}, {rhs}"),
+            Self::Neg(val) => write!(f, "neg {val}"),
+            Self::Copy(val) => write!(f, "copy {val}"),
+            // Self::Ret(val) => match val {
+            //     Some(val) => write!(f, "ret {val}"),
+            //     None => write!(f, "ret"),
+            // },
+            Self::DbgFile(val) => write!(f, r#"dbgfile "{val}""#),
+            Self::DbgLoc(lineno, column) => match column {
+                Some(val) => write!(f, "dbgloc {lineno}, {val}"),
+                None => write!(f, "dbgloc {lineno}"),
+            },
+            // Self::Jnz(val, if_nonzero, if_zero) => {
+            //     write!(f, "jnz {val}, @{if_nonzero}, @{if_zero}")
+            // }
+            // Self::Jmp(label) => write!(f, "jmp @{label}"),
+            Self::Call(name, args, opt_variadic_i) => {
+                let mut args_fmt = args
+                    .iter()
+                    .map(|(ty, temp)| format!("{ty} {temp}"))
+                    .collect::<Vec<String>>();
+                if let Some(i) = *opt_variadic_i {
+                    args_fmt.insert(i as usize, "...".to_string());
+                }
+
+                write!(f, "call ${}({})", name, args_fmt.join(", "),)
+            }
+            Self::Alloc4(size) => write!(f, "alloc4 {size}"),
+            Self::Alloc8(size) => write!(f, "alloc8 {size}"),
+            Self::Alloc16(size) => write!(f, "alloc16 {size}"),
+            Self::Store(ty, dest, value) => {
+                let suffix = match ty {
+                    // TODO:!
+                    // Type::SignedByte | Type::UnsignedByte => "b".to_string(),
+                    // Type::SignedHalfword | Type::UnsignedHalfword => "h".to_string(),
+                    // Type::Aggregate(_) => panic!("cannot store to an aggregate type"),
+                    _ => ty.to_string(),
+                };
+                write!(f, "store{suffix} {value}, {dest}")
+            }
+            Self::Load(ty, src) => match ty {
+                // TODO:!
+                // Type::Byte | Type::Halfword => panic!(
+                //     "ambiguous sub-word load: use SignedByte/UnsignedByte or SignedHalfword/UnsignedHalfword"
+                // ),
+                // Type::Aggregate(_) => panic!("cannot load aggregate type"),
+                _ => write!(f, "load{ty} {src}"),
+            },
+            Self::Blit(src, dst, n) => write!(f, "blit {src}, {dst}, {n}"),
+            Self::Udiv(lhs, rhs) => write!(f, "udiv {lhs}, {rhs}"),
+            Self::Urem(lhs, rhs) => write!(f, "urem {lhs}, {rhs}"),
+            Self::Sar(lhs, rhs) => write!(f, "sar {lhs}, {rhs}"),
+            Self::Shr(lhs, rhs) => write!(f, "shr {lhs}, {rhs}"),
+            Self::Shl(lhs, rhs) => write!(f, "shl {lhs}, {rhs}"),
+            Self::Cast(val) => write!(f, "cast {val}"),
+            Self::Extsw(val) => write!(f, "extsw {val}"),
+            Self::Extuw(val) => write!(f, "extuw {val}"),
+            Self::Extsh(val) => write!(f, "extsh {val}"),
+            Self::Extuh(val) => write!(f, "extuh {val}"),
+            Self::Extsb(val) => write!(f, "extsb {val}"),
+            Self::Extub(val) => write!(f, "extub {val}"),
+            Self::Exts(val) => write!(f, "exts {val}"),
+            Self::Truncd(val) => write!(f, "truncd {val}"),
+            Self::Stosi(val) => write!(f, "stosi {val}"),
+            Self::Stoui(val) => write!(f, "stoui {val}"),
+            Self::Dtosi(val) => write!(f, "dtosi {val}"),
+            Self::Dtoui(val) => write!(f, "dtoui {val}"),
+            Self::Swtof(val) => write!(f, "swtof {val}"),
+            Self::Uwtof(val) => write!(f, "uwtof {val}"),
+            Self::Sltof(val) => write!(f, "sltof {val}"),
+            Self::Ultof(val) => write!(f, "ultof {val}"),
+            Self::Vastart(val) => write!(f, "vastart {val}"),
+            Self::Vaarg(ty, val) => write!(f, "vaarg{ty} {val}"),
+        }
+    }
+}
+
+impl fmt::Display for Statement<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Assign(temp, ty, instr) => {
+                assert!(
+                    matches!(temp, Operand::Var(_)),
+                    "assignment target must be a temporary, got {temp:?}"
+                );
+                write!(f, "{temp} ={ty} {instr}")
+            }
+            Self::Volatile(instr) => write!(f, "{instr}"),
+        }
     }
 }
 

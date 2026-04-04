@@ -308,7 +308,7 @@ impl<'tcx> Builder<'tcx> {
                         .push_instr(Instruction::IndexPtr {
                             dest: ptr_dest,
                             base: Operand::Temporary(dest),
-                            index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)), // TODO: messy cast
+                            index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)), // TODO: index val should probably be an expr instead of forcing usize?
                             elem_ty: list.ty,
                         })
                         .push_instr(Instruction::Store {
@@ -325,13 +325,14 @@ impl<'tcx> Builder<'tcx> {
                 let ptr_dest = self.new_temp(index.ty);
                 let (base_val, block) = self.lower_expr(&index.expr, block)?;
                 let (index_val, block) = self.lower_expr(&index.idx, block)?;
+                let elem_ty = index.expr.type_id().to_owned();
 
                 self.get_block_mut(&block)
                     .push_instr(Instruction::IndexPtr {
                         dest: ptr_dest,
                         base: base_val,
                         index: index_val,
-                        elem_ty: index.ty,
+                        elem_ty,
                     })
                     .push_instr(Instruction::Load {
                         dest,
@@ -344,7 +345,6 @@ impl<'tcx> Builder<'tcx> {
             // hir::Expr::Constructor(constructor) => todo!(),
             // hir::Expr::MemberAccess(member_access) => todo!(),
             // hir::Expr::Ref(expr) => todo!(),
-
             _ => Ok((Operand::Constant(Constant::Unit), block)),
         }
     }
