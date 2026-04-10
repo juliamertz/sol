@@ -56,7 +56,6 @@ impl<'a> IntoOperand<'a> for mir::TempId {
 
 pub struct Builder<'env> {
     pub env: &'env TypeEnv,
-    /// internal temp counter seperate from mir temps
     tmp_idx: usize,
 }
 
@@ -359,10 +358,10 @@ impl<'env> Builder<'env> {
             params: func
                 .params
                 .iter()
-                .map(|type_id| {
+                .map(|(temp_id, type_id)| {
                     Ok(Param::Regular(RegularParam(
                         self.lower_ty(type_id)?,
-                        Operand::Var(Ident::temp("a")),
+                        temp_id.into_operand(),
                     )))
                 })
                 .collect::<Result<Vec<_>>>()?,

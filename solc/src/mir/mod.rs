@@ -116,7 +116,7 @@ pub struct Block {
 pub struct Fn {
     pub name: String,
     pub return_ty: TypeId,
-    pub params: Vec<TypeId>,
+    pub params: Vec<(TempId, TypeId)>,
     pub temps: Vec<TypeId>,
     pub blocks: Vec<Block>,
 }

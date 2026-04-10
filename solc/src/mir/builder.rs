@@ -124,7 +124,7 @@ impl<'tcx> Builder<'tcx> {
         self,
         name: impl ToString,
         return_ty: TypeId,
-        params: impl Iterator<Item = TypeId>,
+        params: impl Iterator<Item = (TempId, TypeId)>,
     ) -> Result<(Fn, Vec<Data>)> {
         let name = name.to_string();
         let blocks = self

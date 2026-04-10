@@ -14,9 +14,13 @@ fn lower_func(
     let mut builder = Builder::new(env);
     let entry = builder.new_block();
 
+    let mut lowered_params = vec![];
+
     for (ident, ty_id) in params {
-        let operand = Operand::Temporary(builder.new_temp(*ty_id));
+        let temp_id = builder.new_temp(*ty_id);
+        let operand = Operand::Temporary(temp_id);
         builder.define_local(ident.def_id, operand);
+        lowered_params.push((temp_id, *ty_id))
     }
 
     let (val, exit_block) = builder.lower_hir_block(body, entry)?;
@@ -25,8 +29,7 @@ fn lower_func(
         .get_block_mut(&exit_block)
         .terminate(Terminator::Return(val))?;
 
-    let param_tys = params.iter().map(|(_, ty)| *ty);
-    builder.build(ident.as_str(), return_ty, param_tys)
+    builder.build(ident.as_str(), return_ty, lowered_params.into_iter())
 }
 
 pub fn lower_item(
