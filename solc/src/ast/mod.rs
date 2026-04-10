@@ -1,5 +1,5 @@
 mod fmt;
-pub use fmt::DisplayModule;
+pub use fmt::FmtModule;
 
 use std::fmt::Display;
 use std::hash::Hash;

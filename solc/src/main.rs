@@ -32,40 +32,57 @@ struct BuildOpts {
 }
 
 #[derive(clap::Subcommand)]
-enum Command {
-    Build {
-        filepath: PathBuf,
-
-        #[clap(flatten)]
-        opts: BuildOpts,
-    },
-    Run {
-        filepath: PathBuf,
-
-        #[clap(flatten)]
-        opts: BuildOpts,
-    },
-    DumpTokens {
-        file_path: PathBuf,
-
+enum DumpCommand {
+    Tokens {
         #[arg(short, long)]
         spans: bool,
 
         #[arg(short, long, default_value_t = 0)]
         take: usize,
     },
-    DumpAst {
+    Ast,
+    Hir,
+    Mir,
+    Qbe,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    Build {
         file_path: PathBuf,
+
+        #[clap(flatten)]
+        opts: BuildOpts,
     },
-    DumpHir {
+    Run {
         file_path: PathBuf,
+
+        #[clap(flatten)]
+        opts: BuildOpts,
     },
-    DumpMir {
+    Dump {
         file_path: PathBuf,
+
+        #[command(subcommand)]
+        cmd: DumpCommand,
     },
-    DumpQbe {
-        file_path: PathBuf,
-    },
+}
+
+fn init_miette() {
+    miette::set_hook(Box::new(|_| {
+        let theme = miette::GraphicalTheme {
+            characters: miette::ThemeCharacters::unicode(),
+            styles: miette::ThemeStyles::ansi(),
+        };
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .terminal_links(true)
+                .context_lines(3)
+                .graphical_theme(theme)
+                .build(),
+        )
+    }))
+    .unwrap();
 }
 
 fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
@@ -92,33 +109,23 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     Ok(out_path)
 }
 
+fn write_str(mut w: impl Write, str: impl ToString) -> Result<(), miette::ErrReport> {
+    w.write_all(str.to_string().as_bytes()).into_diagnostic()
+}
+
 fn main() -> Result<()> {
     let opts = Cli::parse();
-
-    miette::set_hook(Box::new(|_| {
-        let theme = miette::GraphicalTheme {
-            characters: miette::ThemeCharacters::unicode(),
-            styles: miette::ThemeStyles::ansi(),
-        };
-        Box::new(
-            miette::MietteHandlerOpts::new()
-                .terminal_links(true)
-                .context_lines(3)
-                .graphical_theme(theme)
-                .build(),
-        )
-    }))
-    .unwrap();
+    init_miette();
 
     match opts.command {
-        Command::Build { filepath, opts } => {
-            let bin_path = build(&filepath, &opts)?;
+        Command::Build { file_path, opts } => {
+            let bin_path = build(&file_path, &opts)?;
             let metadata = std::fs::metadata(&bin_path).into_diagnostic()?;
             println!("{} bytes written to {bin_path:?}", metadata.size());
         }
 
-        Command::Run { filepath, opts } => {
-            let bin_path = build(&filepath, &opts)?;
+        Command::Run { file_path, opts } => {
+            let bin_path = build(&file_path, &opts)?;
             let _out = std::process::Command::new(&bin_path)
                 .spawn()
                 .unwrap()
@@ -128,113 +135,97 @@ fn main() -> Result<()> {
                 std::fs::remove_file(bin_path).into_diagnostic()?;
             }
         }
-        Command::DumpTokens {
-            file_path,
-            spans,
-            take,
-        } => {
-            let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut stdout = std::io::stdout();
-            let mut lex = lexer::Lexer::new(file_path, &content);
 
-            let mut tokens = vec![];
-            let mut idx = 0;
-            while let Some(result) = lex.read_token() {
-                match result {
-                    Ok(token) => {
-                        tokens.push(token);
-                        idx += 1;
-                        if idx > 0 && idx >= take {
-                            break;
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("error reading token: {err:?}");
-                        break;
-                    }
-                }
+        Command::Dump { file_path, cmd } => {
+            let content = std::fs::read_to_string(&file_path).unwrap();
+            let stdout = std::io::stdout();
+
+            if let DumpCommand::Tokens { spans, take } = cmd {
+                return dump_tokens(file_path, spans, take);
             }
 
-            if spans {
-                let src = lex.source();
-                for token in tokens {
-                    let report = miette::miette!(
-                        labels = vec![miette::LabeledSpan::at(
-                            token.span.offset()..token.span.offset() + token.span.len(),
-                            format!("{:?}", token.kind)
-                        )],
-                        "{:?}",
-                        token.kind
-                    )
-                    .with_source_code(src.clone());
-                    println!("{:?}\n", report);
-                }
-            } else {
-                for token in tokens {
-                    let kind = token.kind.to_string();
-                    stdout.write_all(kind.as_bytes()).unwrap();
-
-                    if !token.text.is_empty() && token.kind != lexer::TokenKind::Newline {
-                        stdout.write_all(b" :: ").unwrap();
-                        stdout.write_all(token.text.as_bytes()).unwrap();
-                    }
-
-                    stdout.write_all(b"\n").unwrap();
-                }
-            }
-        }
-        Command::DumpAst { file_path } => {
-            let content = std::fs::read_to_string(&file_path).unwrap();
             let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
-            let display = solc::ast::DisplayModule {
-                module: &ast,
-                source: &content,
-            };
-            print!("{display}");
-        }
-        Command::DumpHir { file_path } => {
-            let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, &content)?;
-            let module = parser.parse()?;
+            if let DumpCommand::Ast = cmd {
+                let fmt = solc::ast::FmtModule::new(&ast, &content).to_string();
+                return write_str(stdout, fmt);
+            }
 
             let mut env = TypeEnv::new(parser.lex.source());
             let mut scope = Scope::default();
-            type_checker::check_module(&module, &mut env, &mut scope)?;
-            let hir = hir::lower_module(&module, &mut env)?;
-            dbg!(&hir);
-        }
-        Command::DumpMir { file_path } => {
-            let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, &content)?;
-            let module = parser.parse()?;
+            type_checker::check_module(&ast, &mut env, &mut scope)?;
 
-            let mut env = TypeEnv::new(parser.lex.source());
-            let mut scope = Scope::default();
-            type_checker::check_module(&module, &mut env, &mut scope)?;
-            let hir = hir::lower_module(&module, &mut env)?;
+            let hir = hir::lower_module(&ast, &mut env)?;
+            if let DumpCommand::Hir = cmd {
+                return write_str(stdout, format!("hir:?"));
+            }
+
             let mir = mir::lower_module(&hir, &env)?;
+            if let DumpCommand::Hir = cmd {
+                return write_str(stdout, mir);
+            }
 
-            let mut stdout = std::io::stdout();
-            stdout.write_all(mir.to_string().as_bytes()).unwrap();
+            let mut qbe = qbe::lower::Builder::new(&env);
+            let ssa = qbe.lower_module(&mir)?;
+            if let DumpCommand::Qbe = cmd {
+                return write_str(stdout, ssa);
+            }
 
-            // dbg!(&mir);
+            unreachable!()
         }
-        Command::DumpQbe { file_path } => {
-            let content = std::fs::read_to_string(&file_path).unwrap();
-            let mut parser = parser::Parser::new(file_path, &content)?;
-            let module = parser.parse()?;
+    }
 
-            let mut env = TypeEnv::new(parser.lex.source());
-            let mut scope = Scope::default();
-            type_checker::check_module(&module, &mut env, &mut scope)?;
-            let hir = hir::lower_module(&module, &mut env)?;
-            let mir = mir::lower_module(&hir, &env)?;
-            let mut builder = qbe::lower::Builder::new(&env);
-            let qbe = builder.lower_module(&mir)?;
+    Ok(())
+}
 
-            let mut stdout = std::io::stdout();
-            stdout.write_all(qbe.to_string().as_bytes()).unwrap();
+fn dump_tokens(file_path: PathBuf, spans: bool, take: usize) -> Result<()> {
+    let content = std::fs::read_to_string(&file_path).unwrap();
+    let mut stdout = std::io::stdout();
+    let mut lex = lexer::Lexer::new(file_path, &content);
+
+    let mut tokens = vec![];
+    let mut idx = 0;
+    while let Some(result) = lex.read_token() {
+        match result {
+            Ok(token) => {
+                tokens.push(token);
+                idx += 1;
+                if idx > 0 && idx >= take {
+                    break;
+                }
+            }
+            Err(err) => {
+                eprintln!("error reading token: {err:?}");
+                break;
+            }
+        }
+    }
+
+    if spans {
+        let src = lex.source();
+        for token in tokens {
+            let report = miette::miette!(
+                labels = vec![miette::LabeledSpan::at(
+                    token.span.offset()..token.span.offset() + token.span.len(),
+                    format!("{:?}", token.kind)
+                )],
+                "{:?}",
+                token.kind
+            )
+            .with_source_code(src.clone());
+            println!("{:?}\n", report);
+        }
+    } else {
+        for token in tokens {
+            let kind = token.kind.to_string();
+            stdout.write_all(kind.as_bytes()).unwrap();
+
+            if !token.text.is_empty() && token.kind != lexer::TokenKind::Newline {
+                stdout.write_all(b" :: ").unwrap();
+                stdout.write_all(token.text.as_bytes()).unwrap();
+            }
+
+            stdout.write_all(b"\n").unwrap();
         }
     }
 

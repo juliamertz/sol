@@ -400,12 +400,18 @@ impl PrettyPrinter {
     }
 }
 
-pub struct DisplayModule<'a> {
+pub struct FmtModule<'a> {
     pub module: &'a Module,
     pub source: &'a str,
 }
 
-impl Display for DisplayModule<'_> {
+impl<'a> FmtModule<'a> {
+    pub fn new(module: &'a Module, source: &'a str) -> Self {
+        Self { module, source }
+    }
+}
+
+impl Display for FmtModule<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let printer = PrettyPrinter::new(self.source);
         printer.fmt_module(f, self.module)
