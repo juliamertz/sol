@@ -9,7 +9,7 @@ mod lower;
 pub use lower::lower_module;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TempId(usize);
+pub struct TempId(pub usize);
 
 impl TempId {
     pub fn inner(&self) -> usize {

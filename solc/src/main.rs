@@ -83,7 +83,7 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let module_hir = hir::lower_module(&module_ast, &mut env)?;
     let module_mir = mir::lower_module(&module_hir, &env)?;
 
-    let qbe_builder = codegen::qbe::lower::Builder::new(&env);
+    let mut qbe_builder = codegen::qbe::lower::Builder::new(&env);
     let qbe_module = qbe_builder.lower_module(&module_mir)?;
 
     let qbe_ir_path = codegen::qbe::build::build_ir(&opts.outdir, &qbe_module).unwrap();
@@ -230,7 +230,7 @@ fn main() -> Result<()> {
             type_checker::check_module(&module, &mut env, &mut scope)?;
             let hir = hir::lower_module(&module, &mut env)?;
             let mir = mir::lower_module(&hir, &env)?;
-            let builder = qbe::lower::Builder::new(&env);
+            let mut builder = qbe::lower::Builder::new(&env);
             let qbe = builder.lower_module(&mir)?;
 
             let mut stdout = std::io::stdout();

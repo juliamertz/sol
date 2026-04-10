@@ -4,10 +4,12 @@ use thiserror::Error;
 use crate::ast::BinOpKind;
 use crate::codegen::qbe::{
     AbiTy, BaseTy, Block, Cmp, Const, Data, DataItem, DataValue, Definition, ExtTy, Function,
-    Ident, Instruction, Jump, Linkage, Module, Operand, Param, RegularParam, Statement,
+    Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, RegularParam,
+    Statement,
 };
 use crate::mir::{self, BlockId};
 use crate::num::Signedness;
+use crate::num::encode::bijective_base26;
 use crate::type_checker::ty::Type;
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
@@ -20,15 +22,9 @@ pub enum LowerError {
 
 pub type Result<T, E = LowerError> = std::result::Result<T, E>;
 
-const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-
-fn temp_name<'a>(temp_id: mir::TempId) -> Ident<'a> {
-    let idx = temp_id.inner();
-    let mut buf = vec![];
-    buf.push(ALPHABET[idx]); // TODO: when idx out of range push n+1
-    let name = std::str::from_utf8(&buf).unwrap().to_string();
-    Ident::temp(name)
-}
+// fn temp_name<'a>(id: mir::TempId) -> Ident<'a> {
+//     Ident::temp(bijective_base26(id.inner()))
+// }
 
 fn block_name<'a>(block_id: &mir::BlockId) -> Ident<'a> {
     Ident::block(format!("bb{}", block_id.inner()))
@@ -40,13 +36,39 @@ fn data_name<'a>(data_id: mir::DataId) -> Ident<'a> {
     Ident::global(name)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TempId(usize);
+
+impl<'a> IntoOperand<'a> for TempId {
+    fn into_operand(self) -> Operand<'a> {
+        Operand::Var(Ident::temp(format!(
+            "_{}",
+            bijective_base26(self.0 + (26 * 26))
+        )))
+    }
+}
+
+impl<'a> IntoOperand<'a> for mir::TempId {
+    fn into_operand(self) -> Operand<'a> {
+        Operand::Var(Ident::temp(bijective_base26(self.inner())))
+    }
+}
+
 pub struct Builder<'env> {
     pub env: &'env TypeEnv,
+    /// internal temp counter seperate from mir temps
+    tmp_idx: usize,
 }
 
 impl<'env> Builder<'env> {
     pub fn new(env: &'env TypeEnv) -> Self {
-        Self { env }
+        Self { env, tmp_idx: 0 }
+    }
+
+    pub fn new_temp(&mut self) -> TempId {
+        let idx = self.tmp_idx;
+        self.tmp_idx += 1;
+        TempId(idx)
     }
 
     pub fn lower_data<'a>(&self, data: &'a mir::Data) -> Result<Data<'a>> {
@@ -64,7 +86,7 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_def<'a>(&self, def: &'a mir::Definition) -> Result<Definition<'a>> {
+    pub fn lower_def<'a>(&mut self, def: &'a mir::Definition) -> Result<Definition<'a>> {
         Ok(match def {
             mir::Definition::Ty(_) => todo!(),
             mir::Definition::Data(data) => Definition::Data(self.lower_data(data)?),
@@ -72,7 +94,7 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_module<'a>(&self, module: &'a mir::Module) -> Result<Module<'a>> {
+    pub fn lower_module<'a>(&mut self, module: &'a mir::Module) -> Result<Module<'a>> {
         let mut result = Module::default();
 
         for def in module.defs.iter() {
@@ -82,23 +104,28 @@ impl<'env> Builder<'env> {
         Ok(result)
     }
 
-    fn assign<'a>(&self, dest: mir::TempId, ty: BaseTy, instr: Instruction<'a>) -> Statement<'a> {
-        Statement::Assign(Operand::Var(temp_name(dest)), ty, instr)
+    fn assign<'a>(
+        &self,
+        dest: impl IntoOperand<'a>,
+        ty: BaseTy,
+        instr: Instruction<'a>,
+    ) -> Statement<'a> {
+        Statement::Assign(dest.into_operand(), ty, instr)
     }
 
     pub fn lower_instruction<'a>(
-        &self,
+        &mut self,
         func: &'a mir::Fn,
         instruction: &'a mir::Instruction,
-    ) -> Result<Statement<'a>> {
+    ) -> Result<Vec<Statement<'a>>> {
         match instruction {
             mir::Instruction::Copy { dest, val } => {
                 let ty = self.lower_ty(&func.temp_ty(*dest))?;
-                Ok(self.assign(
+                Ok(vec![self.assign(
                     *dest,
                     ty.into_base(),
                     Instruction::Copy(self.lower_operand(val)),
-                ))
+                )])
             }
             mir::Instruction::BinOp { dest, op, lhs, rhs } => {
                 let val_ty_id = &func.operand_ty(lhs);
@@ -137,7 +164,7 @@ impl<'env> Builder<'env> {
                         Instruction::Cmp(ty, cmp, lhs, rhs)
                     }
                 };
-                Ok(self.assign(*dest, return_ty.into_base(), instr))
+                Ok(vec![self.assign(*dest, return_ty.into_base(), instr)])
             }
             mir::Instruction::UnaryOp {
                 dest: _,
@@ -181,32 +208,36 @@ impl<'env> Builder<'env> {
                 };
 
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
-                Ok(self.assign(
+                Ok(vec![self.assign(
                     *dest,
                     return_ty.into_base(),
                     Instruction::Call(name.to_string(), operands, variadic_idx),
-                ))
+                )])
             }
             mir::Instruction::Alloc { dest, ty: _ } => {
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
-                Ok(self.assign(*dest, return_ty.into_base(), Instruction::Alloc4(12))) // TODO: calculate actual size from ty
+                Ok(vec![self.assign(
+                    *dest,
+                    return_ty.into_base(),
+                    Instruction::Alloc4(12),
+                )]) // TODO: calculate actual size from ty
             }
             mir::Instruction::Load { dest, addr } => {
                 let ty = self.lower_ty(&func.temp_ty(*dest))?;
                 let load_ty = self.lower_ty(&func.temp_ty(*dest))?;
-                Ok(self.assign(
+                Ok(vec![self.assign(
                     *dest,
                     ty.into_base(),
-                    Instruction::Load(load_ty, Operand::Var(temp_name(*addr))),
-                ))
+                    Instruction::Load(load_ty, addr.into_operand()),
+                )])
             }
             mir::Instruction::Store { addr, val } => {
                 let ty = self.lower_ty(&func.operand_ty(val))?;
-                Ok(Statement::Volatile(Instruction::Store(
+                Ok(vec![Statement::Volatile(Instruction::Store(
                     ty,
-                    Operand::Var(temp_name(*addr)),
+                    addr.into_operand(),
                     self.lower_operand(val),
-                )))
+                ))])
             }
             mir::Instruction::IndexPtr {
                 dest,
@@ -214,14 +245,21 @@ impl<'env> Builder<'env> {
                 index,
                 elem_ty,
             } => {
-                // TODO: this won't work. we somehow need to calculate memory offset here based on the index
                 let ty = self.lower_ty(elem_ty)?;
-                // TODO: Instruction::Add(self.lower_operand(base), self.lower_operand(index)),
-                Ok(self.assign(
-                    *dest,
-                    ty.into_base(),
-                    Instruction::Add(self.lower_operand(base), self.lower_operand(index)),
-                ))
+                let ptr_offset_dest = self.new_temp();
+
+                Ok(vec![
+                    self.assign(
+                        ptr_offset_dest,
+                        BaseTy::Long,
+                        Instruction::Mul(self.lower_operand(index), Operand::Const(Const::int(4))),
+                    ),
+                    self.assign(
+                        *dest,
+                        ty.into_base(),
+                        Instruction::Add(self.lower_operand(base), ptr_offset_dest.into_operand()),
+                    ),
+                ])
             }
         }
     }
@@ -236,7 +274,7 @@ impl<'env> Builder<'env> {
 
     fn lower_operand<'a>(&self, operand: &'a mir::Operand) -> Operand<'a> {
         match operand {
-            mir::Operand::Temporary(id) => Operand::Var(temp_name(*id)),
+            mir::Operand::Temporary(id) => id.into_operand(),
             mir::Operand::Data(id) => Operand::Var(data_name(*id)),
             mir::Operand::Constant(constant) => Operand::Const(self.lower_const(constant)),
         }
@@ -259,7 +297,7 @@ impl<'env> Builder<'env> {
     }
 
     pub fn lower_block<'a>(
-        &self,
+        &mut self,
         block: &'a mir::Block,
         func: &'a mir::Fn,
         id: BlockId,
@@ -269,7 +307,10 @@ impl<'env> Builder<'env> {
             .body
             .iter()
             .map(|instr| self.lower_instruction(func, instr))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
         let jump = self.lower_term(&block.term)?;
 
         Ok(Block {
@@ -304,7 +345,7 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_func<'a>(&self, func: &'a mir::Fn) -> Result<Function<'a>> {
+    pub fn lower_func<'a>(&mut self, func: &'a mir::Fn) -> Result<Function<'a>> {
         let linkage = if &func.name == "main" {
             Some(Linkage::Export)
         } else {

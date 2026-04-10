@@ -8,7 +8,7 @@ pub type Alignment = usize;
 pub type Size = usize;
 pub type Offset = usize;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Ident<'a> {
     Ty(Cow<'a, str>),
     Global(Cow<'a, str>),
@@ -31,6 +31,15 @@ impl<'a> Ident<'a> {
 
     pub fn block(value: impl Into<Cow<'a, str>>) -> Self {
         Self::Block(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Ident::Ty(cow) => cow,
+            Ident::Global(cow) => cow,
+            Ident::Temp(cow) => cow,
+            Ident::Block(cow) => cow,
+        }
     }
 }
 
@@ -230,6 +239,10 @@ impl Const<'_> {
 pub enum Operand<'a> {
     Var(Ident<'a>),
     Const(Const<'a>),
+}
+
+pub trait IntoOperand<'a> {
+    fn into_operand(self) -> Operand<'a>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Copy)]
