@@ -2,17 +2,9 @@ use extern stdio
 
 extern variadic func printf(format: Str) -> i32
 
-func fib(n: i32, buf: i32[10]) -> i32
-    if n == 0 or n == 1 then
-        n
-    else
-        fib(n - 1) + fib(n - 2)
-    end
-end
-
 func main() -> i32
-    let buf : i32[10] = [0,0,0,0,0,0,0,0,0,0]
-    let result = fib(30)
-    printf("Result is %d", result)
+    let mut n = 0
+    n = 10
+    printf("Result is %d", n)
     0
 end

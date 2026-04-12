@@ -237,6 +237,12 @@ impl PrettyPrinter {
                 self.fmt_expr(f, inner, depth + 1)?;
                 write!(f, ")")
             }
+            Expr::Assign(assign) => {
+                Self::indent(f, depth)?;
+                self.fmt_expr(f, &assign.lhs, depth)?;
+                write!(f, " = ")?;
+                self.fmt_expr(f, &assign.rhs, depth)
+            }
         }
     }
 

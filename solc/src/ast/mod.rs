@@ -1,6 +1,3 @@
-mod fmt;
-pub use fmt::FmtModule;
-
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -10,6 +7,10 @@ use either::Either;
 use crate::ext::AsStr;
 use crate::id;
 use crate::lexer::source::Span;
+
+mod fmt;
+
+pub use fmt::FmtModule;
 
 id!(NodeId);
 
@@ -199,6 +200,7 @@ pub struct List {
 #[derive(Debug, Clone)]
 pub struct Let {
     pub span: Span,
+    pub mutable: bool,
     pub ident: Ident,
     pub ty: Option<Ty>,
     pub val: Expr,
@@ -334,6 +336,14 @@ pub struct Constructor {
 }
 
 #[derive(Debug, Clone)]
+pub struct Assign {
+    pub id: NodeId,
+    pub span: Span,
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     Ident(Ident),
     Literal(Literal),
@@ -347,6 +357,7 @@ pub enum Expr {
     Constructor(Constructor),
     MemberAccess(MemberAccess),
     Ref(Arc<Expr>), // TODO: why is this unused?
+    Assign(Assign),
 }
 
 impl Expr {
@@ -364,6 +375,7 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.span,
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
+            Expr::Assign(assign) => assign.span,
         }
     }
 
@@ -381,6 +393,7 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.id,
             Expr::MemberAccess(member_access) => member_access.id,
             Expr::Ref(r#ref) => r#ref.id(),
+            Expr::Assign(assign) => assign.id,
         }
     }
 }

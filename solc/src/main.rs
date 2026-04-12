@@ -161,7 +161,7 @@ fn main() -> Result<()> {
             }
 
             let mir = mir::lower_module(&hir, &env)?;
-            if let DumpCommand::Hir = cmd {
+            if let DumpCommand::Mir = cmd {
                 return write_str(stdout, mir);
             }
 

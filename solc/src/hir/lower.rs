@@ -151,6 +151,7 @@ pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &TypeEnv) -> Result<hir::
         ty: env.type_of(&ident.id, &ident.span)?,
         span: &ident.span,
         inner: &ident.inner,
+        mutable: env.mutable_definitions.contains(&def_id),
     })
 }
 
@@ -175,6 +176,7 @@ pub fn lower_typed_ident<'ast>(
         ty,
         span: &ident.span,
         inner: &ident.inner,
+        mutable: false,
     })
 }
 
@@ -270,7 +272,9 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             fields: constructor
                 .fields
                 .iter()
-                .map(|(ident, expr)| Ok((lower_untyped_ident(ident, env)?, lower_expr(expr, env)?)))
+                .map(|(ident, expr)| 
+                    // TODO: this should probs be a name?
+                    Ok((lower_untyped_ident(ident, env)?, lower_expr(expr, env)?)))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
@@ -282,6 +286,12 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             ident: lower_typed_ident(&member_access.ident, ty, env)?,
         }),
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env)?.into()),
+        ast::Expr::Assign(assign) => hir::Expr::Assign(hir::Assign {
+            id: HirId::DUMMY,
+            span: &assign.span,
+            lhs: lower_expr(&assign.lhs, env)?.boxed(),
+            rhs: lower_expr(&assign.rhs, env)?.boxed(),
+        }),
     };
     Ok(lowered)
 }
@@ -303,6 +313,7 @@ pub fn lower_stmnt<'ast>(stmnt: &'ast ast::Stmnt, env: &mut TypeEnv) -> Result<h
                 id: HirId::DUMMY,
                 def_id,
                 span: &inner.span,
+                mutable: inner.mutable,
                 ident: lower_ident(&inner.ident, env)?,
                 ty,
                 val: lower_expr(&inner.val, env)?,

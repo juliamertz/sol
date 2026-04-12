@@ -17,6 +17,7 @@ pub struct Ident<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub inner: &'ast str,
+    pub mutable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +132,14 @@ pub struct MemberAccess<'ast> {
 }
 
 #[derive(Debug, Clone)]
+pub struct Assign<'ast> {
+    pub id: HirId,
+    pub span: &'ast Span,
+    pub lhs: Box<Expr<'ast>>,
+    pub rhs: Box<Expr<'ast>>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr<'ast> {
     Ident(Ident<'ast>),
     Literal(Literal<'ast>),
@@ -144,6 +153,7 @@ pub enum Expr<'ast> {
     Constructor(Constructor<'ast>),
     MemberAccess(MemberAccess<'ast>),
     Ref(Box<Expr<'ast>>),
+    Assign(Assign<'ast>),
 }
 
 #[derive(Debug, Clone)]
@@ -152,6 +162,7 @@ pub struct Let<'ast> {
     pub def_id: DefId,
     pub ty: TypeId,
     pub span: &'ast Span,
+    pub mutable: bool,
     pub ident: Ident<'ast>,
     pub val: Expr<'ast>,
 }
@@ -260,6 +271,7 @@ impl Expr<'_> {
             Expr::Constructor(constructor) => &constructor.ty,
             Expr::MemberAccess(member_access) => &member_access.ty,
             Expr::Ref(expr) => expr.type_id(),
+            Expr::Assign(_assign) => &TypeId::UNIT, //TODO:
         }
     }
 
@@ -277,6 +289,7 @@ impl Expr<'_> {
             Expr::Constructor(constructor) => constructor.span,
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
+            Expr::Assign(assign) => assign.span,
         }
     }
 }

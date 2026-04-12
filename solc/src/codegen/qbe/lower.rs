@@ -22,10 +22,6 @@ pub enum LowerError {
 
 pub type Result<T, E = LowerError> = std::result::Result<T, E>;
 
-// fn temp_name<'a>(id: mir::TempId) -> Ident<'a> {
-//     Ident::temp(bijective_base26(id.inner()))
-// }
-
 fn block_name<'a>(block_id: &mir::BlockId) -> Ident<'a> {
     Ident::block(format!("bb{}", block_id.inner()))
 }
@@ -214,10 +210,10 @@ impl<'env> Builder<'env> {
                 )])
             }
             mir::Instruction::Alloc { dest, ty: _ } => {
-                let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
+                // let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
                 Ok(vec![self.assign(
                     *dest,
-                    return_ty.into_base(),
+                    BaseTy::Long, // TODO: allocations always return pointers i think
                     Instruction::Alloc4(12),
                 )]) // TODO: calculate actual size from ty
             }

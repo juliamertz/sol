@@ -33,6 +33,7 @@ pub enum TokenKind {
 
     // Keywords
     Let,
+    Mut,
     Fn,
     Ret,
     If,
@@ -59,25 +60,28 @@ pub enum TokenKind {
     Ampersand,
 }
 
-impl TokenKind {
+use TokenKind as Kind;
+
+impl Kind {
     #[allow(dead_code)]
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
-            TokenKind::Let
-                | TokenKind::Fn
-                | TokenKind::If
-                | TokenKind::Then
-                | TokenKind::Else
-                | TokenKind::End
-                | TokenKind::Ret
-                | TokenKind::Use
-                | TokenKind::Extern
-                | TokenKind::Struct
-                | TokenKind::Impl
-                | TokenKind::True
-                | TokenKind::False
-                | TokenKind::Variadic
+            Kind::Let
+                | Kind::Fn
+                | Kind::If
+                | Kind::Then
+                | Kind::Else
+                | Kind::End
+                | Kind::Ret
+                | Kind::Use
+                | Kind::Extern
+                | Kind::Struct
+                | Kind::Impl
+                | Kind::True
+                | Kind::False
+                | Kind::Variadic
+                | Kind::Mut
         )
     }
 
@@ -85,65 +89,65 @@ impl TokenKind {
     pub fn is_terminator(&self) -> bool {
         matches!(
             self,
-            TokenKind::Eof
-                | TokenKind::End
-                | TokenKind::Semicolon
-                | TokenKind::Comma
-                | TokenKind::RBracket
-                | TokenKind::RParen
-                | TokenKind::RSquirly
-                | TokenKind::Then
-                | TokenKind::Else
+            Kind::Eof
+                | Kind::End
+                | Kind::Semicolon
+                | Kind::Comma
+                | Kind::RBracket
+                | Kind::RParen
+                | Kind::RSquirly
+                | Kind::Then
+                | Kind::Else
         )
     }
 
     pub fn is_operator(&self) -> bool {
         matches!(
             self,
-            TokenKind::Eq
-                | TokenKind::Assign
-                | TokenKind::Add
-                | TokenKind::Sub
-                | TokenKind::Asterisk
-                | TokenKind::Slash
-                | TokenKind::Arrow
-                | TokenKind::RAngle
-                | TokenKind::LAngle
-                | TokenKind::And
-                | TokenKind::Or
-                | TokenKind::Ampersand
+            Kind::Eq
+                | Kind::Add
+                | Kind::Sub
+                | Kind::Asterisk
+                | Kind::Slash
+                | Kind::Arrow
+                | Kind::RAngle
+                | Kind::LAngle
+                | Kind::And
+                | Kind::Or
+                | Kind::Ampersand
         )
     }
 
     pub fn is_unary_op(&self) -> bool {
-        matches!(self, TokenKind::Bang | TokenKind::Sub)
+        matches!(self, Kind::Bang | Kind::Sub)
     }
 }
 
-impl Display for TokenKind {
+impl Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock::new(|| {
+pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, Kind>> = LazyLock::new(|| {
     [
-        ("let", TokenKind::Let),
-        ("func", TokenKind::Fn),
-        ("return", TokenKind::Ret),
-        ("if", TokenKind::If),
-        ("else", TokenKind::Else),
-        ("then", TokenKind::Then),
-        ("end", TokenKind::End),
-        ("use", TokenKind::Use),
-        ("and", TokenKind::And),
-        ("or", TokenKind::Or),
-        ("extern", TokenKind::Extern),
-        ("struct", TokenKind::Struct),
-        ("impl", TokenKind::Impl),
-        ("true", TokenKind::True),
-        ("false", TokenKind::False),
-        ("variadic", TokenKind::Variadic),
+        ("let", Kind::Let),
+        ("mut", Kind::Mut),
+        ("func", Kind::Fn),
+        ("return", Kind::Ret),
+        ("if", Kind::If),
+        ("else", Kind::Else),
+        ("then", Kind::Then),
+        ("end", Kind::End),
+        ("use", Kind::Use),
+        ("and", Kind::And),
+        ("or", Kind::Or),
+        ("extern", Kind::Extern),
+        ("struct", Kind::Struct),
+        ("impl", Kind::Impl),
+        ("true", Kind::True),
+        ("false", Kind::False),
+        ("variadic", Kind::Variadic),
     ]
     .into_iter()
     .collect()
@@ -151,7 +155,7 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'src> {
-    pub kind: TokenKind,
+    pub kind: Kind,
     pub text: &'src str,
     pub span: Span,
 }
@@ -165,20 +169,20 @@ impl Token<'_> {
         }
     }
 
-    pub fn kind(&self) -> &TokenKind {
+    pub fn kind(&self) -> &Kind {
         &self.kind
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct OwnedToken {
-    pub kind: TokenKind,
+    pub kind: Kind,
     pub text: String,
     pub span: Span,
 }
 
 impl<'src> Token<'src> {
-    pub fn new(kind: TokenKind, text: &'src str, start_pos: usize) -> Self {
+    pub fn new(kind: Kind, text: &'src str, start_pos: usize) -> Self {
         Self {
             kind,
             text,

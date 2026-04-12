@@ -176,7 +176,18 @@ impl<'tcx> Builder<'tcx> {
         Ok(match stmnt {
             hir::Stmnt::Let(binding) => {
                 let (val, block) = self.lower_expr(&binding.val, block)?;
-                self.locals.insert(binding.def_id, val);
+
+                if binding.mutable {
+                    let ty = binding.ty;
+                    let dest = self.new_temp(ty);
+                    self.locals.insert(binding.def_id, Operand::Temporary(dest));
+                    self.get_block_mut(&block)
+                        .push_instr(Instruction::Alloc { dest, ty })
+                        .push_instr(Instruction::Store { addr: dest, val });
+                } else {
+                    self.locals.insert(binding.def_id, val);
+                }
+
                 block
             }
             hir::Stmnt::Ret(ret) => {
@@ -293,7 +304,16 @@ impl<'tcx> Builder<'tcx> {
                         src: self.env.src.clone(),
                         span: *ident.span,
                     })?;
-                Ok((val.clone(), block))
+
+                if ident.mutable {
+                    let addr = val.as_temp().copied().expect("value to be a local"); // TODO: error handling
+                    let dest = self.new_temp(ident.ty);
+                    self.get_block_mut(&block)
+                        .push_instr(Instruction::Load { dest, addr });
+                    Ok((Operand::Temporary(dest), block))
+                } else {
+                    Ok((val.clone(), block))
+                }
             }
 
             hir::Expr::List(list) => {
@@ -340,6 +360,31 @@ impl<'tcx> Builder<'tcx> {
                     });
 
                 Ok((Operand::Temporary(dest), block))
+            }
+
+            hir::Expr::Assign(assign) => {
+                // TODO: would be nice to refactor this to places/projections later on
+                match assign.lhs.as_ref() {
+                    hir::Expr::Ident(ident) => {
+                        if !ident.mutable {
+                            todo!("error for assigning to non-mut variable");
+                        }
+                        let addr = self
+                            .locals
+                            .get(&ident.def_id)
+                            .and_then(|operand| operand.as_temp())
+                            .copied()
+                            .expect("addr for lhs");
+                        let (val, block) = self.lower_expr(&assign.rhs, block)?;
+
+                        self.get_block_mut(&block)
+                            .push_instr(Instruction::Store { addr, val });
+                    }
+                    hir::Expr::Index(_index) => todo!(),
+                    _ => todo!("nice error for invalid lvalue"),
+                }
+
+                Ok((Operand::Constant(Constant::Unit), block))
             }
 
             // hir::Expr::Constructor(constructor) => todo!(),

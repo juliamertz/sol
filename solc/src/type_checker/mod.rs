@@ -150,6 +150,7 @@ pub struct TypeEnv {
     pub src: SourceInfo,
     pub types: Interner<TypeId, Type, TypeInterner>,
     pub definitions: Interner<DefId, TypeId>,
+    pub mutable_definitions: Vec<DefId>,
     pub nodes: Interner<NodeId, TypeId>,
     pub node_defs: HashMap<NodeId, DefId>,
     pub def_names: HashMap<DefId, Arc<str>>,
@@ -161,6 +162,7 @@ impl TypeEnv {
             src,
             types: Default::default(),
             definitions: Default::default(),
+            mutable_definitions: Default::default(),
             nodes: Default::default(),
             node_defs: Default::default(),
             def_names: Default::default(),
@@ -514,6 +516,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let inner_ty_id = infer(expr, env, scope)?;
             Ok(env.types.intern(Type::Ptr(inner_ty_id)))
         }
+
+        Expr::Assign(assign) => {
+            let _lhs_ty_id = infer(&assign.lhs, env, scope)?;
+            let _rhs_ty_id = infer(&assign.rhs, env, scope)?;
+            Ok(TypeId::UNIT)
+        }
     }?;
 
     env.nodes.insert(expr.id(), ty);
@@ -567,7 +575,13 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Type
 
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
-        Stmnt::Let(Let { ident, ty, val, .. }) => {
+        Stmnt::Let(Let {
+            ident,
+            ty,
+            val,
+            mutable,
+            ..
+        }) => {
             let ty_id = infer(val, env, scope)?;
             env.nodes.insert(ident.id, ty_id);
             env.nodes.insert(val.id(), ty_id);
@@ -585,6 +599,10 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             }
 
             let def_id = env.definitions.intern(ty_id);
+            if *mutable {
+                env.mutable_definitions.push(def_id);
+            }
+
             env.node_defs.insert(ident.id, def_id);
             env.def_names.insert(def_id, ident.inner.clone());
             scope.define(ident, def_id);

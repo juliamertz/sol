@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::*;
-use crate::ext::AsStr;
+use crate::ext::{AsStr, Boxed};
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
@@ -62,6 +62,7 @@ pub type Result<T, E = ParseError> = core::result::Result<T, E>;
 pub enum Prec {
     #[default]
     Lowest,
+    Assign,    // a = 10
     AndOr,     // && or || - lower precedence than equality
     Eq,        // ==
     Cmp,       // > or <
@@ -78,6 +79,7 @@ impl From<&Token<'_>> for Prec {
     fn from(token: &Token) -> Self {
         match token.kind {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
+            TokenKind::Assign => Self::Assign,
             TokenKind::Eq => Self::Eq,
             TokenKind::LParen => Self::Call,
             TokenKind::LSquirly => Self::Construct,
@@ -260,12 +262,6 @@ impl<'src> Parser<'src> {
             span: token.span,
             inner: Arc::from(token.text),
         })
-    }
-
-    fn extern_ident(&mut self) -> Result<Ident> {
-        let mut ident = self.ident()?;
-        ident.is_extern = true;
-        Ok(ident)
     }
 
     fn ty(&mut self) -> Result<Ty> {
@@ -477,6 +473,7 @@ impl<'src> Parser<'src> {
     fn r#let(&mut self) -> Result<Let> {
         let span = self.curr.span;
         self.consume(TokenKind::Let)?;
+        let mutable = self.accept(TokenKind::Mut)?.is_some();
         let ident = self.ident()?;
 
         let ty = self
@@ -486,13 +483,14 @@ impl<'src> Parser<'src> {
 
         self.consume(TokenKind::Assign)?;
         let val = self.expr(Prec::Lowest)?;
-        let span = span.enclosing_to(&self.curr.span);
+        let span = span.enclosing_to(&val.span());
 
         Ok(Let {
+            span,
+            mutable,
             ident,
             ty,
             val,
-            span,
         })
     }
 
@@ -649,6 +647,20 @@ impl<'src> Parser<'src> {
         }))
     }
 
+    fn assign(&mut self, lhs: Expr) -> Result<Expr> {
+        self.consume(TokenKind::Assign)?;
+        let id = self.ctx.next_id();
+        let rhs = self.expr(Prec::default())?;
+        let span = lhs.span().enclosing_to(&rhs.span());
+
+        Ok(Expr::Assign(Assign {
+            id,
+            span,
+            lhs: lhs.boxed(),
+            rhs: rhs.boxed(),
+        }))
+    }
+
     fn int_lit(&mut self) -> Result<Literal> {
         let text = &self.curr.text;
         let span = self.curr.span;
@@ -718,6 +730,7 @@ impl<'src> Parser<'src> {
             }
 
             match self.curr.kind {
+
                 kind if kind.is_operator() => {
                     lhs = self.binop_expr(lhs)?;
                 }
@@ -739,6 +752,11 @@ impl<'src> Parser<'src> {
                     lhs = self.member_access(lhs)?;
                 }
                 TokenKind::Newline => return Ok(lhs),
+
+                TokenKind::Assign => {
+                    lhs = self.assign(lhs)?;
+                },
+
                 _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),
             }
         }

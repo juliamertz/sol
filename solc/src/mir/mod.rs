@@ -53,6 +53,15 @@ pub enum Operand {
     Constant(Constant),
 }
 
+impl Operand {
+    pub fn as_temp(&self) -> Option<&TempId> {
+        match self {
+            Operand::Temporary(temp_id) => Some(temp_id),
+            Operand::Data(_) | Operand::Constant(_) => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Instruction {
     Copy {
@@ -78,6 +87,7 @@ pub enum Instruction {
     Alloc {
         dest: TempId,
         ty: TypeId,
+        // count: usize,
     },
     Load {
         dest: TempId,
