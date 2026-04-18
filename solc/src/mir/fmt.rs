@@ -85,8 +85,8 @@ impl Display for Instruction {
                 }
                 f.write_char(')')
             }
-            Instruction::Alloc { dest, ty } => {
-                write!(f, "{dest} = alloc {ty:?}")
+            Instruction::Alloc { dest, ty, count } => {
+                write!(f, "{dest} = alloc{count} {ty:?}")
             }
             Instruction::Store { addr, val } => {
                 write!(f, "store {val} -> {addr}")

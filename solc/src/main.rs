@@ -147,7 +147,7 @@ fn main() -> Result<()> {
             let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
             if let DumpCommand::Ast = cmd {
-                let fmt = solc::ast::FmtModule::new(&ast, &content).to_string();
+                let fmt = solc::ast::fmt::FmtModule::new(&ast, &content).to_string();
                 return write_str(stdout, fmt);
             }
 
@@ -157,7 +157,7 @@ fn main() -> Result<()> {
 
             let hir = hir::lower_module(&ast, &mut env)?;
             if let DumpCommand::Hir = cmd {
-                return write_str(stdout, format!("hir:?"));
+                return write_str(stdout, format!("{hir:#?}"));
             }
 
             let mir = mir::lower_module(&hir, &env)?;

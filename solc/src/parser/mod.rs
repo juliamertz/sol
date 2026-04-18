@@ -313,13 +313,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Fn)?;
         let ident = self.ident()?;
         self.consume(TokenKind::LParen)?;
-        let mut params = vec![];
-        while self.curr.kind != TokenKind::RParen {
-            params.push(self.ident_type_param()?);
-            if self.at(TokenKind::Comma) {
-                self.advance()?;
-            }
-        }
+        let params = self.params(Self::ident, Self::ty)?;
         self.consume(TokenKind::RParen)?;
 
         self.consume(TokenKind::Arrow)?;
@@ -358,13 +352,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Fn)?;
         let ident = self.ident()?;
         self.consume(TokenKind::LParen)?;
-        let mut params = vec![];
-        while self.curr.kind != TokenKind::RParen {
-            params.push(self.name_type_param()?);
-            if self.at(TokenKind::Comma) {
-                self.advance()?;
-            }
-        }
+        let params = self.params(Self::name, Self::ty)?;
         self.consume(TokenKind::RParen)?;
 
         self.consume(TokenKind::Arrow)?;
@@ -397,56 +385,30 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn name_type_param(&mut self) -> Result<(Name, Ty)> {
-        let name = self.name()?;
-        self.consume(TokenKind::Colon)?;
-        let ty = self.ty()?;
-        Ok((name, ty))
-    }
-
-    fn ident_type_param(&mut self) -> Result<(Ident, Ty)> {
-        let ident = self.ident()?;
-        self.consume(TokenKind::Colon)?;
-        let ty = self.ty()?;
-        Ok((ident, ty))
-    }
-
-    fn value_param(&mut self) -> Result<(Ident, Expr)> {
-        let ident = self.ident()?;
-        self.consume(TokenKind::Colon)?;
-        let expr = self.expr(Prec::Lowest)?;
-        if self.at(TokenKind::Comma) {
-            self.advance()?;
-        }
-
-        Ok((ident, expr))
-    }
-
-    fn name_type_params(&mut self) -> Result<Vec<(Name, Ty)>> {
+    fn params<K, V>(
+        &mut self,
+        parse_key: fn(&mut Parser<'src>) -> Result<K>,
+        parse_val: fn(&mut Parser<'src>) -> Result<V>,
+    ) -> Result<Vec<(K, V)>> {
         let mut args = vec![];
 
         loop {
             self.skip_whitespace()?;
+
             if self.curr.kind.is_terminator() {
                 break;
             }
 
-            args.push(self.name_type_param()?);
-        }
+            args.push({
+                let key = parse_key(self)?;
+                self.consume(TokenKind::Colon)?;
+                let val = parse_val(self)?;
+                (key, val)
+            });
 
-        Ok(args)
-    }
-
-    fn value_params(&mut self) -> Result<Vec<(Ident, Expr)>> {
-        let mut args = vec![];
-
-        loop {
-            self.skip_whitespace()?;
-            if self.curr.kind.is_terminator() {
-                break;
+            if self.at(TokenKind::Comma) {
+                self.advance()?;
             }
-
-            args.push(self.value_param()?);
         }
 
         Ok(args)
@@ -610,7 +572,7 @@ impl<'src> Parser<'src> {
         let id = self.ctx.next_id();
         let span = expr.span().enclosing_to(&tok.span());
 
-        Ok(Expr::Call(CallExpr {
+        Ok(Expr::Call(Call {
             func: Arc::from(expr),
             params: Arc::from(params),
             id,
@@ -625,7 +587,7 @@ impl<'src> Parser<'src> {
         let id = self.ctx.next_id();
         let span = expr.span().enclosing_to(&tok.span());
 
-        Ok(Expr::Index(IndexExpr {
+        Ok(Expr::Index(Index {
             expr: expr.into(),
             idx: idx.into(),
             id,
@@ -635,16 +597,11 @@ impl<'src> Parser<'src> {
 
     fn member_access(&mut self, lhs: Expr) -> Result<Expr> {
         self.consume(TokenKind::Dot)?;
-        let ident = self.ident()?;
+        let rhs = self.name()?;
         let lhs = Arc::from(lhs);
         let id = self.ctx.next_id();
-        let span = lhs.span().enclosing_to(&ident.span);
-        Ok(Expr::MemberAccess(MemberAccess {
-            id,
-            span,
-            lhs,
-            ident,
-        }))
+        let span = lhs.span().enclosing_to(&rhs.span);
+        Ok(Expr::MemberAccess(MemberAccess { id, span, lhs, rhs }))
     }
 
     fn assign(&mut self, lhs: Expr) -> Result<Expr> {
@@ -656,8 +613,8 @@ impl<'src> Parser<'src> {
         Ok(Expr::Assign(Assign {
             id,
             span,
-            lhs: lhs.boxed(),
-            rhs: rhs.boxed(),
+            lhs: Arc::from(lhs),
+            rhs: Arc::from(rhs),
         }))
     }
 
@@ -697,6 +654,25 @@ impl<'src> Parser<'src> {
         Ok(Literal { id, span, kind })
     }
 
+    fn while_loop(&mut self) -> Result<While> {
+        let span = self.curr.span();
+        self.consume(TokenKind::While)?;
+        let condition = self.expr(Prec::default())?.into();
+        self.consume(TokenKind::Do)?;
+        self.skip_whitespace()?;
+        let consequence = self.block()?;
+        let end = self.consume(TokenKind::End)?;
+        let span = span.enclosing_to(&end.span);
+        let id = self.ctx.next_id();
+        Ok(While {
+            id,
+            span,
+            label: None,
+            condition,
+            consequence,
+        })
+    }
+
     pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
             TokenKind::Int => Expr::Literal(self.int_lit()?),
@@ -705,6 +681,8 @@ impl<'src> Parser<'src> {
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
+            TokenKind::While => Expr::While(self.while_loop()?),
+
             tok if tok.is_unary_op() => {
                 let (op, _prec) = self.unary_op()?;
                 let unary = self.unary(op)?;
@@ -730,7 +708,6 @@ impl<'src> Parser<'src> {
             }
 
             match self.curr.kind {
-
                 kind if kind.is_operator() => {
                     lhs = self.binop_expr(lhs)?;
                 }
@@ -755,13 +732,17 @@ impl<'src> Parser<'src> {
 
                 TokenKind::Assign => {
                     lhs = self.assign(lhs)?;
-                },
+                }
 
                 _ => todo!("kind: {}, span: {:?}", self.curr.kind, self.curr.span),
             }
         }
 
         Ok(lhs)
+    }
+
+    pub fn expr_lowest(&mut self) -> Result<Expr> {
+        self.expr(Prec::Lowest)
     }
 
     fn expr_list(&mut self) -> Result<Vec<Expr>> {
@@ -803,7 +784,7 @@ impl<'src> Parser<'src> {
         let ident = self.ident()?;
         self.consume(TokenKind::Assign)?;
         self.skip_whitespace()?;
-        let fields = self.name_type_params()?;
+        let fields = self.params(Self::name, Self::ty)?;
         let tok = self.consume(TokenKind::End)?;
 
         let fields = Arc::from(fields);
@@ -829,7 +810,7 @@ impl<'src> Parser<'src> {
                 break;
             }
 
-            items.push(self.func()?);
+            items.push(AssocItem::Fn(self.func()?));
         }
 
         let tok = self.consume(TokenKind::End)?;
@@ -843,9 +824,8 @@ impl<'src> Parser<'src> {
 
     fn struct_constructor(&mut self, ident: Ident) -> Result<Expr> {
         self.consume(TokenKind::LSquirly)?;
-        let fields = self.value_params()?;
+        let fields = self.params(Self::name, Self::expr_lowest)?;
         let tok = self.consume(TokenKind::RSquirly)?;
-
         let fields = Arc::from(fields);
         let id = self.ctx.next_id();
         let span = ident.span.enclosing_to(&tok.span());

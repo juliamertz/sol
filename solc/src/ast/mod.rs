@@ -8,9 +8,8 @@ use crate::ext::AsStr;
 use crate::id;
 use crate::lexer::source::Span;
 
-mod fmt;
-
-pub use fmt::FmtModule;
+pub mod fmt;
+pub mod visit;
 
 id!(NodeId);
 
@@ -82,6 +81,14 @@ impl Hash for Name {
     }
 }
 
+impl Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.inner)
+    }
+}
+
+pub type Label = Name;
+
 #[derive(Debug, Clone, Copy)]
 pub enum BinOpKind {
     /// num == 10
@@ -114,6 +121,12 @@ pub enum UnaryOpKind {
 pub struct Op<K> {
     pub span: Span,
     pub kind: K,
+}
+
+impl<K> Op<K> {
+    pub fn new(kind: K, span: Span) -> Self {
+        Self { kind, span }
+    }
 }
 
 /// A literal value within the source code
@@ -181,6 +194,25 @@ pub struct Block {
     pub nodes: Arc<[Stmnt]>,
 }
 
+impl Block {
+    pub fn split_off_returning(&self) -> (Vec<&Stmnt>, Option<&Expr>) {
+        let count = self.nodes.len();
+        let mut iter = self.nodes.iter().enumerate();
+        let mut stmnts = Vec::with_capacity(count);
+
+        while let Some((idx, stmnt)) = iter.next() {
+            let is_last = idx == count - 1;
+            if is_last && let Stmnt::Expr(expr) = stmnt {
+                return (stmnts, Some(expr));
+            } else {
+                stmnts.push(stmnt);
+            }
+        }
+
+        (stmnts, None)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IfElse {
     pub id: NodeId,
@@ -230,7 +262,7 @@ pub struct BinOp {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallExpr {
+pub struct Call {
     pub id: NodeId,
     pub span: Span,
     pub func: Arc<Expr>,
@@ -238,7 +270,7 @@ pub struct CallExpr {
 }
 
 #[derive(Debug, Clone)]
-pub struct IndexExpr {
+pub struct Index {
     pub id: NodeId,
     pub span: Span,
     pub expr: Arc<Expr>,
@@ -290,6 +322,13 @@ impl Fn {
             }
         }
     }
+
+    pub fn body(&self) -> Option<&Block> {
+        match self.kind {
+            FnKind::Local { ref body, .. } => Some(body),
+            FnKind::Extern { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -306,17 +345,16 @@ pub struct StructDef {
     pub fields: Arc<[(Name, Ty)]>,
 }
 
-// TODO:
-// #[derive(Debug, Clone)]
-// pub enum AssocItem {
-//     Fn(Fn),
-// }
+#[derive(Debug, Clone)]
+pub enum AssocItem {
+    Fn(Fn),
+}
 
 #[derive(Debug, Clone)]
 pub struct Impl {
     pub span: Span,
     pub ident: Ident,
-    pub items: Arc<[Fn]>,
+    pub items: Arc<[AssocItem]>,
 }
 
 #[derive(Debug, Clone)]
@@ -324,7 +362,7 @@ pub struct MemberAccess {
     pub id: NodeId,
     pub span: Span,
     pub lhs: Arc<Expr>,
-    pub ident: Ident,
+    pub rhs: Name,
 }
 
 #[derive(Debug, Clone)]
@@ -332,15 +370,39 @@ pub struct Constructor {
     pub id: NodeId,
     pub span: Span,
     pub ident: Ident,
-    pub fields: Arc<[(Ident, Expr)]>,
+    pub fields: Arc<[(Name, Expr)]>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Assign {
     pub id: NodeId,
     pub span: Span,
-    pub lhs: Box<Expr>,
-    pub rhs: Box<Expr>,
+    pub lhs: Arc<Expr>,
+    pub rhs: Arc<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Break {
+    pub id: NodeId,
+    pub span: Span,
+    pub label: Option<Label>,
+    pub val: Option<Arc<Expr>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Continue {
+    pub id: NodeId,
+    pub span: Span,
+    pub label: Option<Label>,
+}
+
+#[derive(Debug, Clone)]
+pub struct While {
+    pub id: NodeId,
+    pub span: Span,
+    pub label: Option<Label>,
+    pub condition: Arc<Expr>,
+    pub consequence: Block,
 }
 
 #[derive(Debug, Clone)]
@@ -350,14 +412,17 @@ pub enum Expr {
     Block(Block),
     BinOp(BinOp),
     Unary(Unary),
-    Call(CallExpr),
-    Index(IndexExpr),
+    Call(Call),
+    Index(Index),
     IfElse(IfElse),
     List(List),
     Constructor(Constructor),
     MemberAccess(MemberAccess),
     Ref(Arc<Expr>), // TODO: why is this unused?
     Assign(Assign),
+    Break(Break),
+    Continue(Continue),
+    While(While),
 }
 
 impl Expr {
@@ -376,6 +441,9 @@ impl Expr {
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
             Expr::Assign(assign) => assign.span,
+            Expr::While(inner) => inner.span,
+            Expr::Break(inner) => inner.span,
+            Expr::Continue(inner) => inner.span,
         }
     }
 
@@ -394,6 +462,9 @@ impl Expr {
             Expr::MemberAccess(member_access) => member_access.id,
             Expr::Ref(r#ref) => r#ref.id(),
             Expr::Assign(assign) => assign.id,
+            Expr::While(inner) => inner.id,
+            Expr::Break(inner) => inner.id,
+            Expr::Continue(inner) => inner.id,
         }
     }
 }

@@ -225,7 +225,7 @@ impl PrettyPrinter {
                 Self::indent(f, depth)?;
                 write!(f, "(member_access ")?;
                 self.fmt_span(f, access.span)?;
-                writeln!(f, " .{}", access.ident)?;
+                writeln!(f, " .{}", access.rhs)?;
                 self.fmt_expr(f, &access.lhs, depth + 1)?;
                 write!(f, ")")
             }
@@ -242,6 +242,15 @@ impl PrettyPrinter {
                 self.fmt_expr(f, &assign.lhs, depth)?;
                 write!(f, " = ")?;
                 self.fmt_expr(f, &assign.rhs, depth)
+            }
+            Expr::Break(_inner) => {
+                todo!("fmt break")
+            }
+            Expr::Continue(_inner) => {
+                todo!("fmt continue")
+            }
+            Expr::While(_inner) => {
+                todo!("fmt while loop")
             }
         }
     }
@@ -387,8 +396,9 @@ impl PrettyPrinter {
                 write!(f, "(impl ")?;
                 self.fmt_span(f, impl_.span)?;
                 write!(f, " \"{}\"", impl_.ident)?;
-                for func in impl_.items.iter() {
+                for item in impl_.items.iter() {
                     writeln!(f)?;
+                    let AssocItem::Fn(func) = item;
                     self.fmt_fn(f, func, depth + 1)?;
                 }
                 write!(f, ")")

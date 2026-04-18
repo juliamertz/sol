@@ -1,11 +1,11 @@
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::ast::BinOpKind;
+use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::codegen::qbe::{
     AbiTy, BaseTy, Block, Cmp, Const, Data, DataItem, DataValue, Definition, ExtTy, Function,
     Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, RegularParam,
-    Statement,
+    Statement, TyDef,
 };
 use crate::mir::{self, BlockId};
 use crate::num::Signedness;
@@ -66,6 +66,12 @@ impl<'env> Builder<'env> {
         TempId(idx)
     }
 
+    pub fn lower_ty_def(&self, ty: &Type) -> Result<TyDef> {
+        // TyDef::Regular { ident: (), align: (), sub_tys: () }
+
+        Ok(todo!())
+    }
+
     pub fn lower_data<'a>(&self, data: &'a mir::Data) -> Result<Data<'a>> {
         Ok(Data {
             linkage: None,
@@ -83,7 +89,7 @@ impl<'env> Builder<'env> {
 
     pub fn lower_def<'a>(&mut self, def: &'a mir::Definition) -> Result<Definition<'a>> {
         Ok(match def {
-            mir::Definition::Ty(_) => todo!(),
+            mir::Definition::Ty(ty) => Definition::Ty(todo!()),
             mir::Definition::Data(data) => Definition::Data(self.lower_data(data)?),
             mir::Definition::Fn(func) => Definition::Fn(self.lower_func(func)?),
         })
@@ -122,6 +128,7 @@ impl<'env> Builder<'env> {
                     Instruction::Copy(self.lower_operand(val)),
                 )])
             }
+
             mir::Instruction::BinOp { dest, op, lhs, rhs } => {
                 let val_ty_id = &func.operand_ty(lhs);
                 let val_ty = self.env.types.get(val_ty_id).unwrap();
@@ -161,11 +168,22 @@ impl<'env> Builder<'env> {
                 };
                 Ok(vec![self.assign(*dest, return_ty.into_base(), instr)])
             }
+
             mir::Instruction::UnaryOp {
-                dest: _,
-                op: _,
-                rhs: _,
-            } => todo!(),
+                dest,
+                op,
+                rhs,
+            } => {
+                let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
+                let rhs = self.lower_operand(rhs);
+                let instr = match op {
+                    UnaryOpKind::Negate => Instruction::Neg(rhs),
+                    UnaryOpKind::Not => Instruction::Xor(Operand::Const(Const::int(1)), rhs),
+                };
+
+                Ok(vec![self.assign(*dest, return_ty.into_base(), instr)])
+            },
+
             mir::Instruction::Call {
                 dest,
                 def,
@@ -209,13 +227,13 @@ impl<'env> Builder<'env> {
                     Instruction::Call(name.to_string(), operands, variadic_idx),
                 )])
             }
-            mir::Instruction::Alloc { dest, ty: _ } => {
-                // let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
+            mir::Instruction::Alloc { dest, ty:_, count } => {
+                let ty_size = 4; // TODO: 
                 Ok(vec![self.assign(
                     *dest,
-                    BaseTy::Long, // TODO: allocations always return pointers i think
-                    Instruction::Alloc4(12),
-                )]) // TODO: calculate actual size from ty
+                    BaseTy::Long,
+                    Instruction::Alloc4((ty_size * count) as u32),
+                )]) 
             }
             mir::Instruction::Load { dest, addr } => {
                 let ty = self.lower_ty(&func.temp_ty(*dest))?;
@@ -263,7 +281,7 @@ impl<'env> Builder<'env> {
         match constant {
             mir::Constant::Int(val, _) => Const::int(*val),
             mir::Constant::Bool(_) => todo!(),
-            mir::Constant::Unit => todo!(),
+            mir::Constant::Unit => unreachable!(), // TODO: this is deffo not unreachable, but ideally it should be :)
         }
     }
 

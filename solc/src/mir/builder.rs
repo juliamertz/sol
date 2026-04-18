@@ -30,14 +30,20 @@ impl BlockBuilder {
         self
     }
 
+    pub fn push_instr_opt(&mut self, instr: Option<Instruction>) -> &mut Self {
+        if let Some(instr) = instr {
+            self.body.push(instr);
+        }
+        self
+    }
+
     pub fn is_terminated(&self) -> bool {
         self.term.is_some()
     }
 
     pub fn terminate(&mut self, term: Terminator) -> Result<(), BlockBuilderError> {
         if self.is_terminated() {
-            dbg!(&term, &self.term);
-
+            // TODO:
             Ok(())
             // Err(BlockBuilderError::AlreadyTerminated)
         } else {
@@ -53,6 +59,14 @@ impl BlockBuilder {
         })
     }
 }
+
+#[derive(Debug)]
+pub struct LoopContext {
+    join_block: BlockId,
+    dest: TempId,
+}
+
+impl LoopContext {}
 
 #[derive(Debug, Diagnostic, Error)]
 pub enum BuilderError {
@@ -78,6 +92,7 @@ pub struct Builder<'tcx> {
     temp_tys: Vec<TypeId>,
     blocks: Vec<BlockBuilder>,
     locals: HashMap<DefId, Operand>,
+    loop_stack: Vec<LoopContext>,
     data: Vec<Data>,
 }
 
@@ -89,6 +104,7 @@ impl<'tcx> Builder<'tcx> {
             temp_tys: vec![],
             blocks: vec![],
             locals: HashMap::default(),
+            loop_stack: Vec::default(),
             data: Vec::default(),
         }
     }
@@ -120,6 +136,14 @@ impl<'tcx> Builder<'tcx> {
         self.locals.insert(def_id, operand);
     }
 
+    pub(super) fn push_loop(&mut self, join_block: BlockId, dest: TempId) {
+        self.loop_stack.push(LoopContext { join_block, dest });
+    }
+
+    pub(super) fn pop_loop(&mut self) -> Option<LoopContext> {
+        self.loop_stack.pop()
+    }
+
     pub fn build(
         self,
         name: impl ToString,
@@ -134,38 +158,31 @@ impl<'tcx> Builder<'tcx> {
             .collect::<Result<Vec<_>, BlockBuilderError>>()?;
         let temps = self.temp_tys;
         let params = params.into_iter().collect();
-        Ok((
-            Fn {
-                name,
-                return_ty,
-                params,
-                temps,
-                blocks,
-            },
-            self.data,
-        ))
+        let func = Fn {
+            name,
+            return_ty,
+            params,
+            temps,
+            blocks,
+        };
+        Ok((func, self.data))
     }
 
-    pub(super) fn lower_hir_block(
+    pub(super) fn lower_block(
         &mut self,
-        hir_block: &hir::Block<'_>,
-        block: BlockId,
+        block: &hir::Block<'_>,
+        mut block_id: BlockId,
     ) -> Result<(Operand, BlockId)> {
-        let mut last_val = None;
-        let mut last_block = block;
-
-        for stmnt in hir_block.nodes.iter() {
-            if let hir::Stmnt::Expr(expr) = stmnt {
-                let (val, block) = self.lower_expr(expr, last_block)?;
-                last_val = Some(val);
-                last_block = block;
-            } else {
-                last_block = self.lower_stmnt(stmnt, last_block)?;
-            }
+        let (stmnts, returning) = block.split_off_returning();
+        for stmnt in stmnts.into_iter() {
+            block_id = self.lower_stmnt(stmnt, block_id)?;
         }
+        let (val, block) = returning
+            .map(|expr| self.lower_expr(expr, block_id))
+            .transpose()?
+            .unwrap_or((Operand::unit(), block_id));
 
-        let val = last_val.unwrap_or(Operand::Constant(Constant::Unit));
-        Ok((val, last_block))
+        Ok((val, block))
     }
 
     pub(super) fn lower_stmnt(
@@ -182,7 +199,7 @@ impl<'tcx> Builder<'tcx> {
                     let dest = self.new_temp(ty);
                     self.locals.insert(binding.def_id, Operand::Temporary(dest));
                     self.get_block_mut(&block)
-                        .push_instr(Instruction::Alloc { dest, ty })
+                        .push_instr(Instruction::Alloc { dest, ty, count: 1 })
                         .push_instr(Instruction::Store { addr: dest, val });
                 } else {
                     self.locals.insert(binding.def_id, val);
@@ -223,27 +240,33 @@ impl<'tcx> Builder<'tcx> {
             hir::Expr::IfElse(if_else) => {
                 let dest = self.new_temp(if_else.ty);
                 let conseq_block = self.new_block();
-                let alt_block = self.new_block();
+                let alt_block = if_else.alternative.as_ref().map(|_| self.new_block());
                 let join_block = self.new_block();
 
                 let (cond, block) = self.lower_expr(&if_else.condition, block)?;
                 self.get_block_mut(&block).terminate(Terminator::branch(
                     cond,
                     conseq_block,
-                    alt_block,
+                    alt_block.unwrap_or(join_block),
                 ))?;
 
                 let (conseq_val, conseq_exit) =
-                    self.lower_hir_block(&if_else.consequence, conseq_block)?;
+                    self.lower_block(&if_else.consequence, conseq_block)?;
                 self.get_block_mut(&conseq_exit)
-                    .push_instr(Instruction::copy(dest, conseq_val))
+                    .push_instr_opt(Instruction::copy_non_unit(dest, conseq_val))
                     .terminate(Terminator::goto(join_block))?;
 
-                let (alt_val, alt_exit) =
-                    self.lower_hir_block(if_else.alternative.as_ref().unwrap(), alt_block)?;
-                self.get_block_mut(&alt_exit)
-                    .push_instr(Instruction::copy(dest, alt_val))
-                    .terminate(Terminator::goto(join_block))?;
+                if let Some(alt_block) = alt_block
+                    && let Some((alt_val, alt_exit)) = if_else
+                        .alternative
+                        .as_ref()
+                        .map(|block| self.lower_block(block, alt_block))
+                        .transpose()?
+                {
+                    self.get_block_mut(&alt_exit)
+                        .push_instr_opt(Instruction::copy_non_unit(dest, alt_val))
+                        .terminate(Terminator::goto(join_block))?;
+                }
 
                 Ok((Operand::Temporary(dest), join_block))
             }
@@ -294,7 +317,7 @@ impl<'tcx> Builder<'tcx> {
                 Ok((Operand::Temporary(dest), block))
             }
 
-            hir::Expr::Block(hir_block) => self.lower_hir_block(hir_block, block),
+            hir::Expr::Block(hir_block) => self.lower_block(hir_block, block),
 
             hir::Expr::Ident(ident) => {
                 let val = self
@@ -305,7 +328,7 @@ impl<'tcx> Builder<'tcx> {
                         span: *ident.span,
                     })?;
 
-                if ident.mutable {
+                if ident.mutability.is_mutable() {
                     let addr = val.as_temp().copied().expect("value to be a local"); // TODO: error handling
                     let dest = self.new_temp(ident.ty);
                     self.get_block_mut(&block)
@@ -318,8 +341,11 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::List(list) => {
                 let dest = self.new_temp(list.ty);
-                self.get_block_mut(&block)
-                    .push_instr(Instruction::Alloc { dest, ty: list.ty });
+                self.get_block_mut(&block).push_instr(Instruction::Alloc {
+                    dest,
+                    ty: list.ty,
+                    count: list.size,
+                });
 
                 for (idx, expr) in list.items.iter().enumerate() {
                     let (val, block) = self.lower_expr(expr, block)?;
@@ -366,7 +392,7 @@ impl<'tcx> Builder<'tcx> {
                 // TODO: would be nice to refactor this to places/projections later on
                 match assign.lhs.as_ref() {
                     hir::Expr::Ident(ident) => {
-                        if !ident.mutable {
+                        if ident.mutability.is_immutable() {
                             todo!("error for assigning to non-mut variable");
                         }
                         let addr = self
@@ -380,17 +406,72 @@ impl<'tcx> Builder<'tcx> {
                         self.get_block_mut(&block)
                             .push_instr(Instruction::Store { addr, val });
                     }
-                    hir::Expr::Index(_index) => todo!(),
+                    hir::Expr::Index(index) => {
+                        let addr = self.new_temp(index.ty);
+                        let (base_val, block) = self.lower_expr(&index.expr, block)?;
+                        let (index_val, block) = self.lower_expr(&index.idx, block)?;
+                        let (val, block) = self.lower_expr(&assign.rhs, block)?;
+
+                        let elem_ty = index.expr.type_id().to_owned();
+
+                        self.get_block_mut(&block)
+                            .push_instr(Instruction::IndexPtr {
+                                dest: addr,
+                                base: base_val,
+                                index: index_val,
+                                elem_ty,
+                            })
+                            .push_instr(Instruction::Store { addr, val });
+                    }
                     _ => todo!("nice error for invalid lvalue"),
                 }
 
-                Ok((Operand::Constant(Constant::Unit), block))
+                Ok((Operand::unit(), block))
             }
 
-            // hir::Expr::Constructor(constructor) => todo!(),
-            // hir::Expr::MemberAccess(member_access) => todo!(),
-            // hir::Expr::Ref(expr) => todo!(),
-            _ => Ok((Operand::Constant(Constant::Unit), block)),
+            hir::Expr::Loop(inner) => {
+                let dest = self.new_temp(inner.ty);
+                let enter_block = block.clone();
+                let loop_block = self.new_block();
+                let join_block = self.new_block();
+
+                let builder = self.get_block_mut(&block);
+                if !builder.is_terminated() {
+                    builder.terminate(Terminator::Goto(loop_block))?;
+                }
+
+                self.push_loop(join_block, dest);
+                let (body_val, body_exit) = self.lower_block(&inner.body, loop_block)?;
+                self.pop_loop();
+
+                // self.get_block_mut(&body_exit)
+                //     .terminate(Terminator::Goto(join_block))?;
+
+                // self.get_block_mut(&body_exit)
+                //     .push_instr(Instruction::copy(dest, conseq_val))
+                //     .terminate(Terminator::goto(join_block))?;
+
+                dbg!(enter_block, loop_block, join_block, body_exit);
+                self.get_block_mut(&body_exit)
+                    .terminate(Terminator::Goto(loop_block))?;
+
+                Ok((Operand::Temporary(dest), join_block))
+            }
+
+            hir::Expr::Constructor(constructor) => todo!(),
+            hir::Expr::MemberAccess(member_access) => todo!(),
+            hir::Expr::Ref(expr) => todo!(),
+            hir::Expr::Break(inner) => {
+                let Some(loop_ctx) = self.pop_loop() else {
+                    todo!("error for breaking outside of loop context");
+                };
+
+                self.get_block_mut(&block)
+                    .terminate(Terminator::Goto(loop_ctx.join_block))?;
+
+                Ok((Operand::unit(), block))
+            }
+            hir::Expr::Continue(_) => todo!(),
         }
     }
 }

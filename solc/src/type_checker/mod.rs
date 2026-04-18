@@ -5,9 +5,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, BinOp, BinOpKind, Block, CallExpr, Constructor, Expr, Fn, Ident, IfElse, Impl, IndexExpr,
-    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, NodeId, Ret, Stmnt, Unary,
-    UnaryOpKind,
+    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Impl,
+    Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
+    StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::ext::{AsStr, Boxed};
 use crate::id;
@@ -39,12 +39,12 @@ pub enum TypeError {
         span: Span,
     },
 
-    #[error("no field '{ident}' on type: '{ty}'")]
+    #[error("no field '{name}' on type: '{ty}'")]
     NoSuchField {
         #[source_code]
         src: SourceInfo,
 
-        ident: Ident,
+        name: Name,
 
         ty: Type,
 
@@ -268,7 +268,6 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
         Expr::Ident(ident) => infer_ident(ident, env, scope),
-
         Expr::Literal(Literal { id, kind, .. }) => match kind {
             LiteralKind::Str(_) => {
                 let ty_id = TypeId::STR;
@@ -286,12 +285,10 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 Ok(ty_id)
             }
         },
-
         Expr::Block(block) => {
             let scope = &mut scope.new_child();
             infer_block(block, env, scope)
         }
-
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
             let lhs_ty = infer(lhs.as_ref(), env, scope)?;
             let rhs_ty = infer(rhs.as_ref(), env, scope)?;
@@ -346,7 +343,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
             }
         }
-
         Expr::Unary(Unary { op, rhs, .. }) => {
             let ty = infer(rhs, env, scope)?;
             match (&op.kind, env.types.get(&ty).unwrap()) {
@@ -354,8 +350,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 _ => todo!(),
             }
         }
-
-        Expr::Call(CallExpr { func, params, .. }) => {
+        Expr::Call(Call { func, params, .. }) => {
             let func_ty_id = infer(func, env, scope)?;
             let returns = {
                 let func_ty = env.types.get(&func_ty_id).unwrap();
@@ -372,8 +367,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(returns)
         }
-
-        Expr::Index(IndexExpr { id, expr, idx, .. }) => {
+        Expr::Index(Index { id, expr, idx, .. }) => {
             let val_ty_id = infer(expr, env, scope)?;
             env.nodes.insert(expr.id(), val_ty_id);
 
@@ -392,7 +386,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             env.nodes.insert(*id, inner);
             Ok(inner)
         }
-
         Expr::IfElse(IfElse {
             condition,
             consequence,
@@ -432,7 +425,6 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(consequence_ty)
         }
-
         Expr::List(List { items, .. }) => {
             let size = items.len();
             let mut iter = items.iter();
@@ -463,20 +455,21 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let ty_id = env.types.intern(ty);
             Ok(ty_id)
         }
-
         Expr::Constructor(Constructor {
             id, ident, fields, ..
         }) => {
-            let def_id = scope
-                .get_definition(ident)
-                .ok_or_else(|| TypeError::NotFound {
-                    src: env.src.clone(),
-                    ident: ident.to_owned(),
-                    span: ident.span,
-                })?;
+            let def_id =
+                scope
+                    .get_definition(ident)
+                    .copied()
+                    .ok_or_else(|| TypeError::NotFound {
+                        src: env.src.clone(),
+                        ident: ident.to_owned(),
+                        span: ident.span,
+                    })?;
             let ty_id = *env
                 .definitions
-                .get(def_id)
+                .get(&def_id)
                 .expect("constructor type to be defined");
 
             for (_ident, expr) in fields.iter() {
@@ -486,24 +479,24 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             env.nodes.insert(*id, ty_id);
             env.nodes.insert(ident.id, ty_id);
+            env.node_defs.insert(ident.id, def_id);
 
             Ok(ty_id)
         }
-
-        Expr::MemberAccess(MemberAccess { lhs, ident, .. }) => {
+        Expr::MemberAccess(MemberAccess { lhs, rhs, .. }) => {
             let lhs_ty_id = infer(lhs, env, scope)?;
             let field_ty_id = {
                 let lhs_ty = env.types.get(&lhs_ty_id).unwrap();
                 if let Type::Struct { fields, .. } = lhs_ty {
                     fields
                         .iter()
-                        .find(|(field, _)| field.as_str() == ident.as_str()) // TODO: this is hacky D:
+                        .find(|(field, _)| field.as_str() == rhs.as_str()) // TODO: this is hacky D:
                         .map(|(_, ty_id)| *ty_id)
                         .ok_or_else(|| TypeError::NoSuchField {
                             src: env.src.clone(),
-                            ident: ident.clone(),
+                            name: rhs.clone(),
                             ty: lhs_ty.clone(),
-                            span: lhs.span().enclosing_to(&ident.span),
+                            span: lhs.span().enclosing_to(&rhs.span),
                         })?
                 } else {
                     todo!("infer member access expr")
@@ -511,16 +504,34 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             };
             Ok(field_ty_id)
         }
-
         Expr::Ref(expr) => {
             let inner_ty_id = infer(expr, env, scope)?;
             Ok(env.types.intern(Type::Ptr(inner_ty_id)))
         }
-
         Expr::Assign(assign) => {
             let _lhs_ty_id = infer(&assign.lhs, env, scope)?;
             let _rhs_ty_id = infer(&assign.rhs, env, scope)?;
             Ok(TypeId::UNIT)
+        }
+        Expr::Break(inner) => Ok(inner
+            .val
+            .as_ref()
+            .map(|expr| infer(expr, env, scope))
+            .transpose()?
+            .unwrap_or(TypeId::UNIT)),
+        Expr::Continue(_inner) => Ok(TypeId::UNIT),
+        Expr::While(inner) => {
+            let _cond_ty_id = infer(&inner.condition, env, scope)?;
+
+            let (stmnts, returning) = inner.consequence.split_off_returning();
+            for stmnt in stmnts {
+                check_stmnt(stmnt, env, scope)?;
+            }
+
+            Ok(returning
+                .map(|expr| infer(expr, env, scope))
+                .transpose()?
+                .unwrap_or(TypeId::UNIT))
         }
     }?;
 
@@ -633,33 +644,47 @@ pub fn check_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()>
         scope.define(param.key, def_id);
     }
 
-    let def_id = *scope.get_definition(&func.ident).unwrap();
-    let ty_id = *env.definitions.get(&def_id).unwrap();
+    let def_id = scope.get_definition(&func.ident).copied().unwrap();
+    let ty_id = env.definitions.get(&def_id).copied().unwrap();
     env.node_defs.insert(func.ident.id, def_id);
     env.nodes.insert(func.ident.id, ty_id);
     scope.define(&func.ident, def_id);
 
-    match &func.kind {
-        ast::FnKind::Local { body, .. } => check_stmnts(&body.nodes, env, &mut scope),
-        ast::FnKind::Extern { .. } => Ok(()),
+    match func.body() {
+        Some(body) => check_stmnts(&body.nodes, env, &mut scope),
+        None => Ok(()),
     }
 }
 
 pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     for item in imp.items.iter() {
-        check_func(item, env, scope)?;
+        let AssocItem::Fn(func) = item;
+        check_func(func, env, scope)?;
     }
 
     Ok(())
 }
 
+pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    let def_id = scope.get_definition(&def.ident).copied().unwrap();
+    let ty_id = env.definitions.get(&def_id).copied().unwrap();
+    env.node_defs.insert(def.ident.id, def_id);
+    env.nodes.insert(def.ident.id, ty_id);
+    scope.define(&def.ident, def_id);
+
+    Ok(())
+}
+
+pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    Ok(())
+}
+
 pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match item {
+        Item::Use(item) => check_use(item, env, scope),
         Item::Fn(func) => check_func(func, env, scope),
         Item::Impl(imp) => check_imp(imp, env, scope),
-        _ => Ok(()),
-        // Item::Use(Use { .. }) => {}
-        // Item::StructDef(StructDef { .. }) => {}
+        Item::StructDef(def) => check_struct_def(def, env, scope),
     }
 }
 
@@ -674,7 +699,8 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     let mut inventory = collect(&module.items)?;
 
     for struct_def in inventory.take_structs() {
-        let field_tys = struct_def
+        let ident = struct_def.ident.to_owned().boxed();
+        let fields = struct_def
             .fields
             .iter()
             .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
@@ -682,11 +708,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
             .into();
         let _impls = inventory.take_impls(&struct_def.ident); // TODO:
 
-        let ty = Type::Struct {
-            ident: struct_def.ident.to_owned().boxed(),
-            fields: field_tys,
-        };
-        let ty_id = env.types.intern(ty);
+        let ty_id = env.types.intern(Type::Struct { ident, fields });
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
     }

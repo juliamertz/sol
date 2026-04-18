@@ -54,6 +54,10 @@ pub enum Operand {
 }
 
 impl Operand {
+    pub fn unit() -> Self {
+        Self::Constant(Constant::Unit)
+    }
+
     pub fn as_temp(&self) -> Option<&TempId> {
         match self {
             Operand::Temporary(temp_id) => Some(temp_id),
@@ -87,7 +91,7 @@ pub enum Instruction {
     Alloc {
         dest: TempId,
         ty: TypeId,
-        // count: usize,
+        count: usize,
     },
     Load {
         dest: TempId,
@@ -176,6 +180,13 @@ pub struct Module {
 impl Instruction {
     fn copy(dest: TempId, val: Operand) -> Self {
         Self::Copy { dest, val }
+    }
+
+    fn copy_non_unit(dest: TempId, val: Operand) -> Option<Self> {
+        match val {
+            Operand::Constant(Constant::Unit) => None,
+            _ => Some(Self::copy(dest, val)),
+        }
     }
 
     fn bin_op(dest: TempId, op: BinOpKind, lhs: Operand, rhs: Operand) -> Self {

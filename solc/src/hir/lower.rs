@@ -1,9 +1,13 @@
+use std::borrow::Cow;
+use std::collections::VecDeque;
+use std::ops::Deref;
+
 use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast;
 use crate::ext::Boxed;
-use crate::hir::{self, HirId};
+use crate::hir::{self, HirId, Locality, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
@@ -38,7 +42,11 @@ pub fn lower_item<'ast>(
         ast::Item::Use(inner) => Some(hir::Item::Use(hir::Use {
             id: HirId::DUMMY,
             span: &inner.span,
-            is_extern: inner.is_extern,
+            locality: if inner.is_extern {
+                Locality::Extern
+            } else {
+                Locality::Local
+            },
             name: lower_name(&inner.name),
         })),
         ast::Item::Fn(func) => {
@@ -135,6 +143,10 @@ pub fn lower_name<'ast>(name: &'ast ast::Name) -> hir::Name<'ast> {
     }
 }
 
+pub fn lower_label<'ast>(label: &'ast ast::Label) -> hir::Label<'ast> {
+    lower_name(label)
+}
+
 pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &TypeEnv) -> Result<hir::Ident<'ast>> {
     let def_id = env
         .node_defs
@@ -151,7 +163,11 @@ pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &TypeEnv) -> Result<hir::
         ty: env.type_of(&ident.id, &ident.span)?,
         span: &ident.span,
         inner: &ident.inner,
-        mutable: env.mutable_definitions.contains(&def_id),
+        mutability: if env.mutable_definitions.contains(&def_id) {
+            Mutability::Mutable
+        } else {
+            Mutability::Immutable
+        },
     })
 }
 
@@ -176,7 +192,7 @@ pub fn lower_typed_ident<'ast>(
         ty,
         span: &ident.span,
         inner: &ident.inner,
-        mutable: false,
+        mutability: Mutability::Immutable,
     })
 }
 
@@ -211,7 +227,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             id: HirId::DUMMY,
             ty,
             span: &unary.span,
-            op: &unary.op,
+            op: Cow::Borrowed(&unary.op),
             rhs: lower_expr(&unary.rhs, env)?.boxed(),
         }),
         ast::Expr::Call(call_expr) => {
@@ -263,18 +279,17 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .map(|expr| lower_expr(expr, env))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
+            size: list.items.len(),
         }),
         ast::Expr::Constructor(constructor) => hir::Expr::Constructor(hir::Constructor {
             id: HirId::DUMMY,
             ty,
             span: &constructor.span,
-            ident: lower_ident(&constructor.ident, env)?,
+            ident: lower_ident(&constructor.ident, env).unwrap(),
             fields: constructor
                 .fields
                 .iter()
-                .map(|(ident, expr)| 
-                    // TODO: this should probs be a name?
-                    Ok((lower_untyped_ident(ident, env)?, lower_expr(expr, env)?)))
+                .map(|(name, expr)| Ok((lower_name(name), lower_expr(expr, env)?)))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
@@ -283,7 +298,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             ty,
             span: &member_access.span,
             lhs: lower_expr(&member_access.lhs, env)?.boxed(),
-            ident: lower_typed_ident(&member_access.ident, ty, env)?,
+            rhs: lower_name(&member_access.rhs),
         }),
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env)?.into()),
         ast::Expr::Assign(assign) => hir::Expr::Assign(hir::Assign {
@@ -292,6 +307,65 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             lhs: lower_expr(&assign.lhs, env)?.boxed(),
             rhs: lower_expr(&assign.rhs, env)?.boxed(),
         }),
+        ast::Expr::Break(inner) => hir::Expr::Break(hir::Break {
+            id: HirId::DUMMY,
+            ty,
+            span: &inner.span,
+            label: inner.label.as_ref().map(lower_label),
+            val: inner
+                .val
+                .as_ref()
+                .map(|expr| lower_expr(expr, env))
+                .transpose()?
+                .map(Box::new),
+        }),
+        ast::Expr::Continue(inner) => hir::Expr::Continue(hir::Continue {
+            id: HirId::DUMMY,
+            span: &inner.span,
+            label: inner.label.as_ref().map(lower_label),
+        }),
+        ast::Expr::While(inner) => {
+            let mut body = lower_block(&inner.consequence, env)?;
+            let desugared_condition = hir::Stmnt::Expr(hir::Expr::IfElse(hir::IfElse {
+                id: HirId::DUMMY,
+                ty: TypeId::UNIT,
+                span: &inner.consequence.span,
+                condition: hir::Expr::Unary(hir::Unary {
+                    id: HirId::DUMMY,
+                    ty: TypeId::BOOL,
+                    span: &inner.consequence.span,
+                    op: Cow::Owned(ast::Op::new(ast::UnaryOpKind::Not, inner.condition.span())),
+                    rhs: lower_expr(&inner.condition, env)?.boxed(),
+                })
+                .into(),
+                consequence: hir::Block {
+                    id: HirId::DUMMY,
+                    ty: TypeId::UNIT,
+                    span: &inner.consequence.span,
+                    nodes: Box::from([hir::Stmnt::Expr(hir::Expr::Break(hir::Break {
+                        id: HirId::DUMMY,
+                        ty: TypeId::UNIT,
+                        span: &inner.span,
+                        label: None,
+                        val: None, // TODO: can be return val from loop body?
+                    }))]),
+                },
+                alternative: None,
+            }));
+            let nodes = [desugared_condition]
+                .into_iter()
+                .chain(body.nodes.clone())
+                .collect::<Vec<_>>();
+            body.nodes = Box::from(nodes);
+
+            hir::Expr::Loop(hir::Loop {
+                id: HirId::DUMMY,
+                ty,
+                span: &inner.span,
+                label: inner.label.as_ref().map(lower_label),
+                body,
+            })
+        }
     };
     Ok(lowered)
 }

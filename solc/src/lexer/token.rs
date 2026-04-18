@@ -45,6 +45,8 @@ pub enum TokenKind {
     Struct,
     Impl,
     Variadic,
+    While,
+    Do,
 
     // Operators
     Eq,
@@ -82,6 +84,8 @@ impl Kind {
                 | Kind::False
                 | Kind::Variadic
                 | Kind::Mut
+                | Kind::While
+                | Kind::Do
         )
     }
 
@@ -148,6 +152,8 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, Kind>> = LazyLock::new
         ("true", Kind::True),
         ("false", Kind::False),
         ("variadic", Kind::Variadic),
+        ("while", Kind::While),
+        ("do", Kind::Do),
     ]
     .into_iter()
     .collect()

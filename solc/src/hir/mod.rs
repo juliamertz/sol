@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::ext::AsStr;
 use crate::lexer::source::Span;
 use crate::type_checker::{DefId, TypeId};
@@ -10,6 +12,25 @@ pub use lower::*;
 
 id!(HirId);
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Mutability {
+    #[default]
+    Immutable,
+    Mutable,
+}
+
+impl Mutability {
+    #[inline]
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, Mutability::Mutable)
+    }
+
+    #[inline]
+    pub fn is_immutable(&self) -> bool {
+        matches!(self, Mutability::Immutable)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Ident<'ast> {
     pub id: HirId,
@@ -17,7 +38,7 @@ pub struct Ident<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub inner: &'ast str,
-    pub mutable: bool,
+    pub mutability: Mutability,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +47,8 @@ pub struct Name<'ast> {
     pub span: &'ast Span,
     pub inner: &'ast str,
 }
+
+pub type Label<'ast> = Name<'ast>;
 
 #[derive(Debug, Clone)]
 pub struct Literal<'ast> {
@@ -43,19 +66,25 @@ pub struct Block<'ast> {
     pub nodes: Box<[Stmnt<'ast>]>,
 }
 
-// impl<'ast> Block<'ast> {
-//     pub fn stmnts(&self) -> Vec<Stmnt<'ast>> {
-//         todo!()
-//     }
-//
-//     pub fn returning(&self) -> Option<&Expr<'ast>> {
-//         if let Some(Stmnt::Expr(expr)) = self.nodes.iter().last() {
-//             Some(expr)
-//         } else {
-//             None
-//         }
-//     }
-// }
+impl<'ast> Block<'ast> {
+    /// collect all statements in the block splitting off the returning expression if present
+    pub fn split_off_returning(&self) -> (Vec<&Stmnt<'ast>>, Option<&Expr<'ast>>) {
+        let count = self.nodes.len();
+        let mut iter = self.nodes.iter().enumerate();
+        let mut stmnts = Vec::with_capacity(count);
+
+        while let Some((idx, stmnt)) = iter.next() {
+            let is_last = idx == count - 1;
+            if is_last && let Stmnt::Expr(expr) = stmnt {
+                return (stmnts, Some(expr));
+            } else {
+                stmnts.push(stmnt);
+            }
+        }
+
+        (stmnts, None)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BinOp<'ast> {
@@ -72,7 +101,7 @@ pub struct Unary<'ast> {
     pub id: HirId,
     pub ty: TypeId,
     pub span: &'ast Span,
-    pub op: &'ast ast::Op<ast::UnaryOpKind>,
+    pub op: Cow<'ast, ast::Op<ast::UnaryOpKind>>,
     pub rhs: Box<Expr<'ast>>,
 }
 
@@ -111,6 +140,7 @@ pub struct List<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub items: Box<[Expr<'ast>]>,
+    pub size: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +149,7 @@ pub struct Constructor<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub ident: Ident<'ast>,
-    pub fields: Box<[(Ident<'ast>, Expr<'ast>)]>,
+    pub fields: Box<[(Name<'ast>, Expr<'ast>)]>,
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +158,7 @@ pub struct MemberAccess<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub lhs: Box<Expr<'ast>>,
-    pub ident: Ident<'ast>,
+    pub rhs: Name<'ast>,
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +167,31 @@ pub struct Assign<'ast> {
     pub span: &'ast Span,
     pub lhs: Box<Expr<'ast>>,
     pub rhs: Box<Expr<'ast>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Break<'ast> {
+    pub id: HirId,
+    pub ty: TypeId,
+    pub span: &'ast Span,
+    pub label: Option<Label<'ast>>,
+    pub val: Option<Box<Expr<'ast>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Continue<'ast> {
+    pub id: HirId,
+    pub span: &'ast Span,
+    pub label: Option<Label<'ast>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Loop<'ast> {
+    pub id: HirId,
+    pub ty: TypeId,
+    pub span: &'ast Span,
+    pub label: Option<Label<'ast>>,
+    pub body: Block<'ast>,
 }
 
 #[derive(Debug, Clone)]
@@ -154,6 +209,9 @@ pub enum Expr<'ast> {
     MemberAccess(MemberAccess<'ast>),
     Ref(Box<Expr<'ast>>),
     Assign(Assign<'ast>),
+    Break(Break<'ast>),
+    Continue(Continue<'ast>),
+    Loop(Loop<'ast>),
 }
 
 #[derive(Debug, Clone)]
@@ -175,11 +233,18 @@ pub struct Ret<'ast> {
     pub val: Expr<'ast>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Locality {
+    #[default]
+    Local,
+    Extern,
+}
+
 #[derive(Debug, Clone)]
 pub struct Use<'ast> {
     pub id: HirId,
     pub span: &'ast Span,
-    pub is_extern: bool,
+    pub locality: Locality,
     pub name: Name<'ast>,
 }
 
@@ -193,6 +258,15 @@ pub enum FnKind<'ast> {
         params: Box<[(Name<'ast>, TypeId)]>,
         is_variadic: bool,
     },
+}
+
+impl FnKind<'_> {
+    pub fn locality(&self) -> Locality {
+        match self {
+            FnKind::Local { .. } => Locality::Local,
+            FnKind::Extern { .. } => Locality::Extern,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -271,7 +345,11 @@ impl Expr<'_> {
             Expr::Constructor(constructor) => &constructor.ty,
             Expr::MemberAccess(member_access) => &member_access.ty,
             Expr::Ref(expr) => expr.type_id(),
-            Expr::Assign(_assign) => &TypeId::UNIT, //TODO:
+            // TODO: this should probably be NEVER type
+            Expr::Assign(_assign) => &TypeId::UNIT,
+            Expr::Break(inner) => &TypeId::UNIT,
+            Expr::Continue(inner) => &TypeId::UNIT,
+            Expr::Loop(inner) => todo!(),
         }
     }
 
@@ -290,6 +368,9 @@ impl Expr<'_> {
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
             Expr::Assign(assign) => assign.span,
+            Expr::Break(inner) => todo!(),
+            Expr::Continue(inner) => todo!(),
+            Expr::Loop(inner) => todo!(),
         }
     }
 }

@@ -23,7 +23,7 @@ fn lower_func(
         lowered_params.push((temp_id, *ty_id))
     }
 
-    let (val, exit_block) = builder.lower_hir_block(body, entry)?;
+    let (val, exit_block) = builder.lower_block(body, entry)?;
 
     builder
         .get_block_mut(&exit_block)
