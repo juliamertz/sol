@@ -211,8 +211,13 @@ impl<'src> Parser<'src> {
     pub fn item(&mut self) -> Result<Item> {
         let item = match self.curr.kind {
             TokenKind::Fn => Item::Fn(self.func()?),
-            TokenKind::Extern => Item::Fn(self.extern_func()?),
-            TokenKind::Use => Item::Use(self.r#use()?),
+            TokenKind::Extern => {
+                match self.next.as_ref().map(|tok| tok.kind) {
+                    Some(TokenKind::Fn | TokenKind::Variadic) => Item::Fn(self.extern_func()?),
+                    Some(TokenKind::Use) => Item::Use(self.r#use()?),
+                    _ => todo!("error: extern keyword should be followed by func or use"),
+                }
+            }
             TokenKind::Struct => Item::StructDef(self.struct_def()?),
             TokenKind::Impl => Item::Impl(self.imp()?),
             _ => {
@@ -374,8 +379,8 @@ impl<'src> Parser<'src> {
 
     fn r#use(&mut self) -> Result<Use> {
         let span = self.curr.span;
-        self.consume(TokenKind::Use)?;
         let is_extern = self.accept(TokenKind::Extern)?.is_some();
+        self.consume(TokenKind::Use)?;
         let name = self.name()?;
         let span = span.enclosing_to(&self.curr.span);
         Ok(Use {

@@ -3,7 +3,8 @@ struct Point =
   y : u32
 end
 
-extern func printf() -> i32
+extern use stdio
+extern variadic func printf(format: Str) -> i32
 
 func main() -> i32
   let point : Point = Point {
