@@ -144,7 +144,7 @@ impl<'env> Builder<'env> {
                     Div => Instruction::Div(lhs, rhs),
                     And => Instruction::And(lhs, rhs),
                     Or => Instruction::Or(lhs, rhs),
-                    Eq | Lt | Gt => {
+                    Eq | Ne | Lt | Gt => {
                         let signedness = match val_ty {
                             Type::Int(_) => Signedness::Signed,
                             Type::UInt(_) => Signedness::Unsigned,
@@ -153,6 +153,7 @@ impl<'env> Builder<'env> {
                         let ty = self.lower_ty(val_ty_id)?;
                         let cmp = match op {
                             Eq => Cmp::Eq,
+                            Ne => Cmp::Ne,
                             Lt => match signedness {
                                 Signedness::Signed => Cmp::Slt,
                                 Signedness::Unsigned => Cmp::Ult,

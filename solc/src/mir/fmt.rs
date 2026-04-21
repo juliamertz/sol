@@ -43,6 +43,7 @@ impl Display for Operand {
 fn fmt_binop(op: &BinOpKind) -> &'static str {
     match op {
         BinOpKind::Eq => "eq",
+        BinOpKind::Ne => "ne",
         BinOpKind::Add => "add",
         BinOpKind::Sub => "sub",
         BinOpKind::Mul => "mul",

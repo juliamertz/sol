@@ -437,6 +437,7 @@ impl Display for FmtModule<'_> {
 fn fmt_binop(op: &BinOpKind) -> &'static str {
     match op {
         BinOpKind::Eq => "==",
+        BinOpKind::Ne => "!=",
         BinOpKind::Add => "+",
         BinOpKind::Sub => "-",
         BinOpKind::Mul => "*",

@@ -157,7 +157,14 @@ impl<'src> Lexer<'src> {
                     Token::new(TokenKind::Sub, "-", start)
                 }
             }
-            '!' => Token::new(TokenKind::Bang, "!", start),
+            '!' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::new(TokenKind::Ne, "!=", start)
+                } else {
+                    Token::new(TokenKind::Bang, "!", start)
+                }
+            }
             '*' => Token::new(TokenKind::Asterisk, "*", start),
             '/' => Token::new(TokenKind::Slash, "/", start),
             '&' => Token::new(TokenKind::Ampersand, "&", start),

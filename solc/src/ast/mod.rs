@@ -93,6 +93,8 @@ pub type Label = Name;
 pub enum BinOpKind {
     /// num == 10
     Eq,
+    /// num != 10
+    Ne,
     /// 4 + 2
     Add,
     /// 4 - 2

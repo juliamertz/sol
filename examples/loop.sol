@@ -7,7 +7,9 @@ func main() -> i32
 
     while result < 25 do
       result = result + 1
-      printf("result is %d\n", result)
+      if result != 10 then
+        printf("result is %d\n", result)
+      end
     end
 
     printf("final result is %d\n", result)

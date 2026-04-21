@@ -64,7 +64,7 @@ pub enum Prec {
     Lowest,
     Assign,    // a = 10
     AndOr,     // && or || - lower precedence than equality
-    Eq,        // ==
+    Eq,        // == or !=
     Cmp,       // > or <
     Sum,       // +
     Product,   // *
@@ -80,7 +80,7 @@ impl From<&Token<'_>> for Prec {
         match token.kind {
             TokenKind::Add | TokenKind::Sub => Self::Sum,
             TokenKind::Assign => Self::Assign,
-            TokenKind::Eq => Self::Eq,
+            TokenKind::Eq | TokenKind::Ne => Self::Eq,
             TokenKind::LParen => Self::Call,
             TokenKind::LSquirly => Self::Construct,
             TokenKind::LBracket => Self::Index,
@@ -527,6 +527,7 @@ impl<'src> Parser<'src> {
             TokenKind::Add => Ok(BinOpKind::Add),
             TokenKind::Sub => Ok(BinOpKind::Sub),
             TokenKind::Eq => Ok(BinOpKind::Eq),
+            TokenKind::Ne => Ok(BinOpKind::Ne),
             TokenKind::Asterisk => Ok(BinOpKind::Mul),
             TokenKind::Slash => Ok(BinOpKind::Div),
             TokenKind::LAngle => Ok(BinOpKind::Lt),

@@ -49,8 +49,9 @@ pub enum TokenKind {
     Do,
 
     // Operators
-    Eq,
     Assign,
+    Eq,
+    Ne,
     Add,
     Sub,
     Asterisk,
@@ -109,6 +110,7 @@ impl Kind {
         matches!(
             self,
             Kind::Eq
+                | Kind::Ne
                 | Kind::Add
                 | Kind::Sub
                 | Kind::Asterisk
@@ -133,8 +135,10 @@ impl Display for Kind {
     }
 }
 
-pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, Kind>> = LazyLock::new(|| {
-    [
+type TokenLookup = HashMap<&'static str, Kind>;
+
+pub static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
+    HashMap::from([
         ("let", Kind::Let),
         ("mut", Kind::Mut),
         ("func", Kind::Fn),
@@ -154,9 +158,7 @@ pub static KEYWORD_LOOKUP: LazyLock<HashMap<&'static str, Kind>> = LazyLock::new
         ("variadic", Kind::Variadic),
         ("while", Kind::While),
         ("do", Kind::Do),
-    ]
-    .into_iter()
-    .collect()
+    ])
 });
 
 #[derive(Debug, Clone, PartialEq, Eq)]

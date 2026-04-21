@@ -294,7 +294,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let rhs_ty = infer(rhs.as_ref(), env, scope)?;
 
             match op.kind {
-                BinOpKind::Eq | BinOpKind::Lt | BinOpKind::Gt => {
+                BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt => {
                     if lhs_ty != rhs_ty {
                         Err(TypeError::ComparisonMismatch {
                             src: env.src.clone(),
