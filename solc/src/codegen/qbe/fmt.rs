@@ -10,7 +10,7 @@ fn join_fmt(items: impl IntoIterator<Item = impl ToString>, sep: &str) -> String
         .join(sep)
 }
 
-impl Display for Ident<'_> {
+impl Display for Ident {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let (sigil, name) = match self {
             Ident::Ty(ty) => (':', ty),
@@ -55,7 +55,7 @@ impl Display for SubWordTy {
     }
 }
 
-impl Display for AbiTy<'_> {
+impl Display for AbiTy {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             AbiTy::Base(base_ty) => base_ty.fmt(f),
@@ -65,16 +65,16 @@ impl Display for AbiTy<'_> {
     }
 }
 
-impl Display for SubTyKind<'_> {
+impl Display for SubTyKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             SubTyKind::Extended(ext_ty) => ext_ty.fmt(f),
-            SubTyKind::Ident(ident) => f.write_str(ident),
+            SubTyKind::Ident(ident) => f.write_str(ident.as_str()),
         }
     }
 }
 
-impl Display for SubTy<'_> {
+impl Display for SubTy {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.kind.fmt(f)?;
         if let Some(alignment) = self.align {
@@ -85,7 +85,7 @@ impl Display for SubTy<'_> {
     }
 }
 
-impl Display for TyDef<'_> {
+impl Display for TyDef {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "type :{} = ", self.ident())?;
         if let Some(alignment) = self.align() {
@@ -125,7 +125,7 @@ impl Display for Linkage {
     }
 }
 
-impl Display for RegularParam<'_> {
+impl Display for RegularParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.0.fmt(f)?;
         f.write_char(' ')?;
@@ -133,7 +133,7 @@ impl Display for RegularParam<'_> {
     }
 }
 
-impl Display for Param<'_> {
+impl Display for Param {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Param::Regular(param) => param.fmt(f),
@@ -162,7 +162,7 @@ impl Display for Precision {
     }
 }
 
-impl Display for Const<'_> {
+impl Display for Const {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Const::Int(sign, val) => write!(f, "{sign}{val}"),
@@ -172,7 +172,7 @@ impl Display for Const<'_> {
     }
 }
 
-impl Display for Operand<'_> {
+impl Display for Operand {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Operand::Var(name) => name.fmt(f),
@@ -181,7 +181,7 @@ impl Display for Operand<'_> {
     }
 }
 
-impl fmt::Display for Instruction<'_> {
+impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Add(lhs, rhs) => write!(f, "add {lhs}, {rhs}"),
@@ -297,7 +297,7 @@ impl fmt::Display for Instruction<'_> {
     }
 }
 
-impl fmt::Display for Statement<'_> {
+impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Assign(temp, ty, instr) => {
@@ -312,7 +312,7 @@ impl fmt::Display for Statement<'_> {
     }
 }
 
-impl Display for Jump<'_> {
+impl Display for Jump {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Jump::Jmp(ident) => write!(f, "jmp {ident}"),
@@ -325,7 +325,7 @@ impl Display for Jump<'_> {
     }
 }
 
-impl Display for Block<'_> {
+impl Display for Block {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         self.ident.fmt(f)?;
         f.write_char('\n')?;
@@ -337,7 +337,7 @@ impl Display for Block<'_> {
     }
 }
 
-impl Display for DataItem<'_> {
+impl Display for DataItem {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             DataItem::Ident(_ident, _) => todo!(),
@@ -347,7 +347,7 @@ impl Display for DataItem<'_> {
     }
 }
 
-impl Display for DataValue<'_> {
+impl Display for DataValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             DataValue::Data(items) => f.write_str(
@@ -362,7 +362,7 @@ impl Display for DataValue<'_> {
     }
 }
 
-impl Display for Data<'_> {
+impl Display for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         writeln!(
             f,
@@ -373,7 +373,7 @@ impl Display for Data<'_> {
     }
 }
 
-impl Display for Function<'_> {
+impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(linkage) = self.linkage.as_ref() {
             linkage.fmt(f)?;
@@ -401,7 +401,7 @@ impl Display for Function<'_> {
     }
 }
 
-impl Display for Definition<'_> {
+impl Display for Definition {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Definition::Ty(ty) => ty.fmt(f),
@@ -411,7 +411,7 @@ impl Display for Definition<'_> {
     }
 }
 
-impl Display for Module<'_> {
+impl Display for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for definition in self.defs.iter() {
             definition.fmt(f)?;

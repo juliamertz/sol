@@ -3,7 +3,7 @@ use std::{fs, io, process};
 
 use crate::codegen::qbe::Module;
 
-pub fn build_ir(temp_dir: &Path, input: &Module<'_>) -> io::Result<PathBuf> {
+pub fn build_ir(temp_dir: &Path, input: &Module) -> io::Result<PathBuf> {
     let text = input.to_string();
     let input_file = temp_dir.join("input.ssa");
     let output_file = temp_dir.join("out.s");

@@ -8,37 +8,37 @@ pub type Alignment = usize;
 pub type Size = usize;
 pub type Offset = usize;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Ident<'a> {
-    Ty(Cow<'a, str>),
-    Global(Cow<'a, str>),
-    Temp(Cow<'a, str>),
-    Block(Cow<'a, str>),
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Ident {
+    Ty(String),
+    Global(String),
+    Temp(String),
+    Block(String),
 }
 
-impl<'a> Ident<'a> {
-    pub fn ty(value: impl Into<Cow<'a, str>>) -> Self {
-        Self::Ty(value.into())
+impl Ident {
+    pub fn ty(value: impl ToString) -> Self {
+        Self::Ty(value.to_string())
     }
 
-    pub fn global(value: impl Into<Cow<'a, str>>) -> Self {
-        Self::Global(value.into())
+    pub fn global(value: impl ToString) -> Self {
+        Self::Global(value.to_string())
     }
 
-    pub fn temp(value: impl Into<Cow<'a, str>>) -> Self {
-        Self::Temp(value.into())
+    pub fn temp(value: impl ToString) -> Self {
+        Self::Temp(value.to_string())
     }
 
-    pub fn block(value: impl Into<Cow<'a, str>>) -> Self {
-        Self::Block(value.into())
+    pub fn block(value: impl ToString) -> Self {
+        Self::Block(value.to_string())
     }
 
     pub fn as_str(&self) -> &str {
         match self {
-            Ident::Ty(cow) => cow,
-            Ident::Global(cow) => cow,
-            Ident::Temp(cow) => cow,
-            Ident::Block(cow) => cow,
+            Ident::Ty(inner) => inner,
+            Ident::Global(inner) => inner,
+            Ident::Temp(inner) => inner,
+            Ident::Block(inner) => inner,
         }
     }
 }
@@ -105,60 +105,69 @@ impl SubWordTy {
 }
 
 #[derive(Debug)]
-pub enum AbiTy<'a> {
+pub enum AbiTy {
     Base(BaseTy),
     SubWord(SubWordTy),
-    Aggregate(Rc<TyDef<'a>>),
+    Aggregate(Rc<TyDef>),
 }
 
-impl AbiTy<'_> {
+impl AbiTy {
     /// size in bytes
     pub fn size(&self) -> u64 {
         todo!()
     }
 
-    pub fn into_base(&self) -> BaseTy {
+    pub fn as_base(&self) -> BaseTy {
         match self {
             AbiTy::Base(base_ty) => *base_ty,
             AbiTy::SubWord(_) => BaseTy::Word,
             AbiTy::Aggregate(_) => BaseTy::Long, // typedefs as ptr?
         }
     }
+
+    pub fn as_sub_ty(&self) -> SubTy {
+        let kind = match self {
+            AbiTy::Base(base_ty) => SubTyKind::Extended(ExtTy::Base(*base_ty)),
+            AbiTy::SubWord(_) => todo!(), // TODO: this can fit into something else.
+            AbiTy::Aggregate(ty_def) => SubTyKind::Ident(ty_def.ident().clone()),
+        };
+        SubTy { kind, align: None }
+    }
 }
 
 #[derive(Debug)]
-pub enum SubTyKind<'a> {
+pub enum SubTyKind {
     Extended(ExtTy),
-    Ident(&'a str),
+    Ident(Ident),
 }
 
 #[derive(Debug)]
-pub struct SubTy<'a> {
-    pub kind: SubTyKind<'a>,
+pub struct SubTy {
+    pub kind: SubTyKind,
     pub align: Option<Alignment>,
 }
 
 #[derive(Debug)]
-pub enum TyDef<'a> {
+pub enum TyDef {
     Regular {
-        ident: Ident<'a>,
+        ident: Ident,
         align: Option<Alignment>,
-        sub_tys: Vec<SubTy<'a>>,
+        sub_tys: Vec<SubTy>,
     },
     Union {
-        ident: Ident<'a>,
+        ident: Ident,
         align: Option<Alignment>,
-        variants: Vec<Vec<SubTy<'a>>>,
+        variants: Vec<Vec<SubTy>>,
     },
     Opaque {
-        ident: Ident<'a>,
+        ident: Ident,
         align: Alignment,
         size: Size,
     },
 }
 
-impl TyDef<'_> {
-    fn ident(&self) -> &Ident<'_> {
+impl TyDef {
+    fn ident(&self) -> &Ident {
         match self {
             TyDef::Regular { ident, .. } => ident,
             TyDef::Union { ident, .. } => ident,
@@ -192,12 +201,12 @@ pub enum Linkage {
 }
 
 #[derive(Debug)]
-pub struct RegularParam<'a>(pub AbiTy<'a>, pub Operand<'a>);
+pub struct RegularParam(pub AbiTy, pub Operand);
 
 #[derive(Debug)]
-pub enum Param<'a> {
-    Regular(RegularParam<'a>),
-    Env(Ident<'a>),
+pub enum Param {
+    Regular(RegularParam),
+    Env(Ident),
     VariadicMarker,
 }
 
@@ -219,13 +228,13 @@ pub enum Precision {
 //   | 'd_' FP       # Double-precision float
 //   | $IDENT        # Global symbol
 #[derive(Debug)]
-pub enum Const<'a> {
+pub enum Const {
     Int(Sign, i128),
     Float(Precision, f64),
-    Ident(Ident<'a>),
+    Ident(Ident),
 }
 
-impl Const<'_> {
+impl Const {
     pub fn int(val: i128) -> Self {
         Self::Int(Sign::None, val)
     }
@@ -236,13 +245,13 @@ impl Const<'_> {
 }
 
 #[derive(Debug)]
-pub enum Operand<'a> {
-    Var(Ident<'a>),
-    Const(Const<'a>),
+pub enum Operand {
+    Var(Ident),
+    Const(Const),
 }
 
-pub trait IntoOperand<'a> {
-    fn into_operand(self) -> Operand<'a>;
+pub trait IntoOperand {
+    fn into_operand(self) -> Operand;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Copy)]
@@ -274,31 +283,31 @@ pub enum Cmp {
 }
 
 #[derive(Debug)]
-pub enum Instruction<'a> {
+pub enum Instruction {
     /// Adds values of two temporaries together
-    Add(Operand<'a>, Operand<'a>),
+    Add(Operand, Operand),
     /// Subtracts the second value from the first one
-    Sub(Operand<'a>, Operand<'a>),
+    Sub(Operand, Operand),
     /// Multiplies values of two temporaries
-    Mul(Operand<'a>, Operand<'a>),
+    Mul(Operand, Operand),
     /// Divides the first value by the second one
-    Div(Operand<'a>, Operand<'a>),
+    Div(Operand, Operand),
     /// Returns a remainder from division
-    Rem(Operand<'a>, Operand<'a>),
+    Rem(Operand, Operand),
     /// Performs a comparion between values
-    Cmp(AbiTy<'a>, Cmp, Operand<'a>, Operand<'a>),
+    Cmp(AbiTy, Cmp, Operand, Operand),
     /// Performs a bitwise AND on values
-    And(Operand<'a>, Operand<'a>),
+    And(Operand, Operand),
     /// Performs a bitwise OR on values
-    Or(Operand<'a>, Operand<'a>),
+    Or(Operand, Operand),
     /// Performs a bitwise XOR on operands
-    Xor(Operand<'a>, Operand<'a>),
+    Xor(Operand, Operand),
     /// Negates a value
-    Neg(Operand<'a>),
+    Neg(Operand),
     /// Copies an operand
-    Copy(Operand<'a>),
+    Copy(Operand),
     /// Calls a function
-    Call(String, Vec<(AbiTy<'a>, Operand<'a>)>, Option<u64>),
+    Call(String, Vec<(AbiTy, Operand)>, Option<u64>),
     /// Allocates a 4-byte aligned area on the stack
     Alloc4(u32),
     /// Allocates a 8-byte aligned area on the stack
@@ -313,19 +322,19 @@ pub enum Instruction<'a> {
     /// since stores only truncate and don't distinguish signedness.
     ///
     /// See the [QBE IL reference](https://c9x.me/compile/doc/il.html#Memory).
-    Store(AbiTy<'a>, Operand<'a>, Operand<'a>),
+    Store(AbiTy, Operand, Operand),
     /// Loads a value from memory pointed to by source.
     /// `(type, source)`
     ///
     /// # Panics
     ///
-    /// Panics if called with [`AbiTy<'a>::Byte`] or [`Type::Halfword`], because QBE requires
-    /// explicit sign/zero extension for sub-word loads. Use [`AbiTy<'a>::SignedByte`] /
-    /// [`AbiTy<'a>::UnsignedByte`] or [`Type::SignedHalfword`] / [`Type::UnsignedHalfword`]
+    /// Panics if called with [`AbiTy::Byte`] or [`Type::Halfword`], because QBE requires
+    /// explicit sign/zero extension for sub-word loads. Use [`AbiTy::SignedByte`] /
+    /// [`AbiTy::UnsignedByte`] or [`Type::SignedHalfword`] / [`Type::UnsignedHalfword`]
     /// instead.
     ///
     /// See the [QBE IL reference](https://c9x.me/compile/doc/il.html#Memory).
-    Load(AbiTy<'a>, Operand<'a>),
+    Load(AbiTy, Operand),
     /// `(source, destination, n)`
     ///
     /// Copy `n` bytes from the source address to the destination address.
@@ -334,7 +343,7 @@ pub enum Instruction<'a> {
     ///
     /// ## Minimum supported QBE version
     /// `1.1`
-    Blit(Operand<'a>, Operand<'a>, u64),
+    Blit(Operand, Operand, u64),
 
     /// Debug file.
     DbgFile(String),
@@ -344,128 +353,128 @@ pub enum Instruction<'a> {
     DbgLoc(u64, Option<u64>),
 
     /// Performs unsigned division of the first value by the second one
-    Udiv(Operand<'a>, Operand<'a>),
+    Udiv(Operand, Operand),
     /// Returns the remainder from unsigned division
-    Urem(Operand<'a>, Operand<'a>),
+    Urem(Operand, Operand),
 
     /// Shift arithmetic right (preserves sign)
-    Sar(Operand<'a>, Operand<'a>),
+    Sar(Operand, Operand),
     /// Shift logical right (fills with zeros)
-    Shr(Operand<'a>, Operand<'a>),
+    Shr(Operand, Operand),
     /// Shift left (fills with zeros)
-    Shl(Operand<'a>, Operand<'a>),
+    Shl(Operand, Operand),
 
     /// Cast between integer and floating point of the same width
-    Cast(Operand<'a>),
+    Cast(Operand),
 
     /// Sign-extends a word to a long
-    Extsw(Operand<'a>),
+    Extsw(Operand),
     /// Zero-extends a word to a long
-    Extuw(Operand<'a>),
+    Extuw(Operand),
     /// Sign-extends a halfword to a word or long
-    Extsh(Operand<'a>),
+    Extsh(Operand),
     /// Zero-extends a halfword to a word or long
-    Extuh(Operand<'a>),
+    Extuh(Operand),
     /// Sign-extends a byte to a word or long
-    Extsb(Operand<'a>),
+    Extsb(Operand),
     /// Zero-extends a byte to a word or long
-    Extub(Operand<'a>),
+    Extub(Operand),
     /// Extends a single-precision float to double-precision
-    Exts(Operand<'a>),
+    Exts(Operand),
     /// Truncates a double-precision float to single-precision
-    Truncd(Operand<'a>),
+    Truncd(Operand),
 
     /// Converts a single-precision float to a signed integer
-    Stosi(Operand<'a>),
+    Stosi(Operand),
     /// Converts a single-precision float to an unsigned integer
-    Stoui(Operand<'a>),
+    Stoui(Operand),
     /// Converts a double-precision float to a signed integer
-    Dtosi(Operand<'a>),
+    Dtosi(Operand),
     /// Converts a double-precision float to an unsigned integer
-    Dtoui(Operand<'a>),
+    Dtoui(Operand),
     /// Converts a signed word to a float
-    Swtof(Operand<'a>),
+    Swtof(Operand),
     /// Converts an unsigned word to a float
-    Uwtof(Operand<'a>),
+    Uwtof(Operand),
     /// Converts a signed long to a float
-    Sltof(Operand<'a>),
+    Sltof(Operand),
     /// Converts an unsigned long to a float
-    Ultof(Operand<'a>),
+    Ultof(Operand),
 
     /// Initializes a variable argument list
-    Vastart(Operand<'a>),
+    Vastart(Operand),
     /// Fetches the next argument from a variable argument list
-    Vaarg(AbiTy<'a>, Operand<'a>),
+    Vaarg(AbiTy, Operand),
     // // Phi instruction
     // /// Selects value based on the control flow path into a block.
-    // Phi(Vec<(String, Operand<'a>)>),
+    // Phi(Vec<(String, Operand)>),
 }
 
 /// An IR statement
 #[derive(Debug)]
-pub enum Statement<'a> {
-    Assign(Operand<'a>, BaseTy, Instruction<'a>),
-    Volatile(Instruction<'a>),
+pub enum Statement {
+    Assign(Operand, BaseTy, Instruction),
+    Volatile(Instruction),
 }
 
 #[derive(Debug)]
-pub enum Jump<'a> {
+pub enum Jump {
     /// Unconditionally jumps to a block
-    Jmp(Ident<'a>),
+    Jmp(Ident),
     /// Jumps to first block if a value is nonzero or to the second one otherwise
-    Jnz(Operand<'a>, Ident<'a>, Ident<'a>),
+    Jnz(Operand, Ident, Ident),
     /// Return from a function
-    Ret(Operand<'a>), // TODO: could be an option
+    Ret(Operand), // TODO: could be an option
     /// Halt the program
     Hlt,
 }
 
 #[derive(Debug)]
-pub struct Block<'a> {
-    pub ident: Ident<'a>,
-    pub phi_instructions: Vec<Statement<'a>>,
-    pub instructions: Vec<Statement<'a>>,
-    pub jump: Jump<'a>,
+pub struct Block {
+    pub ident: Ident,
+    pub phi_instructions: Vec<Statement>,
+    pub instructions: Vec<Statement>,
+    pub jump: Jump,
 }
 
 #[derive(Debug)]
-pub struct Function<'a> {
+pub struct Function {
     pub linkage: Option<Linkage>,
-    pub ident: Ident<'a>,
-    pub return_ty: Option<AbiTy<'a>>,
-    pub params: Vec<Param<'a>>,
-    pub blocks: Vec<Block<'a>>,
+    pub ident: Ident,
+    pub return_ty: Option<AbiTy>,
+    pub params: Vec<Param>,
+    pub blocks: Vec<Block>,
 }
 
 #[derive(Debug)]
-pub enum DataItem<'a> {
-    Ident(Ident<'a>, Option<Offset>),
-    String(Cow<'a, str>),
-    Const(Const<'a>),
+pub enum DataItem {
+    Ident(Ident, Option<Offset>),
+    String(String),
+    Const(Const),
 }
 
 #[derive(Debug)]
-pub enum DataValue<'a> {
-    Data(Vec<(ExtTy, DataItem<'a>)>),
+pub enum DataValue {
+    Data(Vec<(ExtTy, DataItem)>),
     Zeroed(Size),
 }
 
 #[derive(Debug)]
-pub struct Data<'a> {
+pub struct Data {
     pub linkage: Option<Linkage>,
-    pub ident: Ident<'a>,
+    pub ident: Ident,
     pub align: Option<Alignment>,
-    pub value: DataValue<'a>,
+    pub value: DataValue,
 }
 
 #[derive(Debug)]
-pub enum Definition<'a> {
-    Ty(TyDef<'a>),
-    Data(Data<'a>),
-    Fn(Function<'a>),
+pub enum Definition {
+    Ty(TyDef),
+    Data(Data),
+    Fn(Function),
 }
 
 #[derive(Debug, Default)]
-pub struct Module<'a> {
-    pub defs: Vec<Definition<'a>>,
+pub struct Module {
+    pub defs: Vec<Definition>,
 }
