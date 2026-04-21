@@ -458,8 +458,24 @@ impl<'tcx> Builder<'tcx> {
                 Ok((Operand::Temporary(dest), join_block))
             }
 
-            hir::Expr::Constructor(_constructor) => todo!(),
-            hir::Expr::MemberAccess(_member_access) => todo!(),
+            hir::Expr::Constructor(constructor) => {
+                let dest = self.new_temp(constructor.ty);
+
+                self.get_block_mut(&block).push_instr(Instruction::Alloc {
+                    dest,
+                    ty: constructor.ty,
+                    count: 1,
+                });
+
+                // TODO: store initalizer values
+
+                Ok((Operand::Temporary(dest), block))
+            }
+
+            hir::Expr::MemberAccess(member_access) => {
+                Ok((Operand::unit(), block))
+            },
+
             hir::Expr::Ref(_expr) => todo!(),
 
             hir::Expr::Break(_inner) => {
