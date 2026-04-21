@@ -62,6 +62,7 @@ impl BlockBuilder {
 
 #[derive(Debug, Clone, Copy)]
 pub struct LoopContext {
+    enter_block: BlockId,
     join_block: BlockId,
     dest: TempId,
 }
@@ -136,8 +137,12 @@ impl<'tcx> Builder<'tcx> {
         self.locals.insert(def_id, operand);
     }
 
-    pub(super) fn push_loop(&mut self, join_block: BlockId, dest: TempId) {
-        self.loop_stack.push(LoopContext { join_block, dest });
+    pub(super) fn push_loop(&mut self, enter_block: BlockId, join_block: BlockId, dest: TempId) {
+        self.loop_stack.push(LoopContext {
+            enter_block,
+            join_block,
+            dest,
+        });
     }
 
     pub(super) fn pop_loop(&mut self) -> Option<LoopContext> {
@@ -435,7 +440,6 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Loop(inner) => {
                 let dest = self.new_temp(inner.ty);
-                let enter_block = block.clone();
                 let loop_block = self.new_block();
                 let join_block = self.new_block();
 
@@ -444,16 +448,9 @@ impl<'tcx> Builder<'tcx> {
                     builder.terminate(Terminator::Goto(loop_block))?;
                 }
 
-                self.push_loop(join_block, dest);
-                let (body_val, body_exit) = self.lower_block(&inner.body, loop_block)?;
+                self.push_loop(loop_block, join_block, dest);
+                let (_body_val, body_exit) = self.lower_block(&inner.body, loop_block)?;
                 self.pop_loop();
-
-                // self.get_block_mut(&body_exit)
-                //     .terminate(Terminator::Goto(join_block))?;
-
-                // self.get_block_mut(&body_exit)
-                //     .push_instr(Instruction::copy(dest, conseq_val))
-                //     .terminate(Terminator::goto(join_block))?;
 
                 self.get_block_mut(&body_exit)
                     .terminate(Terminator::Goto(loop_block))?;
@@ -461,14 +458,15 @@ impl<'tcx> Builder<'tcx> {
                 Ok((Operand::Temporary(dest), join_block))
             }
 
-            hir::Expr::Constructor(constructor) => todo!(),
-            hir::Expr::MemberAccess(member_access) => todo!(),
-            hir::Expr::Ref(expr) => todo!(),
+            hir::Expr::Constructor(_constructor) => todo!(),
+            hir::Expr::MemberAccess(_member_access) => todo!(),
+            hir::Expr::Ref(_expr) => todo!(),
 
             hir::Expr::Break(_inner) => {
-                let Some(ctx) = self.curr_loop().copied() else {
-                    todo!("error for breaking outside of loop context");
-                };
+                let ctx = self
+                    .curr_loop()
+                    .copied()
+                    .expect("break outside of loop context");
 
                 self.get_block_mut(&block)
                     .terminate(Terminator::Goto(ctx.join_block))?;
@@ -476,7 +474,17 @@ impl<'tcx> Builder<'tcx> {
                 Ok((Operand::unit(), block))
             }
 
-            hir::Expr::Continue(_) => todo!(),
+            hir::Expr::Continue(_) => {
+                let ctx = self
+                    .curr_loop()
+                    .copied()
+                    .expect("continue outside of loop context");
+
+                self.get_block_mut(&block)
+                    .terminate(Terminator::Goto(ctx.enter_block))?;
+
+                Ok((Operand::unit(), block))
+            }
         }
     }
 }
