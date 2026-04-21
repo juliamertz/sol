@@ -202,7 +202,7 @@ impl Block {
         let mut iter = self.nodes.iter().enumerate();
         let mut stmnts = Vec::with_capacity(count);
 
-        while let Some((idx, stmnt)) = iter.next() {
+        for (idx, stmnt) in iter {
             let is_last = idx == count - 1;
             if is_last && let Stmnt::Expr(expr) = stmnt {
                 return (stmnts, Some(expr));

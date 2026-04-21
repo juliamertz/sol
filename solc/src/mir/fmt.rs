@@ -95,7 +95,12 @@ impl Display for Instruction {
             Instruction::Load { dest, addr } => {
                 write!(f, "{dest} = load {addr}")
             }
-            Instruction::IndexPtr { dest, base, index, elem_ty } => {
+            Instruction::IndexPtr {
+                dest,
+                base,
+                index,
+                elem_ty: _,
+            } => {
                 write!(f, "{dest} = index {base} -> {index}")
             }
         }

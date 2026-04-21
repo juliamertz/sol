@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::*;
-use crate::ext::{AsStr, Boxed};
+use crate::ext::AsStr;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;

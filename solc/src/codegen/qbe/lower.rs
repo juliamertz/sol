@@ -66,7 +66,7 @@ impl<'env> Builder<'env> {
         TempId(idx)
     }
 
-    pub fn lower_ty_def(&self, ty: &Type) -> Result<TyDef> {
+    pub fn lower_ty_def(&self, _ty: &Type) -> Result<TyDef<'_>> {
         // TyDef::Regular { ident: (), align: (), sub_tys: () }
 
         Ok(todo!())
@@ -89,7 +89,7 @@ impl<'env> Builder<'env> {
 
     pub fn lower_def<'a>(&mut self, def: &'a mir::Definition) -> Result<Definition<'a>> {
         Ok(match def {
-            mir::Definition::Ty(ty) => Definition::Ty(todo!()),
+            mir::Definition::Ty(_ty) => Definition::Ty(todo!()),
             mir::Definition::Data(data) => Definition::Data(self.lower_data(data)?),
             mir::Definition::Fn(func) => Definition::Fn(self.lower_func(func)?),
         })
@@ -170,11 +170,7 @@ impl<'env> Builder<'env> {
                 Ok(vec![self.assign(*dest, return_ty.into_base(), instr)])
             }
 
-            mir::Instruction::UnaryOp {
-                dest,
-                op,
-                rhs,
-            } => {
+            mir::Instruction::UnaryOp { dest, op, rhs } => {
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
                 let rhs = self.lower_operand(rhs);
                 let instr = match op {
@@ -183,7 +179,7 @@ impl<'env> Builder<'env> {
                 };
 
                 Ok(vec![self.assign(*dest, return_ty.into_base(), instr)])
-            },
+            }
 
             mir::Instruction::Call {
                 dest,
@@ -228,13 +224,13 @@ impl<'env> Builder<'env> {
                     Instruction::Call(name.to_string(), operands, variadic_idx),
                 )])
             }
-            mir::Instruction::Alloc { dest, ty:_, count } => {
+            mir::Instruction::Alloc { dest, ty: _, count } => {
                 let ty_size = 4; // TODO: 
                 Ok(vec![self.assign(
                     *dest,
                     BaseTy::Long,
                     Instruction::Alloc4((ty_size * count) as u32),
-                )]) 
+                )])
             }
             mir::Instruction::Load { dest, addr } => {
                 let ty = self.lower_ty(&func.temp_ty(*dest))?;

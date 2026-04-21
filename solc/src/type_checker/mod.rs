@@ -675,7 +675,7 @@ pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_
     Ok(())
 }
 
-pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+pub fn check_use(_item: &Use, _env: &mut TypeEnv, _scope: &Scope<'_>) -> Result<()> {
     Ok(())
 }
 

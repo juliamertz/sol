@@ -73,7 +73,7 @@ impl<'ast> Block<'ast> {
         let mut iter = self.nodes.iter().enumerate();
         let mut stmnts = Vec::with_capacity(count);
 
-        while let Some((idx, stmnt)) = iter.next() {
+        for (idx, stmnt) in iter {
             let is_last = idx == count - 1;
             if is_last && let Stmnt::Expr(expr) = stmnt {
                 return (stmnts, Some(expr));
@@ -347,9 +347,9 @@ impl Expr<'_> {
             Expr::Ref(expr) => expr.type_id(),
             // TODO: this should probably be NEVER type
             Expr::Assign(_assign) => &TypeId::UNIT,
-            Expr::Break(inner) => &TypeId::UNIT,
-            Expr::Continue(inner) => &TypeId::UNIT,
-            Expr::Loop(inner) => todo!(),
+            Expr::Break(_inner) => &TypeId::UNIT,
+            Expr::Continue(_inner) => &TypeId::UNIT,
+            Expr::Loop(_inner) => todo!(),
         }
     }
 
@@ -368,9 +368,9 @@ impl Expr<'_> {
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
             Expr::Assign(assign) => assign.span,
-            Expr::Break(inner) => todo!(),
-            Expr::Continue(inner) => todo!(),
-            Expr::Loop(inner) => todo!(),
+            Expr::Break(_inner) => todo!(),
+            Expr::Continue(_inner) => todo!(),
+            Expr::Loop(_inner) => todo!(),
         }
     }
 }

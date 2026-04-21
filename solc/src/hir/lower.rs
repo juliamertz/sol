@@ -1,6 +1,4 @@
 use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::ops::Deref;
 
 use miette::Diagnostic;
 use thiserror::Error;
