@@ -60,7 +60,7 @@ impl BlockBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct LoopContext {
     join_block: BlockId,
     dest: TempId,
@@ -142,6 +142,10 @@ impl<'tcx> Builder<'tcx> {
 
     pub(super) fn pop_loop(&mut self) -> Option<LoopContext> {
         self.loop_stack.pop()
+    }
+
+    pub(super) fn curr_loop(&mut self) -> Option<&LoopContext> {
+        self.loop_stack.last()
     }
 
     pub fn build(
@@ -451,7 +455,6 @@ impl<'tcx> Builder<'tcx> {
                 //     .push_instr(Instruction::copy(dest, conseq_val))
                 //     .terminate(Terminator::goto(join_block))?;
 
-                dbg!(enter_block, loop_block, join_block, body_exit);
                 self.get_block_mut(&body_exit)
                     .terminate(Terminator::Goto(loop_block))?;
 
@@ -461,16 +464,18 @@ impl<'tcx> Builder<'tcx> {
             hir::Expr::Constructor(constructor) => todo!(),
             hir::Expr::MemberAccess(member_access) => todo!(),
             hir::Expr::Ref(expr) => todo!(),
-            hir::Expr::Break(inner) => {
-                let Some(loop_ctx) = self.pop_loop() else {
+
+            hir::Expr::Break(_inner) => {
+                let Some(ctx) = self.curr_loop().copied() else {
                     todo!("error for breaking outside of loop context");
                 };
 
                 self.get_block_mut(&block)
-                    .terminate(Terminator::Goto(loop_ctx.join_block))?;
+                    .terminate(Terminator::Goto(ctx.join_block))?;
 
                 Ok((Operand::unit(), block))
             }
+
             hir::Expr::Continue(_) => todo!(),
         }
     }
