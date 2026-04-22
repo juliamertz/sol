@@ -69,7 +69,7 @@ impl Display for SubTyKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             SubTyKind::Extended(ext_ty) => ext_ty.fmt(f),
-            SubTyKind::Ident(ident) => f.write_str(ident.as_str()),
+            SubTyKind::Aggregate(ty_def) => f.write_str(ty_def.ident().as_str()),
         }
     }
 }
@@ -87,23 +87,21 @@ impl Display for SubTy {
 
 impl Display for TyDef {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "type :{} = ", self.ident())?;
-        if let Some(alignment) = self.align() {
-            write!(f, "align {alignment}")?;
-        }
+        write!(f, "type {} = ", self.ident())?;
+        write!(f, "align {}", self.align())?;
 
         f.write_char('{')?;
         match self {
-            TyDef::Regular { sub_tys, .. } => {
-                for sub_ty in sub_tys {
+            TyDef::Regular { items: sub_tys, .. } => {
+                for (sub_ty, _repeat) in sub_tys {
                     sub_ty.fmt(f)?;
                     f.write_char(',')?;
                 }
             }
             TyDef::Union { variants, .. } => {
                 f.write_char('{')?;
-                for sub_tys in variants {
-                    for sub_ty in sub_tys {
+                for items in variants {
+                    for (sub_ty, _repeat) in items {
                         sub_ty.fmt(f)?;
                         f.write_char(',')?;
                     }

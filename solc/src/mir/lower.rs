@@ -47,8 +47,8 @@ pub fn lower_item(
             }
             hir::FnKind::Extern { .. } => None, // TODO:
         },
-        hir::Item::StructDef(struct_def) => {
-            let ty = env.type_by_id(&struct_def.ident.ty).unwrap(); // TODO: kind of weird that we resolve this type by ident
+        hir::Item::TyDef(ty_def) => {
+            let ty = env.type_by_id(&ty_def.ident().ty).unwrap(); // TODO: kind of weird that we resolve this type by ident
             let def = Definition::Ty(ty.clone());
             Some(vec![def])
         }

@@ -3,6 +3,7 @@ use std::hash::Hash;
 
 pub trait Id {
     fn new(inner: u32) -> Self;
+    fn into_inner(self) -> u32;
 }
 
 #[macro_export]
@@ -19,6 +20,10 @@ macro_rules! id {
         impl $crate::interner::Id for $name {
             fn new(inner: u32) -> Self {
                 Self(inner)
+            }
+
+            fn into_inner(self) -> u32 {
+                self.0
             }
         }
     };

@@ -1,12 +1,12 @@
-use std::{borrow::Cow, rc::Rc};
+use std::rc::Rc;
 
 pub mod build;
 pub mod fmt;
 pub mod lower;
 
-pub type Alignment = usize;
-pub type Size = usize;
-pub type Offset = usize;
+pub type Alignment = u64;
+pub type Size = u64;
+pub type Offset = u64;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Ident {
@@ -57,7 +57,7 @@ pub enum BaseTy {
 
 impl BaseTy {
     /// size in bytes
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> Size {
         match self {
             Self::Word | Self::Single => 4,
             Self::Long | Self::Double => 8,
@@ -77,7 +77,7 @@ pub enum ExtTy {
 
 impl ExtTy {
     /// size in bytes
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> Size {
         match self {
             Self::Base(base_ty) => base_ty.size(),
             Self::Byte => 1,
@@ -96,7 +96,7 @@ pub enum SubWordTy {
 
 impl SubWordTy {
     /// size in bytes
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> Size {
         match self {
             Self::SignedByte | Self::UnsignedByte => 1,
             Self::SingedHalfWord | Self::UnsingedHalfWord => 2,
@@ -113,15 +113,23 @@ pub enum AbiTy {
 
 impl AbiTy {
     /// size in bytes
-    pub fn size(&self) -> u64 {
-        todo!()
+    pub fn size(&self) -> Size {
+        match self {
+            AbiTy::Base(base_ty) => base_ty.size(),
+            AbiTy::SubWord(sub_word_ty) => sub_word_ty.size(),
+            AbiTy::Aggregate(ty_def) => ty_def.size(),
+        }
+    }
+
+    pub fn align(&self) -> Alignment {
+        self.size()
     }
 
     pub fn as_base(&self) -> BaseTy {
         match self {
             AbiTy::Base(base_ty) => *base_ty,
             AbiTy::SubWord(_) => BaseTy::Word,
-            AbiTy::Aggregate(_) => BaseTy::Long, // typedefs as ptr?
+            AbiTy::Aggregate(_) => BaseTy::Long,
         }
     }
 
@@ -129,16 +137,23 @@ impl AbiTy {
         let kind = match self {
             AbiTy::Base(base_ty) => SubTyKind::Extended(ExtTy::Base(*base_ty)),
             AbiTy::SubWord(_) => todo!(), // TODO: this can fit into something else.
-            AbiTy::Aggregate(ty_def) => SubTyKind::Ident(ty_def.ident().clone()),
+            AbiTy::Aggregate(ty_def) => SubTyKind::Aggregate(ty_def.clone()),
         };
         SubTy { kind, align: None }
+    }
+
+    pub fn as_aggregate(&self) -> Option<&TyDef> {
+        match self {
+            Self::Aggregate(ty_def) => Some(ty_def),
+            _ => None,
+        }
     }
 }
 
 #[derive(Debug)]
 pub enum SubTyKind {
     Extended(ExtTy),
-    Ident(Ident),
+    Aggregate(Rc<TyDef>),
 }
 
 #[derive(Debug)]
@@ -147,17 +162,30 @@ pub struct SubTy {
     pub align: Option<Alignment>,
 }
 
+impl SubTy {
+    pub fn size(&self) -> Size {
+        match &self.kind {
+            SubTyKind::Extended(ext_ty) => ext_ty.size(),
+            SubTyKind::Aggregate(ty_def) => ty_def.size(),
+        }
+    }
+
+    pub fn align(&self) -> Alignment {
+        self.align.unwrap_or(self.size())
+    }
+}
+
 #[derive(Debug)]
 pub enum TyDef {
     Regular {
         ident: Ident,
         align: Option<Alignment>,
-        sub_tys: Vec<SubTy>,
+        items: Vec<(SubTy, u64)>,
     },
     Union {
         ident: Ident,
         align: Option<Alignment>,
-        variants: Vec<Vec<SubTy>>,
+        variants: Vec<Vec<(SubTy, u64)>>,
     },
     Opaque {
         ident: Ident,
@@ -175,12 +203,71 @@ impl TyDef {
         }
     }
 
-    pub fn align(&self) -> Option<Alignment> {
+    pub fn size(&self) -> Size {
+        let size_of_items = |this: &TyDef, items: &[(SubTy, u64)]| {
+            let mut offset = 0;
+
+            for (item, repeat) in items.iter() {
+                let align = item.align();
+                let size = *repeat * item.size();
+                let padding = (align - (offset % align)) % align;
+                offset += padding + size;
+            }
+
+            let align = this.align();
+            let padding = (align - (offset % align)) % align;
+
+            offset + padding
+        };
+
         match self {
-            TyDef::Regular { align, .. } => *align,
-            TyDef::Union { align, .. } => *align,
-            TyDef::Opaque { align, .. } => Some(*align),
+            TyDef::Regular { items, .. } => size_of_items(self, items),
+            TyDef::Union { variants, .. } => variants
+                .iter()
+                .map(|variant| size_of_items(self, &variant))
+                .max()
+                .unwrap_or(0),
+            TyDef::Opaque { size, .. } => *size,
         }
+    }
+
+    pub fn align(&self) -> Alignment {
+        let alignment_of_items = |items: &[(SubTy, _)]| {
+            items
+                .iter()
+                .map(|(sub_ty, _)| sub_ty.align())
+                .max()
+                .unwrap_or(1)
+        };
+
+        match self {
+            TyDef::Regular { align, items, .. } => {
+                align.unwrap_or_else(|| alignment_of_items(items))
+            }
+            TyDef::Union {
+                align, variants, ..
+            } => align.unwrap_or_else(|| {
+                variants
+                    .iter()
+                    .map(|items| alignment_of_items(items))
+                    .max()
+                    .unwrap_or(1)
+            }),
+            TyDef::Opaque { align, .. } => *align,
+        }
+    }
+
+    /// get byte offset for accessing field
+    pub fn offset_for(&self, id: u32) -> Offset {
+        let TyDef::Regular { items, .. } = self else {
+            unimplemented!()
+        };
+
+        items
+            .iter()
+            .take(id as usize)
+            .map(|(sub_ty, repeat)| sub_ty.size() * repeat)
+            .sum()
     }
 }
 
@@ -469,7 +556,7 @@ pub struct Data {
 
 #[derive(Debug)]
 pub enum Definition {
-    Ty(TyDef),
+    Ty(Rc<TyDef>),
     Data(Data),
     Fn(Function),
 }

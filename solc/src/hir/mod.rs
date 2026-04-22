@@ -70,7 +70,7 @@ impl<'ast> Block<'ast> {
     /// collect all statements in the block splitting off the returning expression if present
     pub fn split_off_returning(&self) -> (Vec<&Stmnt<'ast>>, Option<&Expr<'ast>>) {
         let count = self.nodes.len();
-        let mut iter = self.nodes.iter().enumerate();
+        let iter = self.nodes.iter().enumerate();
         let mut stmnts = Vec::with_capacity(count);
 
         for (idx, stmnt) in iter {
@@ -140,7 +140,7 @@ pub struct List<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub items: Box<[Expr<'ast>]>,
-    pub size: usize,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -278,13 +278,24 @@ pub struct Fn<'ast> {
     pub return_ty: TypeId,
 }
 
+id!(FieldId);
+
 #[derive(Debug, Clone)]
-pub struct StructDef<'ast> {
-    pub id: HirId,
-    pub span: &'ast Span,
-    pub ident: Ident<'ast>,
-    pub fields: Box<[(Name<'ast>, TypeId)]>,
-    pub impls: Box<[&'ast ast::Impl]>, // TODO: This should probably also be lowered...
+pub enum TyDef<'ast> {
+    Struct {
+        id: HirId,
+        span: &'ast Span,
+        ident: Ident<'ast>,
+        fields: Box<[(FieldId, TypeId)]>,
+        impls: Box<[&'ast ast::Impl]>, // TODO: lower impls
+    },
+}
+
+impl TyDef<'_> {
+    pub fn ident(&self) -> &Ident<'_> {
+        let TyDef::Struct { ident, .. } = self;
+        ident
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -298,7 +309,7 @@ pub enum Stmnt<'ast> {
 pub enum Item<'ast> {
     Use(Use<'ast>),
     Fn(Fn<'ast>),
-    StructDef(StructDef<'ast>),
+    TyDef(TyDef<'ast>),
 }
 
 #[derive(Debug, Clone)]

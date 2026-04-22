@@ -5,7 +5,8 @@ use thiserror::Error;
 
 use crate::ast;
 use crate::ext::Boxed;
-use crate::hir::{self, HirId, Locality, Mutability};
+use crate::hir::{self, FieldId, HirId, Locality, Mutability};
+use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
@@ -80,18 +81,22 @@ pub fn lower_item<'ast>(
                 return_ty: env.type_of(&func.return_ty.id, &func.span)?,
             }))
         }
-        ast::Item::StructDef(def) => Some(hir::Item::StructDef(hir::StructDef {
+        ast::Item::StructDef(def) => Some(hir::Item::TyDef(hir::TyDef::Struct {
             id: HirId::DUMMY,
             span: &def.span,
             ident: lower_ident(&def.ident, env)?,
             fields: def
                 .fields
                 .iter()
-                .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
+                .enumerate()
+                .map(|(id, (_name, ty))| {
+                    Ok((FieldId::new(id as u32), env.type_of(&ty.id, &ty.span)?))
+                })
                 .collect::<Result<Vec<_>>>()?
                 .into(),
             impls: inventory.take_impls(&def.ident).into(),
         })),
+
         ast::Item::Impl(_) => None,
     })
 }
@@ -277,7 +282,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .map(|expr| lower_expr(expr, env))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
-            size: list.items.len(),
+            size: list.items.len() as u64,
         }),
         ast::Expr::Constructor(constructor) => hir::Expr::Constructor(hir::Constructor {
             id: HirId::DUMMY,

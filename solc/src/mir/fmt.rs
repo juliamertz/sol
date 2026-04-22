@@ -96,12 +96,17 @@ impl Display for Instruction {
                 write!(f, "{dest} = load {addr}")
             }
             Instruction::IndexPtr {
-                dest,
-                base,
-                index,
-                elem_ty: _,
+                dest, base, index, ..
             } => {
                 write!(f, "{dest} = index {base} -> {index}")
+            }
+            Instruction::FieldPtr {
+                dest,
+                lval,
+                field_id,
+                ..
+            } => {
+                write!(f, "{dest} = field {lval}.{field_id:?}")
             }
         }
     }

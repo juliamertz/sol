@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::hir::FieldId;
+use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::mir::{
     Block, BlockId, Constant, Data, DataId, DataValue, Fn, Instruction, Operand, TempId, Terminator,
@@ -64,6 +66,8 @@ impl BlockBuilder {
 pub struct LoopContext {
     enter_block: BlockId,
     join_block: BlockId,
+    // TODO: loop return values
+    #[allow(unused)]
     dest: TempId,
 }
 
@@ -467,14 +471,57 @@ impl<'tcx> Builder<'tcx> {
                     count: 1,
                 });
 
-                // TODO: store initalizer values
+                for (idx, (_, expr)) in constructor.fields.iter().enumerate() {
+                    let field_ty = *expr.type_id();
+                    let ptr_dest = self.new_temp(field_ty);
+                    let (val, block) = self.lower_expr(expr, block)?;
+
+                    self.get_block_mut(&block)
+                        .push_instr(Instruction::FieldPtr {
+                            dest: ptr_dest,
+                            lval: Operand::Temporary(dest),
+                            field_id: FieldId::new(idx as u32),
+                            base_ty: constructor.ty,
+                            field_ty,
+                        })
+                        .push_instr(Instruction::Store {
+                            addr: ptr_dest,
+                            val,
+                        });
+                }
 
                 Ok((Operand::Temporary(dest), block))
             }
 
             hir::Expr::MemberAccess(member_access) => {
-                Ok((Operand::unit(), block))
-            },
+                let dest = self.new_temp(member_access.ty);
+                let ptr_dest = self.new_temp(member_access.ty);
+
+                let lhs_ty_id = member_access.lhs.type_id();
+                let lhs_ty = self.env.types.get(lhs_ty_id).unwrap();
+                let field_id = lhs_ty
+                    .as_struct()
+                    .expect("member access can only be called on structs (for now)")
+                    .get_field(&member_access.rhs)
+                    .expect("field to exist");
+
+                let (lval, block) = self.lower_expr(&member_access.lhs, block)?;
+
+                self.get_block_mut(&block)
+                    .push_instr(Instruction::FieldPtr {
+                        dest: ptr_dest,
+                        lval,
+                        field_id,
+                        base_ty: *member_access.lhs.type_id(),
+                        field_ty: member_access.ty,
+                    })
+                    .push_instr(Instruction::Load {
+                        dest,
+                        addr: ptr_dest,
+                    });
+
+                Ok((Operand::Temporary(dest), block))
+            }
 
             hir::Expr::Ref(_expr) => todo!(),
 

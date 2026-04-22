@@ -199,7 +199,7 @@ pub struct Block {
 impl Block {
     pub fn split_off_returning(&self) -> (Vec<&Stmnt>, Option<&Expr>) {
         let count = self.nodes.len();
-        let mut iter = self.nodes.iter().enumerate();
+        let iter = self.nodes.iter().enumerate();
         let mut stmnts = Vec::with_capacity(count);
 
         for (idx, stmnt) in iter {

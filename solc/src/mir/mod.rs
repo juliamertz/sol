@@ -1,4 +1,5 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
+use crate::hir::FieldId;
 use crate::type_checker::ty::Type;
 use crate::type_checker::{DefId, TypeId};
 
@@ -91,7 +92,7 @@ pub enum Instruction {
     Alloc {
         dest: TempId,
         ty: TypeId,
-        count: usize,
+        count: u64,
     },
     Load {
         dest: TempId,
@@ -106,6 +107,13 @@ pub enum Instruction {
         base: Operand,
         index: Operand,
         elem_ty: TypeId,
+    },
+    FieldPtr {
+        dest: TempId,
+        lval: Operand,
+        field_id: FieldId,
+        base_ty: TypeId,
+        field_ty: TypeId,
     },
 }
 
@@ -146,7 +154,7 @@ impl Fn {
             Operand::Data(_) => TypeId::STR, // TODO: for now, all data is strings
             Operand::Constant(constant) => match constant {
                 Constant::Int(_, ty_id) => *ty_id,
-                Constant::Bool(_) => todo!(),
+                Constant::Bool(_) => TypeId::BOOL,
                 Constant::Unit => TypeId::UNIT,
             },
         }
@@ -211,6 +219,7 @@ impl Terminator {
         Self::Goto(block)
     }
 
+    #[allow(unused)]
     fn ret(operand: Operand) -> Self {
         Self::Return(operand)
     }

@@ -1,4 +1,7 @@
 use crate::ast;
+use crate::ext::AsStr;
+use crate::hir::FieldId;
+use crate::interner::Id;
 use crate::type_checker::TypeId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,6 +65,24 @@ impl From<&ast::UIntTy> for UIntTy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructTy {
+    pub ident: Box<ast::Ident>,
+    pub fields: Box<[(ast::Name, TypeId)]>,
+}
+
+impl StructTy {
+    pub fn get_field(&self, name: impl AsStr) -> Option<FieldId> {
+        let key = name.as_str();
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|(_, (name, _))| name.as_str() == key)
+            .map(|(id, _)| FieldId::new(id as u32))
+    }
+}
+
+// TODO: rename to `Ty`
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Unit,
     Int(IntTy),
@@ -76,10 +97,7 @@ pub enum Type {
         params: Box<[TypeId]>,
         returns: TypeId,
     },
-    Struct {
-        ident: Box<ast::Ident>, // TODO: this field should probably be removed but we're still using it in places to pass around the name
-        fields: Box<[(ast::Name, TypeId)]>,
-    },
+    Struct(StructTy),
 }
 
 impl Type {
@@ -102,6 +120,13 @@ impl Type {
             is_variadic,
             params: params.into(),
             returns,
+        }
+    }
+
+    pub fn as_struct(&self) -> Option<&StructTy> {
+        match self {
+            Self::Struct(struct_ty) => Some(struct_ty),
+            _ => None,
         }
     }
 }

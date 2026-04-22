@@ -487,7 +487,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let lhs_ty_id = infer(lhs, env, scope)?;
             let field_ty_id = {
                 let lhs_ty = env.types.get(&lhs_ty_id).unwrap();
-                if let Type::Struct { fields, .. } = lhs_ty {
+                if let Type::Struct(StructTy { fields, .. }) = lhs_ty {
                     fields
                         .iter()
                         .find(|(field, _)| field.as_str() == rhs.as_str()) // TODO: this is hacky D:
@@ -708,7 +708,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
             .into();
         let _impls = inventory.take_impls(&struct_def.ident); // TODO:
 
-        let ty_id = env.types.intern(Type::Struct { ident, fields });
+        let ty_id = env.types.intern(Type::Struct(StructTy { ident, fields }));
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
     }

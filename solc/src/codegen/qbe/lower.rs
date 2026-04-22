@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -8,10 +11,11 @@ use crate::codegen::qbe::{
     Statement, TyDef,
 };
 use crate::ext::AsStr;
+use crate::interner::Id;
 use crate::mir::{self, BlockId};
-use crate::num::Signedness;
-use crate::num::encode::bijective_base26;
-use crate::type_checker::ty::Type;
+use crate::number::Signedness;
+use crate::number::encode::bijective_base26;
+use crate::type_checker::ty::{StructTy, Type};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -54,11 +58,16 @@ impl IntoOperand for mir::TempId {
 pub struct Builder<'env> {
     pub env: &'env TypeEnv,
     tmp_idx: usize,
+    type_defs: HashMap<String, Rc<TyDef>>,
 }
 
 impl<'env> Builder<'env> {
     pub fn new(env: &'env TypeEnv) -> Self {
-        Self { env, tmp_idx: 0 }
+        Self {
+            env,
+            tmp_idx: 0,
+            type_defs: HashMap::default(),
+        }
     }
 
     pub fn new_temp(&mut self) -> TempId {
@@ -69,8 +78,7 @@ impl<'env> Builder<'env> {
 
     pub fn lower_ty_def(&self, _ty: &Type) -> Result<TyDef> {
         // TyDef::Regular { ident: (), align: (), sub_tys: () }
-
-        Ok(todo!())
+        todo!()
     }
 
     pub fn lower_data<'a>(&self, data: &'a mir::Data) -> Result<Data> {
@@ -91,22 +99,30 @@ impl<'env> Builder<'env> {
     pub fn lower_def<'a>(&mut self, def: &'a mir::Definition) -> Result<Definition> {
         Ok(match def {
             mir::Definition::Ty(ty) => {
-                let ty_def = match ty {
-                    Type::Struct { ident, fields } => TyDef::Regular {
-                        ident: Ident::Ty(ident.as_str().into()),
-                        align: None, // TODO:
-                        sub_tys: fields
-                            .iter()
-                            .map(|(_, type_id)| {
-                                self.lower_ty(type_id).map(|abi_ty| abi_ty.as_sub_ty())
-                            })
-                            .collect::<Result<Vec<_>>>()?,
-                    },
+                let (ident, ty_def) = match ty {
+                    Type::Struct(StructTy { ident, fields }) => (
+                        ident.as_str(),
+                        Rc::new(TyDef::Regular {
+                            ident: Ident::Ty(ident.as_str().into()),
+                            align: None, // TODO:
+                            items: fields
+                                .iter()
+                                .map(|(_, type_id)| {
+                                    Ok((
+                                        self.lower_ty(type_id).map(|abi_ty| abi_ty.as_sub_ty())?,
+                                        1,
+                                    ))
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                        }),
+                    ),
 
                     _ => todo!("handle non-struct type defs.."),
                 };
 
-                Definition::Ty(todo!())
+                self.type_defs.insert(ident.to_string(), ty_def.clone());
+
+                Definition::Ty(ty_def)
             }
             mir::Definition::Data(data) => Definition::Data(self.lower_data(data)?),
             mir::Definition::Fn(func) => Definition::Fn(self.lower_func(func)?),
@@ -123,12 +139,7 @@ impl<'env> Builder<'env> {
         Ok(result)
     }
 
-    fn assign<'a>(
-        &self,
-        dest: impl IntoOperand,
-        ty: BaseTy,
-        instr: Instruction,
-    ) -> Statement {
+    fn assign<'a>(&self, dest: impl IntoOperand, ty: BaseTy, instr: Instruction) -> Statement {
         Statement::Assign(dest.into_operand(), ty, instr)
     }
 
@@ -242,12 +253,12 @@ impl<'env> Builder<'env> {
                     Instruction::Call(name.to_string(), operands, variadic_idx),
                 )])
             }
-            mir::Instruction::Alloc { dest, ty: _, count } => {
-                let ty_size = 4; // TODO: 
+            mir::Instruction::Alloc { dest, ty, count } => {
+                let ty = self.lower_ty(ty)?;
                 Ok(vec![self.assign(
                     *dest,
                     BaseTy::Long,
-                    Instruction::Alloc4((ty_size * count) as u32),
+                    Instruction::Alloc4((ty.size() * count) as u32),
                 )])
             }
             mir::Instruction::Load { dest, addr } => {
@@ -280,7 +291,10 @@ impl<'env> Builder<'env> {
                     self.assign(
                         ptr_offset_dest,
                         BaseTy::Long,
-                        Instruction::Mul(self.lower_operand(index), Operand::Const(Const::int(4))),
+                        Instruction::Mul(
+                            self.lower_operand(index),
+                            Operand::Const(Const::int(i128::from(ty.size()))),
+                        ),
                     ),
                     self.assign(
                         *dest,
@@ -288,6 +302,27 @@ impl<'env> Builder<'env> {
                         Instruction::Add(self.lower_operand(base), ptr_offset_dest.into_operand()),
                     ),
                 ])
+            }
+
+            mir::Instruction::FieldPtr {
+                dest,
+                lval,
+                field_id,
+                base_ty,
+                field_ty: _,
+            } => {
+                let base_ty = self.lower_ty(base_ty)?;
+                let ty_def = base_ty.as_aggregate().expect("field ptr on tydef");
+                let ptr_offset = ty_def.offset_for(field_id.into_inner());
+
+                Ok(vec![self.assign(
+                    *dest,
+                    BaseTy::Long,
+                    Instruction::Add(
+                        self.lower_operand(lval),
+                        Operand::Const(Const::int(i128::from(ptr_offset))),
+                    ),
+                )])
             }
         }
     }
@@ -355,9 +390,7 @@ impl<'env> Builder<'env> {
             Type::Unit => AbiTy::Base(BaseTy::Word), // TODO: maybe use a custom unit type
             Type::Int(_) | Type::UInt(_) => AbiTy::Base(BaseTy::Word),
             Type::Bool => AbiTy::Base(BaseTy::Word),
-            //not sure if this is correct but it works for data pointers
             Type::Str => AbiTy::Base(BaseTy::Long),
-            // List type should also just be a pointer im guessing?
             Type::List(_ty, _size) => AbiTy::Base(BaseTy::Long),
             Type::Ptr(_type_id) => todo!(),
             Type::Fn {
@@ -366,10 +399,13 @@ impl<'env> Builder<'env> {
                 params: _,
                 returns: _,
             } => todo!(),
-            Type::Struct {
-                ident: _,
-                fields: _,
-            } => todo!(),
+            Type::Struct(StructTy { ident, .. }) => {
+                let Some(ty_def) = self.type_defs.get(ident.as_str()) else {
+                    todo!("unknown type: {ident}");
+                };
+
+                AbiTy::Aggregate(ty_def.clone())
+            }
         })
     }
 
