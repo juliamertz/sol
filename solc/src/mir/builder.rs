@@ -436,6 +436,32 @@ impl<'tcx> Builder<'tcx> {
                             })
                             .push_instr(Instruction::Store { addr, val });
                     }
+                    hir::Expr::MemberAccess(member_access) => {
+                        let addr = self.new_temp(member_access.ty);
+                        // let ptr_dest = self.new_temp(member_access.ty);
+
+                        let lhs_ty_id = member_access.lhs.type_id();
+                        let lhs_ty = self.env.types.get(lhs_ty_id).unwrap();
+                        let field_id = lhs_ty
+                            .as_struct()
+                            .unwrap()
+                            .get_field(&member_access.rhs)
+                            .unwrap();
+
+                        let (lval, block) = self.lower_expr(&member_access.lhs, block)?;
+                        let (val, block) = self.lower_expr(&assign.rhs, block)?;
+
+                        self.get_block_mut(&block)
+                            .push_instr(Instruction::FieldPtr {
+                                dest: addr,
+                                lval,
+                                field_id,
+                                base_ty: *member_access.lhs.type_id(),
+                                field_ty: member_access.ty,
+                            })
+                            .push_instr(Instruction::Store { addr, val });
+                    }
+
                     _ => todo!("nice error for invalid lvalue"),
                 }
 
