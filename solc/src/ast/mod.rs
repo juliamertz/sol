@@ -352,6 +352,14 @@ pub enum AssocItem {
     Fn(Fn),
 }
 
+impl AssocItem {
+    pub fn ident(&self) -> &Ident {
+        match self {
+            AssocItem::Fn(func) => &func.ident,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Impl {
     pub span: Span,

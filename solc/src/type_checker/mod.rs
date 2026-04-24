@@ -9,10 +9,10 @@ use crate::ast::{
     Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
     StructDef, Unary, UnaryOpKind, Use,
 };
-use crate::traits::{AsStr, Boxed};
 use crate::id;
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
+use crate::traits::{AsStr, Boxed, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::interner::TypeInterner;
 use crate::type_checker::ty::*;
@@ -149,9 +149,10 @@ impl Scope<'_> {
 pub struct TypeEnv {
     pub src: SourceInfo,
     pub types: Interner<TypeId, Type, TypeInterner>,
+    pub associated_items: HashMap<(TypeId, Ident), DefId>,
     pub definitions: Interner<DefId, TypeId>,
-    pub mutable_definitions: Vec<DefId>,
     pub nodes: Interner<NodeId, TypeId>,
+    pub mutable_definitions: Vec<DefId>,
     pub node_defs: HashMap<NodeId, DefId>,
     pub def_names: HashMap<DefId, Arc<str>>,
 }
@@ -160,12 +161,13 @@ impl TypeEnv {
     pub fn new(src: SourceInfo) -> Self {
         Self {
             src,
-            types: Default::default(),
-            definitions: Default::default(),
-            mutable_definitions: Default::default(),
-            nodes: Default::default(),
-            node_defs: Default::default(),
-            def_names: Default::default(),
+            types: Interner::default(),
+            associated_items: HashMap::default(),
+            definitions: Interner::default(),
+            nodes: Interner::default(),
+            mutable_definitions: Vec::default(),
+            node_defs: HashMap::default(),
+            def_names: HashMap::default(),
         }
     }
 
@@ -332,7 +334,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 _ => {
                     let lhs_type = env.types.get(&lhs_ty).unwrap();
                     match lhs_type {
-                        Type::Int(_) => match op.kind {
+                        Type::Int(_) | Type::UInt(_) => match op.kind {
                             BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
                                 Ok(lhs_ty)
                             }
@@ -540,13 +542,13 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
+pub fn infer_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
     match &func.kind {
         ast::FnKind::Local { params, body } => {
             let param_tys = params
                 .iter()
-                .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
-                .collect::<Result<Vec<_>>>()?;
+                .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
+                .transpose_vec()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
             let fn_ty_id = env.types.intern(Type::func(param_tys, returns));
             let def_id = env.definitions.intern(fn_ty_id);
@@ -581,6 +583,16 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Type
             env.def_names.insert(def_id, func.ident.inner.clone());
             Ok((fn_ty_id, def_id))
         }
+    }
+}
+
+pub fn infer_assoc_item(
+    item: &AssocItem,
+    env: &mut TypeEnv,
+    scope: &Scope<'_>,
+) -> Result<(TypeId, DefId)> {
+    match item {
+        AssocItem::Fn(func) => infer_func(func, env, scope),
     }
 }
 
@@ -631,38 +643,47 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(())
 }
 
-pub fn check_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
-    let mut scope = scope.new_child();
+pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    let mut fn_scope = scope.new_child();
 
     for param in func.params() {
-        let ty_id = env.type_from_ast_ty(param.ty, &scope)?;
+        let ty_id = env.type_from_ast_ty(param.ty, &fn_scope)?;
         let def_id = env.definitions.intern(ty_id);
         if let Some(node_id) = param.node_id {
             env.nodes.insert(node_id, ty_id);
             env.node_defs.insert(node_id, def_id);
         }
-        scope.define(param.key, def_id);
+        fn_scope.define(param.key, def_id);
     }
 
-    let def_id = scope.get_definition(&func.ident).copied().unwrap();
     let ty_id = env.definitions.get(&def_id).copied().unwrap();
     env.node_defs.insert(func.ident.id, def_id);
     env.nodes.insert(func.ident.id, ty_id);
-    scope.define(&func.ident, def_id);
+    fn_scope.define(&func.ident, def_id);
 
     match func.body() {
-        Some(body) => check_stmnts(&body.nodes, env, &mut scope),
+        Some(body) => check_stmnts(&body.nodes, env, &mut fn_scope),
         None => Ok(()),
     }
 }
 
-pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
-    for item in imp.items.iter() {
-        let AssocItem::Fn(func) = item;
-        check_func(func, env, scope)?;
-    }
+pub fn check_assoc_item(item: &AssocItem, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    let ident = item.ident().to_owned();
+    let (ty_id, def_id) = infer_assoc_item(item, env, scope)?;
 
-    Ok(())
+    env.associated_items.insert((ty_id, ident), def_id);
+
+    match item {
+        AssocItem::Fn(func) => check_func(func, def_id, env, scope),
+    }
+}
+
+pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+    imp.items
+        .iter()
+        .map(|item| check_assoc_item(item, env, scope))
+        .transpose_vec()
+        .map(|_| ())
 }
 
 pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
@@ -682,17 +703,21 @@ pub fn check_use(_item: &Use, _env: &mut TypeEnv, _scope: &Scope<'_>) -> Result<
 pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match item {
         Item::Use(item) => check_use(item, env, scope),
-        Item::Fn(func) => check_func(func, env, scope),
+        Item::Fn(func) => {
+            let def_id = scope.get_definition(&func.ident).copied().unwrap();
+            check_func(func, def_id, env, scope)
+        }
         Item::Impl(imp) => check_imp(imp, env, scope),
         Item::StructDef(def) => check_struct_def(def, env, scope),
     }
 }
 
 pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
-    for stmnt in stmnts {
-        check_stmnt(stmnt, env, scope)?;
-    }
-    Ok(())
+    stmnts
+        .iter()
+        .map(|stmnt| check_stmnt(stmnt, env, scope))
+        .transpose_vec()
+        .map(|_| ())
 }
 
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
@@ -714,7 +739,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     }
 
     for func in inventory.take_fns() {
-        let (_ty_id, def_id) = infer_fn(func, env, scope)?;
+        let (_ty_id, def_id) = infer_func(func, env, scope)?;
         scope.define(&func.ident, def_id);
     }
 
