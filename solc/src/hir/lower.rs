@@ -4,10 +4,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast;
-use crate::ext::Boxed;
-use crate::hir::{self, FieldId, HirId, Locality, Mutability};
-use crate::interner::Id;
+use crate::hir::{self, FieldId, HirId, ItemId, Locality, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
+use crate::traits::{Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
@@ -32,6 +31,38 @@ pub enum LowerError {
 
 pub type Result<T> = std::result::Result<T, LowerError>;
 
+pub fn lower_func<'ast>(func: &'ast ast::Fn, env: &mut TypeEnv) -> Result<hir::Fn<'ast>> {
+    let kind = match &func.kind {
+        ast::FnKind::Local { params, body } => hir::FnKind::Local {
+            params: params
+                .iter()
+                .map(|(ident, ty)| Ok((lower_ident(ident, env)?, env.type_of(&ty.id, &ty.span)?)))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+            body: lower_block(body, env)?,
+        },
+        ast::FnKind::Extern {
+            params,
+            is_variadic,
+        } => hir::FnKind::Extern {
+            is_variadic: *is_variadic,
+            params: params
+                .iter()
+                .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        },
+    };
+
+    Ok(hir::Fn {
+        id: HirId::DUMMY,
+        span: &func.span,
+        ident: lower_ident(&func.ident, env)?,
+        kind,
+        return_ty: env.type_of(&func.return_ty.id, &func.span)?,
+    })
+}
+
 pub fn lower_item<'ast>(
     item: &'ast ast::Item,
     inventory: &mut Inventory<'ast>,
@@ -48,57 +79,48 @@ pub fn lower_item<'ast>(
             },
             name: lower_name(&inner.name),
         })),
-        ast::Item::Fn(func) => {
-            let kind = match &func.kind {
-                ast::FnKind::Local { params, body } => hir::FnKind::Local {
-                    params: params
-                        .iter()
-                        .map(|(ident, ty)| {
-                            Ok((lower_ident(ident, env)?, env.type_of(&ty.id, &ty.span)?))
-                        })
-                        .collect::<Result<Vec<_>>>()?
-                        .into(),
-                    body: lower_block(body, env)?,
-                },
-                ast::FnKind::Extern {
-                    params,
-                    is_variadic,
-                } => hir::FnKind::Extern {
-                    is_variadic: *is_variadic,
-                    params: params
-                        .iter()
-                        .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
-                        .collect::<Result<Vec<_>>>()?
-                        .into(),
-                },
-            };
-
-            Some(hir::Item::Fn(hir::Fn {
-                id: HirId::DUMMY,
-                span: &func.span,
-                ident: lower_ident(&func.ident, env)?,
-                kind,
-                return_ty: env.type_of(&func.return_ty.id, &func.span)?,
-            }))
-        }
-        ast::Item::StructDef(def) => Some(hir::Item::TyDef(hir::TyDef::Struct {
-            id: HirId::DUMMY,
-            span: &def.span,
-            ident: lower_ident(&def.ident, env)?,
-            fields: def
+        ast::Item::Fn(func) => Some(hir::Item::Fn(lower_func(func, env)?)),
+        ast::Item::StructDef(def) => {
+            let fields = def
                 .fields
                 .iter()
+                .map(|(_, ty)| env.type_of(&ty.id, &ty.span))
+                .transpose_vec()?
+                .into_iter()
                 .enumerate()
-                .map(|(id, (_name, ty))| {
-                    Ok((FieldId::new(id as u32), env.type_of(&ty.id, &ty.span)?))
-                })
-                .collect::<Result<Vec<_>>>()?
-                .into(),
-            impls: inventory.take_impls(&def.ident).into(),
-        })),
+                .map(|(id, item)| (FieldId::from(id), item))
+                .collect_vec();
+            let items = inventory
+                .take_impls(&def.ident)
+                .into_iter()
+                .flat_map(|imp| imp.items.as_ref())
+                .map(|item| lower_assoc_item(item, env))
+                .transpose_vec()?
+                .into_iter()
+                .enumerate()
+                .map(|(id, item)| (ItemId::from(id), item))
+                .collect_vec();
+
+            Some(hir::Item::TyDef(hir::TyDef::Struct {
+                id: HirId::DUMMY,
+                span: &def.span,
+                ident: lower_ident(&def.ident, env)?,
+                fields: Box::from(fields),
+                items: Box::from(items),
+            }))
+        }
 
         ast::Item::Impl(_) => None,
     })
+}
+
+pub fn lower_assoc_item<'ast>(
+    item: &'ast ast::AssocItem,
+    env: &mut TypeEnv,
+) -> Result<hir::AssocItem<'ast>> {
+    match item {
+        ast::AssocItem::Fn(func) => lower_func(func, env).map(hir::AssocItem::Fn),
+    }
 }
 
 pub fn lower_items<'ast>(
@@ -110,7 +132,7 @@ pub fn lower_items<'ast>(
     let items = items
         .iter()
         .filter_map(|item| lower_item(item, &mut inventory, env).transpose())
-        .collect::<Result<Vec<_>>>()?;
+        .transpose_vec()?;
 
     Ok(items)
 }
@@ -133,7 +155,7 @@ pub fn lower_block<'ast>(block: &'ast ast::Block, env: &mut TypeEnv) -> Result<h
             .nodes
             .iter()
             .map(|stmnt| lower_stmnt(stmnt, env))
-            .collect::<Result<Vec<_>>>()?
+            .transpose_vec()?
             .into(),
     })
 }
@@ -249,7 +271,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                     .params
                     .iter()
                     .map(|param| lower_expr(param, env))
-                    .collect::<Result<Vec<_>>>()?
+                    .transpose_vec()?
                     .into(),
             })
         }
@@ -280,7 +302,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .items
                 .iter()
                 .map(|expr| lower_expr(expr, env))
-                .collect::<Result<Vec<_>>>()?
+                .transpose_vec()?
                 .into(),
             size: list.items.len() as u64,
         }),
@@ -358,7 +380,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             let nodes = [desugared_condition]
                 .into_iter()
                 .chain(body.nodes.clone())
-                .collect::<Vec<_>>();
+                .collect_vec();
             body.nodes = Box::from(nodes);
 
             hir::Expr::Loop(hir::Loop {

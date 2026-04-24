@@ -1,12 +1,14 @@
 use std::fmt::{Display, Formatter, Result, Write};
 
+use crate::traits::CollectVec;
+
 use super::*;
 
 fn join_fmt(items: impl IntoIterator<Item = impl ToString>, sep: &str) -> String {
     items
         .into_iter()
         .map(|item| item.to_string())
-        .collect::<Vec<_>>()
+        .collect_vec()
         .join(sep)
 }
 
@@ -238,7 +240,7 @@ impl fmt::Display for Instruction {
                 let mut args_fmt = args
                     .iter()
                     .map(|(ty, temp)| format!("{ty} {temp}"))
-                    .collect::<Vec<String>>();
+                    .collect_vec();
                 if let Some(i) = *opt_variadic_i {
                     args_fmt.insert(i as usize, "...".to_string());
                 }
@@ -352,7 +354,7 @@ impl Display for DataValue {
                 &items
                     .iter()
                     .map(|(ty, item)| format!("{ty} {item}"))
-                    .collect::<Vec<_>>()
+                    .collect_vec()
                     .join(", "),
             ),
             DataValue::Zeroed(_) => todo!(),

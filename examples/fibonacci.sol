@@ -1,5 +1,4 @@
-use extern stdio
-
+extern use stdio
 extern variadic func printf(format: Str) -> i32
 
 func fib(n: i32) -> i32

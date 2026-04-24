@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod codegen;
-pub mod ext;
+pub mod traits;
 pub mod hir;
 pub mod lexer;
 pub mod parser;

@@ -10,7 +10,7 @@ use crate::codegen::qbe::{
     Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, RegularParam,
     Statement, TyDef,
 };
-use crate::ext::AsStr;
+use crate::traits::AsStr;
 use crate::interner::Id;
 use crate::mir::{self, BlockId};
 use crate::number::Signedness;

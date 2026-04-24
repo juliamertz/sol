@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::ext::AsStr;
+use crate::traits::AsStr;
 use crate::lexer::source::Span;
 use crate::type_checker::{DefId, TypeId};
 use crate::{ast, id};
@@ -152,6 +152,8 @@ pub struct Constructor<'ast> {
     pub fields: Box<[(Name<'ast>, Expr<'ast>)]>,
 }
 
+// TODO: might be nice if we store the FieldId/ItemId here directly
+// this way we don't have to resolve this later
 #[derive(Debug, Clone)]
 pub struct MemberAccess<'ast> {
     pub id: HirId,
@@ -278,7 +280,13 @@ pub struct Fn<'ast> {
     pub return_ty: TypeId,
 }
 
+#[derive(Debug, Clone)]
+pub enum AssocItem<'ast> {
+    Fn(Fn<'ast>),
+}
+
 id!(FieldId);
+id!(ItemId);
 
 #[derive(Debug, Clone)]
 pub enum TyDef<'ast> {
@@ -287,7 +295,7 @@ pub enum TyDef<'ast> {
         span: &'ast Span,
         ident: Ident<'ast>,
         fields: Box<[(FieldId, TypeId)]>,
-        impls: Box<[&'ast ast::Impl]>, // TODO: lower impls
+        items: Box<[(ItemId, AssocItem<'ast>)]>
     },
 }
 

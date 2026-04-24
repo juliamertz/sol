@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     ast::{Fn, Impl, Item, StructDef},
-    ext::AsStr,
+    traits::AsStr,
 };
 
 #[derive(Error, Diagnostic, Debug)]

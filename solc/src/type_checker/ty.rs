@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::ext::AsStr;
+use crate::traits::AsStr;
 use crate::hir::FieldId;
 use crate::interner::Id;
 use crate::type_checker::TypeId;

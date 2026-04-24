@@ -1,4 +1,4 @@
-use crate::ext::AsStr;
+use crate::traits::{AsStr, CollectVec};
 use crate::hir;
 use crate::mir::builder::{Builder, BuilderError};
 use crate::mir::{Data, Definition, Fn, Module, Operand, Terminator};
@@ -66,7 +66,7 @@ pub fn lower_module(module: &hir::Module<'_>, env: &TypeEnv) -> Result<Module, B
         .into_iter()
         .flatten()
         .flatten()
-        .collect::<Vec<_>>();
+        .collect_vec();
 
     Ok(Module { defs })
 }

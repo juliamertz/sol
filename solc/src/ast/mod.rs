@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use either::Either;
 
-use crate::ext::AsStr;
+use crate::traits::AsStr;
 use crate::id;
 use crate::lexer::source::Span;
 

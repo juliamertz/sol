@@ -360,21 +360,27 @@ impl<'tcx> Builder<'tcx> {
                     count: list.size,
                 });
 
-                for (idx, expr) in list.items.iter().enumerate() {
-                    let (val, block) = self.lower_expr(expr, block)?;
-                    let ptr_dest = self.new_temp(list.ty); // TODO: should be ptr type                                                                   
-                    self.get_block_mut(&block)
-                        .push_instr(Instruction::IndexPtr {
-                            dest: ptr_dest,
-                            base: Operand::Temporary(dest),
-                            index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)), // TODO: index val should probably be an expr instead of forcing usize?
-                            elem_ty: list.ty,
-                        })
-                        .push_instr(Instruction::Store {
-                            addr: ptr_dest,
-                            val,
-                        });
-                }
+                list.items
+                    .iter()
+                    .enumerate()
+                    .try_fold(block, |block, (idx, expr)| {
+                        let (val, block) = self.lower_expr(expr, block)?;
+                        let ptr_dest = self.new_temp(list.ty);
+
+                        self.get_block_mut(&block)
+                            .push_instr(Instruction::IndexPtr {
+                                dest: ptr_dest,
+                                base: Operand::Temporary(dest),
+                                index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)),
+                                elem_ty: list.ty,
+                            })
+                            .push_instr(Instruction::Store {
+                                addr: ptr_dest,
+                                val,
+                            });
+
+                        Ok::<_, BuilderError>(block)
+                    })?;
 
                 Ok((Operand::Temporary(dest), block))
             }

@@ -26,6 +26,12 @@ macro_rules! id {
                 self.0
             }
         }
+
+        impl From<usize> for $name {
+            fn from(value: usize) -> Self {
+                Self(value as u32)
+            }
+        }
     };
 }
 
