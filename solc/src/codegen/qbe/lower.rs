@@ -28,11 +28,11 @@ pub enum LowerError {
 pub type Result<T, E = LowerError> = std::result::Result<T, E>;
 
 fn block_name<'a>(block_id: &mir::BlockId) -> Ident {
-    Ident::block(format!("bb{}", block_id.inner()))
+    Ident::block(format!("bb{}", block_id.into_inner()))
 }
 
 fn data_name<'a>(data_id: mir::DataId) -> Ident {
-    let idx = data_id.inner();
+    let idx = data_id.into_inner();
     let name = format!("dat_{idx}");
     Ident::global(name)
 }
@@ -51,7 +51,7 @@ impl IntoOperand for TempId {
 
 impl IntoOperand for mir::TempId {
     fn into_operand(self) -> Operand {
-        Operand::Var(Ident::temp(bijective_base26(self.inner())))
+        Operand::Var(Ident::temp(bijective_base26(self.into_inner() as usize)))
     }
 }
 
@@ -434,7 +434,7 @@ impl<'env> Builder<'env> {
                 .blocks
                 .iter()
                 .enumerate()
-                .map(|(idx, block)| self.lower_block(block, func, BlockId::new(idx)))
+                .map(|(idx, block)| self.lower_block(block, func, BlockId::from(idx)))
                 .collect::<Result<Vec<_>>>()?,
         })
     }

@@ -1,6 +1,6 @@
 use std::fmt::{self, Display, Write};
 
-use crate::mir::*;
+use crate::{interner::Id, mir::*};
 
 impl Display for TempId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -148,7 +148,7 @@ impl Display for Fn {
 
 impl Display for Data {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "_data_{}: ", self.id.inner())?;
+        write!(f, "_data_{}: ", self.id.into_inner())?;
         match self.value {
             DataValue::Bytes(_) => write!(f, "<bytes>"),
             DataValue::String(ref inner) => f.write_str(inner),

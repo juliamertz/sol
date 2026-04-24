@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use miette::Diagnostic;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::hir::FieldId;
@@ -63,15 +64,32 @@ impl BlockBuilder {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct LoopContext {
+pub struct LoopCtx {
     enter_block: BlockId,
     join_block: BlockId,
-    // TODO: loop return values
-    #[allow(unused)]
     dest: TempId,
 }
 
-impl LoopContext {}
+#[derive(Debug, Default)]
+pub struct LoopStack(SmallVec<[LoopCtx; 8]>);
+
+impl LoopStack {
+    pub fn enter(&mut self, enter_block: BlockId, join_block: BlockId, dest: TempId) {
+        self.0.push(LoopCtx {
+            enter_block,
+            join_block,
+            dest,
+        });
+    }
+
+    pub fn leave(&mut self) -> Option<LoopCtx> {
+        self.0.pop()
+    }
+
+    pub fn current(&mut self) -> Option<&LoopCtx> {
+        self.0.last()
+    }
+}
 
 #[derive(Debug, Diagnostic, Error)]
 pub enum BuilderError {
@@ -97,7 +115,7 @@ pub struct Builder<'tcx> {
     temp_tys: Vec<TypeId>,
     blocks: Vec<BlockBuilder>,
     locals: HashMap<DefId, Operand>,
-    loop_stack: Vec<LoopContext>,
+    loop_stack: LoopStack,
     data: Vec<Data>,
 }
 
@@ -109,52 +127,36 @@ impl<'tcx> Builder<'tcx> {
             temp_tys: vec![],
             blocks: vec![],
             locals: HashMap::default(),
-            loop_stack: Vec::default(),
+            loop_stack: LoopStack::default(),
             data: Vec::default(),
         }
     }
 
     pub(super) fn new_temp(&mut self, ty: TypeId) -> TempId {
-        let id = TempId(self.temp_idx);
+        let id = TempId::from(self.temp_idx);
         self.temp_tys.push(ty);
         self.temp_idx += 1;
         id
     }
 
     pub(super) fn new_block(&mut self) -> BlockId {
-        let id = BlockId(self.blocks.len());
+        let id = BlockId::from(self.blocks.len());
         self.blocks.push(BlockBuilder::default());
         id
     }
 
     pub(super) fn new_data(&mut self, value: DataValue) -> DataId {
-        let id = DataId(self.data.len());
+        let id = DataId::from(self.data.len());
         self.data.push(Data { id, value });
         id
     }
 
     pub(super) fn get_block_mut(&mut self, BlockId(idx): &BlockId) -> &mut BlockBuilder {
-        &mut self.blocks[*idx]
+        &mut self.blocks[*idx as usize]
     }
 
     pub(super) fn define_local(&mut self, def_id: DefId, operand: Operand) {
         self.locals.insert(def_id, operand);
-    }
-
-    pub(super) fn push_loop(&mut self, enter_block: BlockId, join_block: BlockId, dest: TempId) {
-        self.loop_stack.push(LoopContext {
-            enter_block,
-            join_block,
-            dest,
-        });
-    }
-
-    pub(super) fn pop_loop(&mut self) -> Option<LoopContext> {
-        self.loop_stack.pop()
-    }
-
-    pub(super) fn curr_loop(&mut self) -> Option<&LoopContext> {
-        self.loop_stack.last()
     }
 
     pub fn build(
@@ -484,9 +486,9 @@ impl<'tcx> Builder<'tcx> {
                     builder.terminate(Terminator::Goto(loop_block))?;
                 }
 
-                self.push_loop(loop_block, join_block, dest);
+                self.loop_stack.enter(loop_block, join_block, dest);
                 let (_body_val, body_exit) = self.lower_block(&inner.body, loop_block)?;
-                self.pop_loop();
+                self.loop_stack.leave();
 
                 self.get_block_mut(&body_exit)
                     .terminate(Terminator::Goto(loop_block))?;
@@ -559,7 +561,8 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Break(_inner) => {
                 let ctx = self
-                    .curr_loop()
+                    .loop_stack
+                    .current()
                     .copied()
                     .expect("break outside of loop context");
 
@@ -571,7 +574,8 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Continue(_) => {
                 let ctx = self
-                    .curr_loop()
+                    .loop_stack
+                    .current()
                     .copied()
                     .expect("continue outside of loop context");
 

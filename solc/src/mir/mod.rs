@@ -1,5 +1,6 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::hir::FieldId;
+use crate::interner::Id;
 use crate::type_checker::ty::Type;
 use crate::type_checker::{DefId, TypeId};
 
@@ -9,36 +10,10 @@ mod lower;
 
 pub use lower::lower_module;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TempId(pub usize);
+id!(TempId);
+id!(DataId);
+id!(BlockId);
 
-impl TempId {
-    pub fn inner(&self) -> usize {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DataId(usize);
-
-impl DataId {
-    pub fn inner(&self) -> usize {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BlockId(usize);
-
-impl BlockId {
-    pub fn new(id: usize) -> Self {
-        Self(id)
-    }
-
-    pub fn inner(&self) -> usize {
-        self.0
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum Constant {
@@ -145,7 +120,7 @@ pub struct Fn {
 
 impl Fn {
     pub fn temp_ty(&self, id: TempId) -> TypeId {
-        self.temps[id.inner()]
+        self.temps[id.into_inner() as usize]
     }
 
     pub fn operand_ty(&self, op: &Operand) -> TypeId {
