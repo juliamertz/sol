@@ -98,8 +98,8 @@ pub enum TypeError {
         help: Option<String>,
     },
 
-    #[error("tried to access a field on a non-aggregate type")]
-    FieldAccessOnNonAggregate {
+    #[error("tried to access a member of non-aggregate type")]
+    MemberAccessOnNonAggregate {
         #[source_code]
         src: SourceInfo,
 
@@ -274,7 +274,7 @@ pub fn infer_member_access(
     let lhs_ty = env.types.get(&lhs_ty_id);
     let struct_ty = lhs_ty
         .as_struct()
-        .ok_or(TypeError::FieldAccessOnNonAggregate {
+        .ok_or(TypeError::MemberAccessOnNonAggregate {
             src: env.src.clone(),
             span: member_access.span,
         })?;
