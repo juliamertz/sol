@@ -9,6 +9,9 @@ use crate::lexer::token::KEYWORD_LOOKUP;
 pub mod source;
 pub mod token;
 
+#[cfg(test)]
+mod test;
+
 pub use crate::lexer::token::{Token, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]

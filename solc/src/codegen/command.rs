@@ -36,24 +36,6 @@ impl PipeFlags {
     }
 }
 
-#[test]
-fn test_pipeflags() {
-    let mut flags = PipeFlags::default();
-
-    assert!(flags.is_unset(STDOUT));
-    assert!(flags.is_unset(STDERR));
-
-    flags.toggle(STDOUT);
-
-    assert!(flags.is_set(STDOUT));
-    assert!(flags.is_unset(STDERR));
-
-    flags.toggle(STDERR);
-
-    assert!(flags.is_set(STDOUT));
-    assert!(flags.is_set(STDERR));
-}
-
 #[derive(Clone)]
 pub struct CommandBuilder {
     program: Rc<OsString>,
@@ -94,5 +76,28 @@ impl CommandBuilder {
             cmd.stderr(Stdio::piped());
         }
         cmd
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn pipeflags() {
+        let mut flags = PipeFlags::default();
+
+        assert!(flags.is_unset(STDOUT));
+        assert!(flags.is_unset(STDERR));
+
+        flags.toggle(STDOUT);
+
+        assert!(flags.is_set(STDOUT));
+        assert!(flags.is_unset(STDERR));
+
+        flags.toggle(STDERR);
+
+        assert!(flags.is_set(STDOUT));
+        assert!(flags.is_set(STDERR));
     }
 }
