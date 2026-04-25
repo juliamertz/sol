@@ -103,8 +103,8 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut qbe_builder = codegen::qbe::lower::Builder::new(&env);
     let qbe_module = qbe_builder.lower_module(&module_mir)?;
 
-    let qbe_ir_path = codegen::qbe::build::build_ir(&opts.outdir, &qbe_module).unwrap();
-    let out_path = codegen::qbe::build::build_bin(&opts.outdir, &qbe_ir_path).unwrap();
+    let compiler = codegen::qbe::compile::Compiler::new(&opts.outdir);
+    let out_path = compiler.ir_to_bin(&qbe_module)?;
 
     Ok(out_path)
 }

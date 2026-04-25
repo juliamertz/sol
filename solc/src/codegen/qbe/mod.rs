@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-pub mod build;
+pub mod compile;
 pub mod fmt;
 pub mod lower;
 
