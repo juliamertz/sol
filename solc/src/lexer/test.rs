@@ -1,37 +1,50 @@
+extern crate test;
+
+use test::Bencher;
+
 use crate::lexer::{
     Lexer,
     TokenKind::{self, *},
 };
 
-type Token = crate::lexer::Token<'static>;
-
-fn lex(source: &'static str) -> Vec<Token> {
+fn lex(source: &'static str) -> Vec<TokenKind> {
     let mut lexer = Lexer::new("inline".into(), source);
-    let mut buf = vec![];
-
-    while let Some(token) = lexer.read_token() {
-        match token {
-            Ok(tok) if tok.kind == Eof => break,
-            Ok(tok) => buf.push(tok),
-            Err(err) => panic!("failed to read token: {err}"),
-        }
-    }
-
-    buf
-}
-
-fn kinds(tokens: Vec<Token>) -> Vec<TokenKind> {
-    tokens.into_iter().map(|tok| tok.kind).collect()
+    lexer
+        .read_until_eof()
+        .unwrap()
+        .into_iter()
+        .map(|tok| tok.kind)
+        .collect()
 }
 
 #[test]
 fn math_expr() {
-    let tokens = kinds(lex(r"10 / 2 * 50 - 5"));
+    let tokens = lex(r"10 / 2 * 50 - 5");
     assert_eq!(tokens, vec![Int, Slash, Int, Asterisk, Int, Sub, Int]);
 }
 
 #[test]
 fn literals() {
-    let tokens = kinds(lex(r#"10 true false "hello world""#));
+    let tokens = lex(r#"10 true false "hello world""#);
     assert_eq!(tokens, vec![Int, True, False, String]);
+}
+
+#[test]
+fn keywords() {
+    let tokens = lex(r"extern variadic func struct then end if else");
+    assert_eq!(
+        tokens,
+        vec![Extern, Variadic, Fn, Struct, Then, End, If, Else]
+    );
+}
+
+#[bench]
+fn bench_complex_expression(b: &mut Bencher) {
+    let source = "((1 + 2) * 3 - 4 / (5 + 6) + 7 * (8 - 9 * (10 + 11)) - ((12 + 13) * (14 - 15) + 16) / 17 + 18 * 19 - 20 + (21 - (22 + 23) * 24 + 25 * (26 - 27 * (28 + 29))) / ((30 + 31) * 32 - 33) + 34 * (35 + 36 - (37 * 38 + 39) / 40) - ((41 + 42) * (43 - 44) + 45 * 46 - (47 + 48 * (49 - 50))))";
+    let mut lexer = Lexer::new("inline".into(), source);
+
+    b.iter(|| {
+        let _ = lexer.read_until_eof();
+        lexer.reset();
+    });
 }

@@ -57,6 +57,10 @@ impl<'src> Lexer<'src> {
         self.pos
     }
 
+    pub fn reset(&mut self) {
+        self.pos = 0;
+    }
+
     pub fn source(&self) -> SourceInfo {
         self.source.clone()
     }
@@ -120,7 +124,7 @@ impl<'src> Lexer<'src> {
     pub fn read_token(&mut self) -> Option<Result<Token<'src>>> {
         self.skip_whitespace();
 
-        if self.curr().is_none(){
+        if self.curr().is_none() {
             return Some(Ok(Token::new(TokenKind::Eof, "", self.pos)));
         }
 
@@ -205,5 +209,19 @@ impl<'src> Lexer<'src> {
 
         self.advance();
         Some(Ok(token))
+    }
+
+    pub fn read_until_eof(&mut self) -> Result<Vec<Token<'_>>> {
+        let mut buf = vec![];
+
+        while let Some(token) = self.read_token() {
+            match token {
+                Ok(tok) if tok.kind == TokenKind::Eof => break,
+                Ok(tok) => buf.push(tok),
+                Err(err) => panic!("failed to read token: {err}"), // TODO: return err variant here
+            }
+        }
+
+        Ok(buf)
     }
 }
