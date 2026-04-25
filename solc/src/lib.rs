@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(portable_simd)]
 
 pub mod ast;
 pub mod codegen;

@@ -3,9 +3,11 @@ use std::path::PathBuf;
 use miette::Diagnostic;
 use thiserror::Error;
 
+use crate::lexer::memchr::FindByte;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::KEYWORD_LOOKUP;
 
+pub mod memchr;
 pub mod source;
 pub mod token;
 
@@ -14,10 +16,12 @@ mod test;
 
 pub use crate::lexer::token::{Token, TokenKind};
 
+const ASCII_WHITESPACE_BYTES: [u8; 5] = [b'\t', b'\n', b'\x0C', b'\r', b' '];
+
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::lexer))]
 pub enum LexerError {
-    #[error("illegal character: {ch}")]
+    #[error("illegal character: `{ch}`")]
     Illegal {
         #[source_code]
         src: SourceInfo,
@@ -41,6 +45,7 @@ pub struct Lexer<'src> {
     source: SourceInfo,
     content: &'src str,
     pos: usize,
+    eof: bool,
 }
 
 impl<'src> Lexer<'src> {
@@ -50,6 +55,7 @@ impl<'src> Lexer<'src> {
             source,
             content,
             pos: 0,
+            eof: false,
         }
     }
 
@@ -59,6 +65,7 @@ impl<'src> Lexer<'src> {
 
     pub fn reset(&mut self) {
         self.pos = 0;
+        self.eof = false;
     }
 
     pub fn source(&self) -> SourceInfo {
@@ -73,18 +80,21 @@ impl<'src> Lexer<'src> {
         self.content.as_bytes().get(self.pos + 1).copied()
     }
 
+    fn remaining(&self) -> &[u8] {
+        &self.content.as_bytes()[self.pos..self.content.len()]
+    }
+
     fn advance(&mut self) -> Option<u8> {
         self.pos += 1;
         self.curr()
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some(ch) = self.curr() {
-            if ch.is_ascii_whitespace() && ch != b'\n' {
-                self.advance();
-            } else {
-                break;
-            }
+        if let Some(offset) = self.remaining().find_byte_not_in(ASCII_WHITESPACE_BYTES) {
+            self.pos += offset;
+        } else {
+            // if we didn't find any matching byte we can assume we reached eof
+            self.eof = true;
         }
     }
 
@@ -124,7 +134,7 @@ impl<'src> Lexer<'src> {
     pub fn read_token(&mut self) -> Option<Result<Token<'src>>> {
         self.skip_whitespace();
 
-        if self.curr().is_none() {
+        if self.curr().is_none() || self.eof {
             return Some(Ok(Token::new(TokenKind::Eof, "", self.pos)));
         }
 
