@@ -38,7 +38,6 @@ pub struct Lexer<'src> {
     source: SourceInfo,
     content: &'src str,
     pos: usize,
-    eof: bool,
 }
 
 impl<'src> Lexer<'src> {
@@ -48,7 +47,6 @@ impl<'src> Lexer<'src> {
             source,
             content,
             pos: 0,
-            eof: false,
         }
     }
 
@@ -60,28 +58,22 @@ impl<'src> Lexer<'src> {
         self.source.clone()
     }
 
-    fn curr(&self) -> Option<char> {
-        self.content
-            .as_bytes()
-            .get(self.pos)
-            .map(|byte| *byte as char)
+    fn curr(&self) -> Option<u8> {
+        self.content.as_bytes().get(self.pos).copied()
     }
 
-   fn peek(&self) -> Option<char> {
-        self.content
-            .as_bytes()
-            .get(self.pos + 1)
-            .map(|byte| *byte as char)
+    fn peek(&self) -> Option<u8> {
+        self.content.as_bytes().get(self.pos + 1).copied()
     }
 
-    fn advance(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<u8> {
         self.pos += 1;
         self.curr()
     }
 
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.curr() {
-            if ch.is_ascii_whitespace() && ch != '\n' {
+            if ch.is_ascii_whitespace() && ch != b'\n' {
                 self.advance();
             } else {
                 break;
@@ -91,7 +83,7 @@ impl<'src> Lexer<'src> {
 
     fn read_while<F>(&mut self, condition: F) -> &'src str
     where
-        F: Fn(char) -> bool,
+        F: Fn(u8) -> bool,
     {
         let start = self.pos;
 
@@ -108,10 +100,10 @@ impl<'src> Lexer<'src> {
 
     fn read_string(&mut self) -> Result<&'src str> {
         let start = self.pos;
-        assert_eq!(self.curr(), Some('"'),);
+        assert_eq!(self.curr(), Some(b'"'),);
         self.advance();
-        let text = self.read_while(|ch| ch != '"');
-        if self.curr() != Some('"') {
+        let text = self.read_while(|ch| ch != b'"');
+        if self.curr() != Some(b'"') {
             Err(LexerError::UnterminatedString {
                 src: self.source(),
                 span: (start, self.pos - start).into(),
@@ -125,73 +117,71 @@ impl<'src> Lexer<'src> {
     pub fn read_token(&mut self) -> Option<Result<Token<'src>>> {
         self.skip_whitespace();
 
-        // Dirty little hack to return EOF as last token
-        if self.curr().is_none() && !self.eof {
-            self.eof = true;
+        if self.curr().is_none(){
             return Some(Ok(Token::new(TokenKind::Eof, "", self.pos)));
         }
 
         let start = self.pos;
 
         let token = match self.curr()? {
-            '"' => match self.read_string() {
+            b'"' => match self.read_string() {
                 Ok(text) => {
                     let token = Token::new(TokenKind::String, text, start);
                     return Some(Ok(token));
                 }
                 Err(err) => return Some(Err(err)),
             },
-            '+' => Token::new(TokenKind::Add, "+", start),
-            '=' => {
-                if self.peek() == Some('=') {
+            b'+' => Token::new(TokenKind::Add, "+", start),
+            b'=' => {
+                if self.peek() == Some(b'=') {
                     self.advance();
                     Token::new(TokenKind::Eq, "==", start)
                 } else {
                     Token::new(TokenKind::Assign, "=", start)
                 }
             }
-            '-' => {
-                if self.peek() == Some('>') {
+            b'-' => {
+                if self.peek() == Some(b'>') {
                     self.advance();
                     Token::new(TokenKind::Arrow, "->", start)
-                } else if self.peek() == Some('-') {
-                    self.read_while(|ch| ch != '\n');
+                } else if self.peek() == Some(b'-') {
+                    self.read_while(|ch| ch != b'\n');
                     return self.read_token();
                 } else {
                     Token::new(TokenKind::Sub, "-", start)
                 }
             }
-            '!' => {
-                if self.peek() == Some('=') {
+            b'!' => {
+                if self.peek() == Some(b'=') {
                     self.advance();
                     Token::new(TokenKind::Ne, "!=", start)
                 } else {
                     Token::new(TokenKind::Bang, "!", start)
                 }
             }
-            '*' => Token::new(TokenKind::Asterisk, "*", start),
-            '/' => Token::new(TokenKind::Slash, "/", start),
-            '&' => Token::new(TokenKind::Ampersand, "&", start),
-            '(' => Token::new(TokenKind::LParen, "(", start),
-            ')' => Token::new(TokenKind::RParen, ")", start),
-            '[' => Token::new(TokenKind::LBracket, "[", start),
-            ']' => Token::new(TokenKind::RBracket, "]", start),
-            '{' => Token::new(TokenKind::LSquirly, "{", start),
-            '}' => Token::new(TokenKind::RSquirly, "}", start),
-            '<' => Token::new(TokenKind::LAngle, "<", start),
-            '>' => Token::new(TokenKind::RAngle, ">", start),
-            ':' => Token::new(TokenKind::Colon, ":", start),
-            ';' => Token::new(TokenKind::Semicolon, ";", start),
-            '.' => Token::new(TokenKind::Dot, ".", start),
-            ',' => Token::new(TokenKind::Comma, ",", start),
-            '\n' => Token::new(TokenKind::Newline, "\n", start),
+            b'*' => Token::new(TokenKind::Asterisk, "*", start),
+            b'/' => Token::new(TokenKind::Slash, "/", start),
+            b'&' => Token::new(TokenKind::Ampersand, "&", start),
+            b'(' => Token::new(TokenKind::LParen, "(", start),
+            b')' => Token::new(TokenKind::RParen, ")", start),
+            b'[' => Token::new(TokenKind::LBracket, "[", start),
+            b']' => Token::new(TokenKind::RBracket, "]", start),
+            b'{' => Token::new(TokenKind::LSquirly, "{", start),
+            b'}' => Token::new(TokenKind::RSquirly, "}", start),
+            b'<' => Token::new(TokenKind::LAngle, "<", start),
+            b'>' => Token::new(TokenKind::RAngle, ">", start),
+            b':' => Token::new(TokenKind::Colon, ":", start),
+            b';' => Token::new(TokenKind::Semicolon, ";", start),
+            b'.' => Token::new(TokenKind::Dot, ".", start),
+            b',' => Token::new(TokenKind::Comma, ",", start),
+            b'\n' => Token::new(TokenKind::Newline, "\n", start),
             ch if ch.is_ascii_digit() => {
                 let text = self.read_while(|ch| ch.is_ascii_digit());
                 return Some(Ok(Token::new(TokenKind::Int, text, start)));
             }
-            ch if ch.is_ascii_alphabetic() || ch == '_' => {
+            ch if ch.is_ascii_alphabetic() || ch == b'_' => {
                 let text = self
-                    .read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_');
+                    .read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == b'_');
 
                 let token = if let Some(kind) = KEYWORD_LOOKUP.get(text) {
                     Token::new(*kind, text, start)
@@ -205,7 +195,7 @@ impl<'src> Lexer<'src> {
                 return Some(Err(LexerError::Illegal {
                     src: self.source(),
                     span: (start, 1).into(),
-                    ch,
+                    ch: ch as char,
                 }));
             }
         };
