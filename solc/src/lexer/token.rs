@@ -66,7 +66,6 @@ pub enum TokenKind {
 use TokenKind as Kind;
 
 impl Kind {
-    #[allow(dead_code)]
     pub fn is_keyword(&self) -> bool {
         matches!(
             self,
@@ -90,7 +89,7 @@ impl Kind {
         )
     }
 
-    // expression parsing should stop if this token is encountered
+    /// a token that is a terminator indicates whether expression parsing should stop or can continue
     pub fn is_terminator(&self) -> bool {
         matches!(
             self,
@@ -137,8 +136,8 @@ impl Display for Kind {
 
 type TokenLookup = HashMap<&'static str, Kind>;
 
-pub static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
-    HashMap::from([
+pub(super) static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
+    TokenLookup::from([
         ("let", Kind::Let),
         ("mut", Kind::Mut),
         ("func", Kind::Fn),
@@ -161,25 +160,11 @@ pub static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
     ])
 });
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'src> {
     pub kind: Kind,
     pub text: &'src str,
     pub span: Span,
-}
-
-impl Token<'_> {
-    pub fn owned(&self) -> OwnedToken {
-        OwnedToken {
-            kind: self.kind,
-            text: self.text.to_string(),
-            span: self.span,
-        }
-    }
-
-    pub fn kind(&self) -> &Kind {
-        &self.kind
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -196,6 +181,18 @@ impl<'src> Token<'src> {
             text,
             span: (start_pos, text.len()).into(),
         }
+    }
+
+    pub fn to_owned(&self) -> OwnedToken {
+        OwnedToken {
+            kind: self.kind,
+            text: self.text.to_string(),
+            span: self.span,
+        }
+    }
+
+    pub fn kind(&self) -> &Kind {
+        &self.kind
     }
 
     pub fn span(&self) -> Span {

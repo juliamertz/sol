@@ -1,8 +1,6 @@
 use crate::ast;
 use crate::traits::AsStr;
-use crate::hir::FieldId;
-use crate::interner::Id;
-use crate::type_checker::TypeId;
+use crate::type_checker::{TypeId, FieldId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntTy {
@@ -31,6 +29,17 @@ impl From<&ast::IntTy> for IntTy {
             ast::IntTy::I32 => IntTy::I32,
             ast::IntTy::I64 => IntTy::I64,
         }
+    }
+}
+
+impl std::fmt::Display for IntTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            IntTy::I8 => "i8",
+            IntTy::I16 => "i16",
+            IntTy::I32 => "i32",
+            IntTy::I64 => "i64",
+        })
     }
 }
 
@@ -64,6 +73,17 @@ impl From<&ast::UIntTy> for UIntTy {
     }
 }
 
+impl std::fmt::Display for UIntTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            UIntTy::U8 => "u8",
+            UIntTy::U16 => "u16",
+            UIntTy::U32 => "u32",
+            UIntTy::U64 => "u64",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructTy {
     pub ident: Box<ast::Ident>,
@@ -71,19 +91,18 @@ pub struct StructTy {
 }
 
 impl StructTy {
-    pub fn get_field(&self, name: impl AsStr) -> Option<FieldId> {
+    pub fn get_field(&self, name: impl AsStr) -> Option<(FieldId, TypeId)> {
         let key = name.as_str();
         self.fields
             .iter()
             .enumerate()
             .find(|(_, (name, _))| name.as_str() == key)
-            .map(|(id, _)| FieldId::new(id as u32))
+            .map(|(id, (_, ty_id))| (FieldId::from(id), *ty_id))
     }
 }
 
-// TODO: rename to `Ty`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Type {
+pub enum Ty {
     Unit,
     Int(IntTy),
     UInt(UIntTy),
@@ -100,7 +119,7 @@ pub enum Type {
     Struct(StructTy),
 }
 
-impl Type {
+impl Ty {
     pub fn func(params: impl Into<Box<[TypeId]>>, returns: TypeId) -> Self {
         Self::Fn {
             is_extern: false,
@@ -131,8 +150,20 @@ impl Type {
     }
 }
 
-impl std::fmt::Display for Type {
+impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(self, f)
+        match self {
+            Ty::Unit => f.write_str("()"),
+            Ty::Int(int_ty) => int_ty.fmt(f),
+            Ty::UInt(uint_ty) => uint_ty.fmt(f),
+            Ty::Bool => f.write_str("bool"),
+            Ty::Str => f.write_str("str"),
+            // TODO: it's kind of annoying that we only know the id of the inner type.
+            Ty::List(type_id, len) => write!(f, "[{type_id:?}; {len:?}]"),
+            // same here
+            Ty::Ptr(type_id) => write!(f, "*{type_id:?}"),
+            Ty::Fn { .. } => f.write_str("func"),
+            Ty::Struct(struct_ty) => f.write_str(struct_ty.ident.as_str()),
+        }
     }
 }

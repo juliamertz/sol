@@ -10,12 +10,12 @@ use crate::codegen::qbe::{
     Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, RegularParam,
     Statement, TyDef,
 };
-use crate::traits::AsStr;
 use crate::interner::Id;
 use crate::mir::{self, BlockId};
 use crate::number::Signedness;
 use crate::number::encode::bijective_base26;
-use crate::type_checker::ty::{StructTy, Type};
+use crate::traits::AsStr;
+use crate::type_checker::ty::{StructTy, Ty};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -76,7 +76,7 @@ impl<'env> Builder<'env> {
         TempId(idx)
     }
 
-    pub fn lower_ty_def(&self, _ty: &Type) -> Result<TyDef> {
+    pub fn lower_ty_def(&self, _ty: &Ty) -> Result<TyDef> {
         // TyDef::Regular { ident: (), align: (), sub_tys: () }
         todo!()
     }
@@ -100,7 +100,7 @@ impl<'env> Builder<'env> {
         Ok(match def {
             mir::Definition::Ty(ty) => {
                 let (ident, ty_def) = match ty {
-                    Type::Struct(StructTy { ident, fields }) => (
+                    Ty::Struct(StructTy { ident, fields }) => (
                         ident.as_str(),
                         Rc::new(TyDef::Regular {
                             ident: Ident::Ty(ident.as_str().into()),
@@ -160,7 +160,7 @@ impl<'env> Builder<'env> {
 
             mir::Instruction::BinOp { dest, op, lhs, rhs } => {
                 let val_ty_id = &func.operand_ty(lhs);
-                let val_ty = self.env.types.get(val_ty_id).unwrap();
+                let val_ty = self.env.types.get(val_ty_id);
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
                 let lhs = self.lower_operand(lhs);
                 let rhs = self.lower_operand(rhs);
@@ -175,8 +175,8 @@ impl<'env> Builder<'env> {
                     Or => Instruction::Or(lhs, rhs),
                     Eq | Ne | Lt | Gt => {
                         let signedness = match val_ty {
-                            Type::Int(_) => Signedness::Signed,
-                            Type::UInt(_) => Signedness::Unsigned,
+                            Ty::Int(_) => Signedness::Signed,
+                            Ty::UInt(_) => Signedness::Unsigned,
                             _ => unreachable!(),
                         };
                         let ty = self.lower_ty(val_ty_id)?;
@@ -216,14 +216,9 @@ impl<'env> Builder<'env> {
                 operands,
             } => {
                 let name = self.env.def_names.get(def).expect("def name");
-                let fn_ty = self
-                    .env
-                    .definitions
-                    .get(def)
-                    .and_then(|ty_id| self.env.types.get(ty_id))
-                    .expect("def type");
+                let fn_ty = self.env.types.get(self.env.definitions.get(def));
 
-                let Type::Fn {
+                let Ty::Fn {
                     is_variadic,
                     params: param_tys,
                     ..
@@ -387,19 +382,19 @@ impl<'env> Builder<'env> {
     pub fn lower_ty<'a>(&self, type_id: &TypeId) -> Result<AbiTy> {
         let ty = self.env.type_by_id(type_id)?;
         Ok(match ty {
-            Type::Unit => AbiTy::Base(BaseTy::Word), // TODO: maybe use a custom unit type
-            Type::Int(_) | Type::UInt(_) => AbiTy::Base(BaseTy::Word),
-            Type::Bool => AbiTy::Base(BaseTy::Word),
-            Type::Str => AbiTy::Base(BaseTy::Long),
-            Type::List(_ty, _size) => AbiTy::Base(BaseTy::Long),
-            Type::Ptr(_type_id) => todo!(),
-            Type::Fn {
+            Ty::Unit => AbiTy::Base(BaseTy::Word), // TODO: maybe use a custom unit type
+            Ty::Int(_) | Ty::UInt(_) => AbiTy::Base(BaseTy::Word),
+            Ty::Bool => AbiTy::Base(BaseTy::Word),
+            Ty::Str => AbiTy::Base(BaseTy::Long),
+            Ty::List(_ty, _size) => AbiTy::Base(BaseTy::Long),
+            Ty::Ptr(_type_id) => todo!(),
+            Ty::Fn {
                 is_extern: _,
                 is_variadic: _,
                 params: _,
                 returns: _,
             } => todo!(),
-            Type::Struct(StructTy { ident, .. }) => {
+            Ty::Struct(StructTy { ident, .. }) => {
                 let Some(ty_def) = self.type_defs.get(ident.as_str()) else {
                     todo!("unknown type: {ident}");
                 };

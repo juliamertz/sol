@@ -5,11 +5,11 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::*;
-use crate::traits::AsStr;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
+use crate::traits::AsStr;
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::parser))]
@@ -56,23 +56,38 @@ pub enum ParseError {
     Lexer(#[from] crate::lexer::LexerError),
 }
 
-pub type Result<T, E = ParseError> = core::result::Result<T, E>;
+type Result<T, E = ParseError> = core::result::Result<T, E>;
 
+/// precedence of a token produced by the lexer
+///
+/// this dictates the order in which expressions are traversed in the parser
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Default)]
 pub enum Prec {
     #[default]
+    /// lowest precedence, this is the default
     Lowest,
-    Assign,    // a = 10
-    AndOr,     // && or || - lower precedence than equality
-    Eq,        // == or !=
-    Cmp,       // > or <
-    Sum,       // +
-    Product,   // *
-    Unary,     // -a, !a or &a
-    Call,      // func()
-    Construct, // Point { x : 10, y : 5 }
-    Index,     // list[0]
-    Chain,     // mod.field
+    /// `a = 10`
+    Assign,
+    /// `&&` or `||` lower precedence than equality
+    AndOr,
+    /// `==` or `!=`
+    Eq,
+    /// `>` or `<`
+    Cmp,
+    /// `+`
+    Sum,
+    /// `*`
+    Product,
+    /// `-a`, `!a` or `&a`
+    Unary,
+    /// `func()`
+    Call,
+    /// `Point { x : 10, y : 5 }`
+    Construct,
+    /// `list[0]`
+    Index,
+    /// `mod.field`
+    Chain,
 }
 
 impl From<&Token<'_>> for Prec {
@@ -95,7 +110,7 @@ impl From<&Token<'_>> for Prec {
 }
 
 #[derive(Default)]
-pub struct Context {
+struct Context {
     id: u32,
 }
 
@@ -108,20 +123,20 @@ impl Context {
 }
 
 pub struct Parser<'src> {
-    pub lex: Lexer<'src>,
-    pub ctx: Context,
-    pub tokens: Vec<Token<'src>>,
-    pub curr: Token<'src>,
-    pub next: Option<Token<'src>>,
+    lex: Lexer<'src>,
+    ctx: Context,
+    tokens: Vec<Token<'src>>,
+    curr: Token<'src>,
+    next: Option<Token<'src>>,
 }
 
 impl<'src> Parser<'src> {
     pub fn new(file_path: PathBuf, content: &'src str) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
-        let curr = lex
-            .read_token()
-            .transpose()?
-            .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos));
+        let curr =
+            lex.read_token()
+                .transpose()?
+                .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos()));
         let next = lex.read_token().transpose()?;
         let ctx = Context::default();
         Ok(Self {
@@ -131,6 +146,10 @@ impl<'src> Parser<'src> {
             next,
             tokens: vec![],
         })
+    }
+
+    pub fn source(&self) -> SourceInfo {
+        self.lex.source()
     }
 
     pub fn parse(&mut self) -> Result<Module> {
@@ -208,22 +227,20 @@ impl<'src> Parser<'src> {
         Ok(())
     }
 
-    pub fn item(&mut self) -> Result<Item> {
+    fn item(&mut self) -> Result<Item> {
         let item = match self.curr.kind {
             TokenKind::Fn => Item::Fn(self.func()?),
-            TokenKind::Extern => {
-                match self.next.as_ref().map(|tok| tok.kind) {
-                    Some(TokenKind::Fn | TokenKind::Variadic) => Item::Fn(self.extern_func()?),
-                    Some(TokenKind::Use) => Item::Use(self.r#use()?),
-                    _ => todo!("error: extern keyword should be followed by func or use"),
-                }
-            }
+            TokenKind::Extern => match self.next.as_ref().map(|tok| tok.kind) {
+                Some(TokenKind::Fn | TokenKind::Variadic) => Item::Fn(self.extern_func()?),
+                Some(TokenKind::Use) => Item::Use(self.r#use()?),
+                _ => todo!("error: extern keyword should be followed by func or use"),
+            },
             TokenKind::Struct => Item::StructDef(self.struct_def()?),
             TokenKind::Impl => Item::Impl(self.imp()?),
             _ => {
                 return Err(ParseError::Todo {
                     src: self.lex.source(),
-                    token: self.curr.owned(),
+                    token: self.curr.to_owned(),
                     span: self.curr.span,
                 });
             }
@@ -490,24 +507,21 @@ impl<'src> Parser<'src> {
     }
 
     fn unary_op(&mut self) -> Result<(Op<UnaryOpKind>, Prec)> {
-        let token = self.curr.to_owned();
-        let prec = Prec::from(&token);
-        let span = token.span;
-
-        let kind = match token.kind {
+        let prec = Prec::from(&self.curr);
+        let span = self.curr.span;
+        let kind = match self.curr.kind {
             TokenKind::Sub => Ok(UnaryOpKind::Negate),
             TokenKind::Bang => Ok(UnaryOpKind::Not),
             _ => Err(ParseError::InvalidOperator {
                 src: self.lex.source(),
-                span: token.span(),
+                span,
                 help: None,
             }),
         }?;
 
         self.advance()?;
 
-        let op = Op { span, kind };
-        Ok((op, prec))
+        Ok((Op { span, kind }, prec))
     }
 
     fn unary(&mut self, op: Op<UnaryOpKind>) -> Result<Unary> {
@@ -524,11 +538,9 @@ impl<'src> Parser<'src> {
     }
 
     fn bin_op(&mut self) -> Result<(Op<BinOpKind>, Prec)> {
-        let token = self.curr.to_owned();
-        let prec = Prec::from(&token);
-        let span = token.span;
-
-        let kind = match token.kind {
+        let prec = Prec::from(&self.curr);
+        let span = self.curr.span;
+        let kind = match self.curr.kind {
             TokenKind::Add => Ok(BinOpKind::Add),
             TokenKind::Sub => Ok(BinOpKind::Sub),
             TokenKind::Eq => Ok(BinOpKind::Eq),
@@ -541,15 +553,14 @@ impl<'src> Parser<'src> {
             TokenKind::Or => Ok(BinOpKind::Or),
             _ => Err(ParseError::InvalidOperator {
                 src: self.lex.source(),
-                span: token.span(),
+                span,
                 help: None,
             }),
         }?;
 
         self.advance()?;
 
-        let op = Op { span, kind };
-        Ok((op, prec))
+        Ok((Op { span, kind }, prec))
     }
 
     fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
@@ -679,7 +690,7 @@ impl<'src> Parser<'src> {
         })
     }
 
-    pub fn expr(&mut self, prec: Prec) -> Result<Expr> {
+    fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
             TokenKind::Int => Expr::Literal(self.int_lit()?),
             TokenKind::True | TokenKind::False => Expr::Literal(self.bool_lit()?),
@@ -698,7 +709,7 @@ impl<'src> Parser<'src> {
             _ => {
                 return Err(ParseError::Todo {
                     src: self.lex.source(),
-                    token: self.curr.owned(),
+                    token: self.curr.to_owned(),
                     span: self.curr.span,
                 });
             }
@@ -747,7 +758,7 @@ impl<'src> Parser<'src> {
         Ok(lhs)
     }
 
-    pub fn expr_lowest(&mut self) -> Result<Expr> {
+    fn expr_lowest(&mut self) -> Result<Expr> {
         self.expr(Prec::Lowest)
     }
 

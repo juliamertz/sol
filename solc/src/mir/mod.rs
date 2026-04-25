@@ -1,8 +1,7 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
-use crate::hir::FieldId;
 use crate::interner::Id;
-use crate::type_checker::ty::Type;
-use crate::type_checker::{DefId, TypeId};
+use crate::type_checker::ty::Ty;
+use crate::type_checker::{DefId, TypeId, FieldId};
 
 mod builder;
 mod fmt;
@@ -150,7 +149,7 @@ pub struct Data {
 
 #[derive(Debug)]
 pub enum Definition {
-    Ty(Type),
+    Ty(Ty),
     Data(Data),
     Fn(Fn),
 }

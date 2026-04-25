@@ -2,28 +2,34 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct SourceInfo {
-    name: Arc<str>,
-    source: Arc<str>,
+pub struct SourceInfo(Arc<InnerSource>);
+
+struct InnerSource {
+    name: String,
+    source: String,
 }
 
 impl SourceInfo {
-    pub fn new(name: impl Into<Arc<str>>, source: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            source: source.into(),
-        }
+    pub fn new(name: impl ToString, source: impl ToString) -> Self {
+        Self(Arc::new(InnerSource {
+            name: name.to_string(),
+            source: source.to_string(),
+        }))
     }
 
-    pub fn inner(&self) -> &str {
-        &self.source
+    pub fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    pub fn source(&self) -> &str {
+        &self.0.source
     }
 }
 
 impl std::fmt::Debug for SourceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SourceInfo")
-            .field("name", &self.name)
+            .field("name", &self.name())
             .field("source", &"<redacted>");
         Ok(())
     }
@@ -37,10 +43,10 @@ impl miette::SourceCode for SourceInfo {
         context_lines_after: usize,
     ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
         let inner_contents =
-            self.inner()
+            self.source()
                 .read_span(span, context_lines_before, context_lines_after)?;
         let mut contents = miette::MietteSpanContents::new_named(
-            self.name.to_string(),
+            self.name().to_string(),
             inner_contents.data(),
             *inner_contents.span(),
             inner_contents.line(),

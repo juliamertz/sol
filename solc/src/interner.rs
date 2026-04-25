@@ -81,8 +81,8 @@ where
     K: Id + Hash + Eq + Copy,
     S: Strategy<K, V>,
 {
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.map.get(key)
+    pub fn get(&self, key: &K) -> &V {
+        self.map.get(key).expect("interned key to exist in map")
     }
 
     pub fn insert(&mut self, key: K, value: V) {

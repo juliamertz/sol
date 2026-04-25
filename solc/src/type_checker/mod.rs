@@ -28,7 +28,7 @@ pub enum TypeError {
     #[error(transparent)]
     Collect(#[from] CollectError),
 
-    #[error("{ident} not found in scope")]
+    #[error("`{ident}` not found in scope")]
     NotFound {
         #[source_code]
         src: SourceInfo,
@@ -39,14 +39,14 @@ pub enum TypeError {
         span: Span,
     },
 
-    #[error("no field '{name}' on type: '{ty}'")]
+    #[error("no field `{name}` on type `{ty}`")]
     NoSuchField {
         #[source_code]
         src: SourceInfo,
 
         name: Name,
 
-        ty: Type,
+        ty: Ty,
 
         #[label("here")]
         span: Span,
@@ -54,8 +54,8 @@ pub enum TypeError {
 
     #[error("invalid type, expected: {expected:?}, got: {actual:?}")]
     InvalidType {
-        expected: Type,
-        actual: Type,
+        expected: Ty,
+        actual: Ty,
 
         #[source_code]
         src: SourceInfo,
@@ -69,11 +69,11 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
-        lhs_ty: Type,
+        lhs_ty: Ty,
         #[label("has type `{lhs_ty}`")]
         lhs_span: Span,
 
-        rhs_ty: Type,
+        rhs_ty: Ty,
         #[label("has type `{rhs_ty}`")]
         rhs_span: Span,
 
@@ -86,11 +86,11 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
-        first_ty: Type,
+        first_ty: Ty,
         #[label("first element has type `{first_ty}`")]
         first_span: Span,
 
-        other_ty: Type,
+        other_ty: Ty,
         #[label("this element has type `{other_ty}`")]
         other_span: Span,
 
@@ -98,10 +98,8 @@ pub enum TypeError {
         help: Option<String>,
     },
 
-    #[error("type not found for node")]
-    UntypedNode {
-        node_id: NodeId,
-
+    #[error("tried to access a field on a non-aggregate type")]
+    FieldAccessOnNonAggregate {
         #[source_code]
         src: SourceInfo,
 
@@ -113,7 +111,7 @@ pub enum TypeError {
     Internal,
 }
 
-pub type Result<T, E = TypeError> = core::result::Result<T, E>;
+type Result<T, E = TypeError> = core::result::Result<T, E>;
 
 id!(DefId);
 id!(TypeId);
@@ -145,16 +143,26 @@ impl Scope<'_> {
     }
 }
 
+id!(FieldId);
+id!(ItemId);
+
+#[derive(Debug, Clone, Copy)]
+pub enum MemberResolution {
+    Field(FieldId),
+    Item(ItemId),
+}
+
 #[derive(Debug)]
 pub struct TypeEnv {
-    pub src: SourceInfo,
-    pub types: Interner<TypeId, Type, TypeInterner>,
-    pub associated_items: HashMap<(TypeId, Ident), DefId>,
-    pub definitions: Interner<DefId, TypeId>,
-    pub nodes: Interner<NodeId, TypeId>,
-    pub mutable_definitions: Vec<DefId>,
-    pub node_defs: HashMap<NodeId, DefId>,
-    pub def_names: HashMap<DefId, Arc<str>>,
+    pub(crate) src: SourceInfo,
+    pub(crate) types: Interner<TypeId, Ty, TypeInterner>,
+    pub(crate) associated_items: HashMap<(TypeId, String), (DefId, ItemId)>,
+    pub(crate) member_resolutions: HashMap<NodeId, MemberResolution>,
+    pub(crate) definitions: Interner<DefId, TypeId>,
+    pub(crate) nodes: Interner<NodeId, TypeId>,
+    pub(crate) mutable_definitions: Vec<DefId>,
+    pub(crate) node_defs: HashMap<NodeId, DefId>,
+    pub(crate) def_names: HashMap<DefId, Arc<str>>,
 }
 
 impl TypeEnv {
@@ -163,6 +171,7 @@ impl TypeEnv {
             src,
             types: Interner::default(),
             associated_items: HashMap::default(),
+            member_resolutions: HashMap::default(),
             definitions: Interner::default(),
             nodes: Interner::default(),
             mutable_definitions: Vec::default(),
@@ -171,40 +180,33 @@ impl TypeEnv {
         }
     }
 
-    pub fn type_of(&self, node_id: &NodeId, span: &Span) -> Result<TypeId> {
-        self.nodes
-            .get(node_id)
-            .copied()
-            .ok_or_else(|| TypeError::UntypedNode {
-                node_id: *node_id,
-                src: self.src.clone(),
-                span: *span,
-            })
+    pub fn type_of(&self, node_id: &NodeId, span: &Span) -> TypeId {
+        *self.nodes.get(node_id)
     }
 
-    pub fn type_by_id(&self, type_id: &TypeId) -> Result<&Type> {
-        Ok(self.types.get(type_id).unwrap())
+    pub fn type_by_id(&self, type_id: &TypeId) -> Result<&Ty> {
+        Ok(self.types.get(type_id))
     }
 
     pub fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
         let ty = match &ast_ty.kind {
-            ast::TyKind::Int(kind) => Type::Int(kind.into()),
-            ast::TyKind::UInt(kind) => Type::UInt(kind.into()),
-            ast::TyKind::Bool => Type::Bool,
-            ast::TyKind::Str => Type::Str,
+            ast::TyKind::Int(kind) => Ty::Int(kind.into()),
+            ast::TyKind::UInt(kind) => Ty::UInt(kind.into()),
+            ast::TyKind::Bool => Ty::Bool,
+            ast::TyKind::Str => Ty::Str,
             ast::TyKind::Var(ident) => {
                 let def_id = scope.get_definition(ident).ok_or(TypeError::NotFound {
                     src: self.src.clone(),
                     ident: ident.to_owned(),
                     span: ident.span,
                 })?;
-                let ty_id = self.definitions.get(def_id).copied().unwrap(); // TODO: handle error
+                let ty_id = *self.definitions.get(def_id); // TODO: handle error
                 self.nodes.insert(ast_ty.id, ty_id);
                 return Ok(ty_id);
             }
             ast::TyKind::List { inner, size } => {
                 let inner_id = self.type_from_ast_ty(inner, scope)?;
-                Type::List(inner_id, *size)
+                Ty::List(inner_id, *size)
             }
             ast::TyKind::Fn {
                 params,
@@ -217,7 +219,7 @@ impl TypeEnv {
                     .collect::<Result<Vec<_>>>()?
                     .into();
                 let return_id = self.type_from_ast_ty(returns, scope)?;
-                Type::Fn {
+                Ty::Fn {
                     is_extern: *is_extern,
                     is_variadic: false, // FIXME:????????
                     params: param_ids,
@@ -241,11 +243,7 @@ pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
             span: ident.span,
         })?;
     env.node_defs.insert(ident.id, *def_id);
-    let ty_id = env
-        .definitions
-        .get(def_id)
-        .copied()
-        .ok_or(TypeError::Internal)?;
+    let ty_id = *env.definitions.get(def_id);
     Ok(ty_id)
 }
 
@@ -254,9 +252,9 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
 
     let ty_id = if let Some(last) = block.nodes.last() {
         match last {
-            Stmnt::Expr(expr) => env.nodes.get(&expr.id()).copied().unwrap(),
-            Stmnt::Ret(Ret { val, .. }) => env.nodes.get(&val.id()).copied().unwrap(),
-            _ => env.types.intern(Type::Unit),
+            Stmnt::Expr(expr) => *env.nodes.get(&expr.id()),
+            Stmnt::Ret(Ret { val, .. }) => *env.nodes.get(&val.id()),
+            _ => env.types.intern(Ty::Unit),
         }
     } else {
         TypeId::NONE
@@ -265,6 +263,43 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     env.nodes.insert(block.id, ty_id);
 
     Ok(ty_id)
+}
+
+pub fn infer_member_access(
+    member_access: &MemberAccess,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
+) -> Result<(TypeId, MemberResolution)> {
+    let lhs_ty_id = infer(&member_access.lhs, env, scope)?;
+    let lhs_ty = env.types.get(&lhs_ty_id);
+    let struct_ty = lhs_ty
+        .as_struct()
+        .ok_or(TypeError::FieldAccessOnNonAggregate {
+            src: env.src.clone(),
+            span: member_access.span,
+        })?;
+
+    {
+        let assoc_item = env
+            .associated_items
+            .get(&(lhs_ty_id, member_access.rhs.to_string()));
+
+        if let Some((def_id, item_id)) = assoc_item.copied() {
+            let ty_id = *env.definitions.get(&def_id);
+            env.node_defs.insert(member_access.id, def_id);
+            Ok((ty_id, MemberResolution::Item(item_id)))
+        } else if let Some((field_id, ty_id)) = struct_ty.get_field(&member_access.rhs) {
+            Ok((ty_id, MemberResolution::Field(field_id)))
+        } else {
+            Err(TypeError::NoSuchField {
+                // TODO: or item...
+                src: env.src.clone(),
+                name: member_access.rhs.clone(),
+                ty: lhs_ty.clone(),
+                span: member_access.span,
+            })
+        }
+    }
 }
 
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
@@ -301,9 +336,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                         Err(TypeError::ComparisonMismatch {
                             src: env.src.clone(),
                             lhs_span: lhs.span(),
-                            lhs_ty: env.types.get(&lhs_ty).unwrap().clone(),
+                            lhs_ty: env.types.get(&lhs_ty).clone(),
                             rhs_span: rhs.span(),
-                            rhs_ty: env.types.get(&rhs_ty).unwrap().clone(),
+                            rhs_ty: env.types.get(&rhs_ty).clone(),
                             help: None,
                         })
                     } else {
@@ -314,15 +349,15 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 BinOpKind::And | BinOpKind::Or => {
                     if lhs_ty != TypeId::BOOL {
                         Err(TypeError::InvalidType {
-                            expected: Type::Bool,
-                            actual: env.types.get(&lhs_ty).unwrap().clone(),
+                            expected: Ty::Bool,
+                            actual: env.types.get(&lhs_ty).clone(),
                             src: env.src.clone(),
                             span: lhs.span(),
                         })
                     } else if rhs_ty != TypeId::BOOL {
                         Err(TypeError::InvalidType {
-                            expected: Type::Bool,
-                            actual: env.types.get(&rhs_ty).unwrap().clone(),
+                            expected: Ty::Bool,
+                            actual: env.types.get(&rhs_ty).clone(),
                             src: env.src.clone(),
                             span: rhs.span(),
                         })
@@ -332,9 +367,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 _ => {
-                    let lhs_type = env.types.get(&lhs_ty).unwrap();
+                    let lhs_type = env.types.get(&lhs_ty);
                     match lhs_type {
-                        Type::Int(_) | Type::UInt(_) => match op.kind {
+                        Ty::Int(_) | Ty::UInt(_) => match op.kind {
                             BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
                                 Ok(lhs_ty)
                             }
@@ -347,16 +382,16 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
         }
         Expr::Unary(Unary { op, rhs, .. }) => {
             let ty = infer(rhs, env, scope)?;
-            match (&op.kind, env.types.get(&ty).unwrap()) {
-                (UnaryOpKind::Negate, Type::Int(_)) => Ok(ty),
+            match (&op.kind, env.types.get(&ty)) {
+                (UnaryOpKind::Negate, Ty::Int(_)) => Ok(ty),
                 _ => todo!(),
             }
         }
         Expr::Call(Call { func, params, .. }) => {
             let func_ty_id = infer(func, env, scope)?;
             let returns = {
-                let func_ty = env.types.get(&func_ty_id).unwrap();
-                let Type::Fn { returns, .. } = func_ty else {
+                let func_ty = env.types.get(&func_ty_id);
+                let Ty::Fn { returns, .. } = func_ty else {
                     todo!("cannot call a non fn var");
                 };
                 *returns
@@ -377,8 +412,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             env.nodes.insert(idx.id(), idx_ty_id);
 
             let inner = {
-                let ty = env.types.get(&val_ty_id).unwrap();
-                if let Type::List(inner, _) = ty {
+                let ty = env.types.get(&val_ty_id);
+                if let Ty::List(inner, _) = ty {
                     *inner
                 } else {
                     todo!("can only index for list types")
@@ -399,8 +434,8 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 return Err(TypeError::InvalidType {
                     src: env.src.clone(),
                     span: condition.span(),
-                    expected: Type::Bool,
-                    actual: env.types.get(&condition_ty).unwrap().clone(),
+                    expected: Ty::Bool,
+                    actual: env.types.get(&condition_ty).clone(),
                 });
             }
 
@@ -418,9 +453,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 return Err(TypeError::ComparisonMismatch {
                     src: env.src.clone(),
                     lhs_span: consequence.span,
-                    lhs_ty: env.types.get(&consequence_ty).unwrap().clone(),
+                    lhs_ty: env.types.get(&consequence_ty).clone(),
                     rhs_span: alternative.span,
-                    rhs_ty: env.types.get(&alternative_ty).unwrap().clone(),
+                    rhs_ty: env.types.get(&alternative_ty).clone(),
                     help: None,
                 });
             }
@@ -444,16 +479,16 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 if ty != inner_type {
                     return Err(TypeError::HeterogeneousList {
                         src: env.src.clone(),
-                        first_ty: env.types.get(&inner_type).unwrap().clone(),
+                        first_ty: env.types.get(&inner_type).clone(),
                         first_span: first_item.span(),
-                        other_ty: env.types.get(&ty).unwrap().clone(),
+                        other_ty: env.types.get(&ty).clone(),
                         other_span: item.span(),
                         help: Some("pick a type and commit to it".into()),
                     });
                 }
             }
 
-            let ty = Type::List(inner_type, Some(size));
+            let ty = Ty::List(inner_type, Some(size));
             let ty_id = env.types.intern(ty);
             Ok(ty_id)
         }
@@ -469,10 +504,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                         ident: ident.to_owned(),
                         span: ident.span,
                     })?;
-            let ty_id = *env
-                .definitions
-                .get(&def_id)
-                .expect("constructor type to be defined");
+            let ty_id = *env.definitions.get(&def_id);
 
             for (_ident, expr) in fields.iter() {
                 let _field_ty = infer(expr, env, scope)?;
@@ -485,30 +517,14 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(ty_id)
         }
-        Expr::MemberAccess(MemberAccess { lhs, rhs, .. }) => {
-            let lhs_ty_id = infer(lhs, env, scope)?;
-            let field_ty_id = {
-                let lhs_ty = env.types.get(&lhs_ty_id).unwrap();
-                if let Type::Struct(StructTy { fields, .. }) = lhs_ty {
-                    fields
-                        .iter()
-                        .find(|(field, _)| field.as_str() == rhs.as_str()) // TODO: this is hacky D:
-                        .map(|(_, ty_id)| *ty_id)
-                        .ok_or_else(|| TypeError::NoSuchField {
-                            src: env.src.clone(),
-                            name: rhs.clone(),
-                            ty: lhs_ty.clone(),
-                            span: lhs.span().enclosing_to(&rhs.span),
-                        })?
-                } else {
-                    todo!("infer member access expr")
-                }
-            };
-            Ok(field_ty_id)
+        Expr::MemberAccess(member_access) => {
+            let (ty_id, resolution) = infer_member_access(member_access, env, scope)?;
+            env.member_resolutions.insert(member_access.id, resolution);
+            Ok(ty_id)
         }
         Expr::Ref(expr) => {
             let inner_ty_id = infer(expr, env, scope)?;
-            Ok(env.types.intern(Type::Ptr(inner_ty_id)))
+            Ok(env.types.intern(Ty::Ptr(inner_ty_id)))
         }
         Expr::Assign(assign) => {
             let _lhs_ty_id = infer(&assign.lhs, env, scope)?;
@@ -550,7 +566,7 @@ pub fn infer_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Ty
                 .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
                 .transpose_vec()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env.types.intern(Type::func(param_tys, returns));
+            let fn_ty_id = env.types.intern(Ty::func(param_tys, returns));
             let def_id = env.definitions.intern(fn_ty_id);
 
             let mut scope = scope.new_child();
@@ -578,7 +594,7 @@ pub fn infer_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Ty
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
             let fn_ty_id = env
                 .types
-                .intern(Type::extern_func(param_tys, returns, *is_variadic));
+                .intern(Ty::extern_func(param_tys, returns, *is_variadic));
             let def_id = env.definitions.intern(fn_ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
             Ok((fn_ty_id, def_id))
@@ -615,8 +631,8 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
                     return Err(TypeError::InvalidType {
                         src: env.src.clone(),
                         span: val.span(),
-                        expected: env.types.get(&declared_ty_id).unwrap().clone(),
-                        actual: env.types.get(&ty_id).unwrap().clone(),
+                        expected: env.types.get(&declared_ty_id).clone(),
+                        actual: env.types.get(&ty_id).clone(),
                     });
                 }
             }
@@ -656,7 +672,7 @@ pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>
         fn_scope.define(param.key, def_id);
     }
 
-    let ty_id = env.definitions.get(&def_id).copied().unwrap();
+    let ty_id = *env.definitions.get(&def_id);
     env.node_defs.insert(func.ident.id, def_id);
     env.nodes.insert(func.ident.id, ty_id);
     fn_scope.define(&func.ident, def_id);
@@ -670,8 +686,6 @@ pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>
 pub fn check_assoc_item(item: &AssocItem, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     let ident = item.ident().to_owned();
     let (ty_id, def_id) = infer_assoc_item(item, env, scope)?;
-
-    env.associated_items.insert((ty_id, ident), def_id);
 
     match item {
         AssocItem::Fn(func) => check_func(func, def_id, env, scope),
@@ -688,7 +702,7 @@ pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()>
 
 pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let def_id = scope.get_definition(&def.ident).copied().unwrap();
-    let ty_id = env.definitions.get(&def_id).copied().unwrap();
+    let ty_id = *env.definitions.get(&def_id);
     env.node_defs.insert(def.ident.id, def_id);
     env.nodes.insert(def.ident.id, ty_id);
     scope.define(&def.ident, def_id);
@@ -731,11 +745,23 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
             .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
             .collect::<Result<Vec<_>>>()?
             .into();
-        let _impls = inventory.take_impls(&struct_def.ident); // TODO:
 
-        let ty_id = env.types.intern(Type::Struct(StructTy { ident, fields }));
+        let ty_id = env.types.intern(Ty::Struct(StructTy { ident, fields }));
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
+
+        {
+            let mut scope = scope.new_child();
+            let impls = inventory.take_impls(&struct_def.ident);
+            for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
+                let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
+                check_assoc_item(item, env, &mut scope)?;
+
+                let key = (ty_id, item.ident().to_string());
+                let item_id = ItemId::from(idx);
+                env.associated_items.insert(key, (def_id, item_id));
+            }
+        }
     }
 
     for func in inventory.take_fns() {

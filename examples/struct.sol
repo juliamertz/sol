@@ -22,7 +22,7 @@ func main() -> i32
   -- FIXME: we shouldn't be able to mutate fields of a non-mut struct
   point.x = 40
 
-  -- let final = point.add(other_point)
+  let final = point.add(other_point)
 
   printf("x: %d, y: %d", point.x, point.y)
 end

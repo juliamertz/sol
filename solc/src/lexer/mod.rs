@@ -35,10 +35,10 @@ pub type Result<T> = std::result::Result<T, LexerError>;
 
 #[derive(Debug)]
 pub struct Lexer<'src> {
-    pub source: SourceInfo,
-    pub content: &'src str,
-    pub pos: usize,
-    pub eof: bool,
+    source: SourceInfo,
+    content: &'src str,
+    pos: usize,
+    eof: bool,
 }
 
 impl<'src> Lexer<'src> {
@@ -52,25 +52,29 @@ impl<'src> Lexer<'src> {
         }
     }
 
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+
     pub fn source(&self) -> SourceInfo {
         self.source.clone()
     }
 
-    pub fn curr(&self) -> Option<char> {
+    fn curr(&self) -> Option<char> {
         self.content
             .as_bytes()
             .get(self.pos)
             .map(|byte| *byte as char)
     }
 
-    pub fn peek(&self) -> Option<char> {
+   fn peek(&self) -> Option<char> {
         self.content
             .as_bytes()
             .get(self.pos + 1)
             .map(|byte| *byte as char)
     }
 
-    pub fn advance(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<char> {
         self.pos += 1;
         self.curr()
     }

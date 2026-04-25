@@ -4,11 +4,11 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast;
-use crate::hir::{self, FieldId, HirId, ItemId, Locality, Mutability};
+use crate::hir::{self, HirId, Locality, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
-use crate::type_checker::{TypeEnv, TypeError, TypeId};
+use crate::type_checker::{FieldId, ItemId, MemberResolution, TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -36,7 +36,7 @@ pub fn lower_func<'ast>(func: &'ast ast::Fn, env: &mut TypeEnv) -> Result<hir::F
         ast::FnKind::Local { params, body } => hir::FnKind::Local {
             params: params
                 .iter()
-                .map(|(ident, ty)| Ok((lower_ident(ident, env)?, env.type_of(&ty.id, &ty.span)?)))
+                .map(|(ident, ty)| Ok((lower_ident(ident, env)?, env.type_of(&ty.id, &ty.span))))
                 .collect::<Result<Vec<_>>>()?
                 .into(),
             body: lower_block(body, env)?,
@@ -48,8 +48,8 @@ pub fn lower_func<'ast>(func: &'ast ast::Fn, env: &mut TypeEnv) -> Result<hir::F
             is_variadic: *is_variadic,
             params: params
                 .iter()
-                .map(|(name, ty)| Ok((lower_name(name), env.type_of(&ty.id, &ty.span)?)))
-                .collect::<Result<Vec<_>>>()?
+                .map(|(name, ty)| (lower_name(name), env.type_of(&ty.id, &ty.span)))
+                .collect_vec()
                 .into(),
         },
     };
@@ -59,7 +59,7 @@ pub fn lower_func<'ast>(func: &'ast ast::Fn, env: &mut TypeEnv) -> Result<hir::F
         span: &func.span,
         ident: lower_ident(&func.ident, env)?,
         kind,
-        return_ty: env.type_of(&func.return_ty.id, &func.span)?,
+        return_ty: env.type_of(&func.return_ty.id, &func.span),
     })
 }
 
@@ -85,8 +85,6 @@ pub fn lower_item<'ast>(
                 .fields
                 .iter()
                 .map(|(_, ty)| env.type_of(&ty.id, &ty.span))
-                .transpose_vec()?
-                .into_iter()
                 .enumerate()
                 .map(|(id, item)| (FieldId::from(id), item))
                 .collect_vec();
@@ -185,7 +183,7 @@ pub fn lower_ident<'ast>(ident: &'ast ast::Ident, env: &TypeEnv) -> Result<hir::
     Ok(hir::Ident {
         id: HirId::DUMMY,
         def_id,
-        ty: env.type_of(&ident.id, &ident.span)?,
+        ty: env.type_of(&ident.id, &ident.span),
         span: &ident.span,
         inner: &ident.inner,
         mutability: if env.mutable_definitions.contains(&def_id) {
@@ -229,8 +227,28 @@ pub fn lower_untyped_ident<'ast>(
     lower_typed_ident(ident, TypeId::NONE, env)
 }
 
+fn lower_member_access<'ast>(
+    member_access: &'ast ast::MemberAccess,
+    env: &mut TypeEnv,
+) -> Result<hir::MemberAccess<'ast>> {
+    let ty = env.type_of(&member_access.id, &member_access.span);
+    let resolution = env
+        .member_resolutions
+        .get(&member_access.id)
+        .copied()
+        .expect("member access to have an associated resolution");
+
+    Ok(hir::MemberAccess {
+        id: HirId::DUMMY,
+        ty,
+        span: &member_access.span,
+        lhs: lower_expr(&member_access.lhs, env)?.boxed(),
+        resolution,
+    })
+}
+
 pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir::Expr<'ast>> {
-    let ty = env.type_of(&expr.id(), &expr.span())?;
+    let ty = env.type_of(&expr.id(), &expr.span());
     let lowered = match expr {
         ast::Expr::Ident(ident) => hir::Expr::Ident(lower_ident(ident, env)?),
         ast::Expr::Literal(literal) => hir::Expr::Literal(hir::Literal {
@@ -318,13 +336,9 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .collect::<Result<Vec<_>>>()?
                 .into(),
         }),
-        ast::Expr::MemberAccess(member_access) => hir::Expr::MemberAccess(hir::MemberAccess {
-            id: HirId::DUMMY,
-            ty,
-            span: &member_access.span,
-            lhs: lower_expr(&member_access.lhs, env)?.boxed(),
-            rhs: lower_name(&member_access.rhs),
-        }),
+        ast::Expr::MemberAccess(member_access) => {
+            lower_member_access(member_access, env).map(hir::Expr::MemberAccess)?
+        }
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env)?.into()),
         ast::Expr::Assign(assign) => hir::Expr::Assign(hir::Assign {
             id: HirId::DUMMY,
@@ -398,11 +412,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
 pub fn lower_stmnt<'ast>(stmnt: &'ast ast::Stmnt, env: &mut TypeEnv) -> Result<hir::Stmnt<'ast>> {
     Ok(match stmnt {
         ast::Stmnt::Let(inner) => {
-            let ty = env
-                .nodes
-                .get(&inner.val.id())
-                .copied()
-                .unwrap_or(TypeId::NONE);
+            let ty = *env.nodes.get(&inner.val.id());
             let def_id = env
                 .node_defs
                 .get(&inner.ident.id)
@@ -420,11 +430,7 @@ pub fn lower_stmnt<'ast>(stmnt: &'ast ast::Stmnt, env: &mut TypeEnv) -> Result<h
         }
         ast::Stmnt::Ret(inner) => {
             let val = lower_expr(&inner.val, env)?;
-            let ty = env
-                .nodes
-                .get(&inner.val.id())
-                .copied()
-                .unwrap_or(TypeId::NONE);
+            let ty = *env.nodes.get(&inner.val.id());
             hir::Stmnt::Ret(hir::Ret {
                 id: HirId::DUMMY,
                 ty,

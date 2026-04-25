@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::interner::{self, Id};
-use crate::type_checker::{IntTy, Type, TypeId, UIntTy};
+use crate::type_checker::{IntTy, Ty, TypeId, UIntTy};
 
 impl TypeId {
     pub const NONE: TypeId = TypeId(0);
@@ -21,7 +21,7 @@ impl TypeId {
 #[derive(Debug)]
 pub struct TypeInterner {
     idx: u32,
-    lookup: HashMap<Type, TypeId>,
+    lookup: HashMap<Ty, TypeId>,
 }
 
 impl TypeInterner {
@@ -41,25 +41,25 @@ impl Default for TypeInterner {
     }
 }
 
-impl interner::Strategy<TypeId, Type> for TypeInterner {
-    fn key_for(&mut self, value: &Type) -> TypeId {
+impl interner::Strategy<TypeId, Ty> for TypeInterner {
+    fn key_for(&mut self, value: &Ty) -> TypeId {
         match value {
-            Type::Unit => TypeId::UNIT,
-            Type::Int(int_ty) => match int_ty {
+            Ty::Unit => TypeId::UNIT,
+            Ty::Int(int_ty) => match int_ty {
                 IntTy::I8 => TypeId::I8,
                 IntTy::I16 => TypeId::I16,
                 IntTy::I32 => TypeId::I32,
                 IntTy::I64 => TypeId::I64,
             },
-            Type::UInt(uint_ty) => match uint_ty {
+            Ty::UInt(uint_ty) => match uint_ty {
                 UIntTy::U8 => TypeId::U8,
                 UIntTy::U16 => TypeId::U16,
                 UIntTy::U32 => TypeId::U32,
                 UIntTy::U64 => TypeId::U64,
             },
-            Type::Bool => TypeId::BOOL,
-            Type::Str => TypeId::STR,
-            Type::List(..) | Type::Ptr(_) | Type::Fn { .. } => {
+            Ty::Bool => TypeId::BOOL,
+            Ty::Str => TypeId::STR,
+            Ty::List(..) | Ty::Ptr(_) | Ty::Fn { .. } => {
                 if let Some(id) = self.lookup.get(value).copied() {
                     id
                 } else {
@@ -68,24 +68,24 @@ impl interner::Strategy<TypeId, Type> for TypeInterner {
                     id
                 }
             }
-            Type::Struct { .. } => self.next(),
+            Ty::Struct { .. } => self.next(),
         }
     }
 
-    fn default_values() -> Option<std::collections::HashMap<TypeId, Type>> {
+    fn default_values() -> Option<std::collections::HashMap<TypeId, Ty>> {
         Some(
             [
-                (TypeId::UNIT, Type::Unit),
-                (TypeId::I8, Type::Int(IntTy::I8)),
-                (TypeId::U8, Type::UInt(UIntTy::U8)),
-                (TypeId::I16, Type::Int(IntTy::I16)),
-                (TypeId::U16, Type::UInt(UIntTy::U16)),
-                (TypeId::I32, Type::Int(IntTy::I32)),
-                (TypeId::U32, Type::UInt(UIntTy::U32)),
-                (TypeId::I64, Type::Int(IntTy::I64)),
-                (TypeId::U64, Type::UInt(UIntTy::U64)),
-                (TypeId::BOOL, Type::Bool),
-                (TypeId::STR, Type::Str),
+                (TypeId::UNIT, Ty::Unit),
+                (TypeId::I8, Ty::Int(IntTy::I8)),
+                (TypeId::U8, Ty::UInt(UIntTy::U8)),
+                (TypeId::I16, Ty::Int(IntTy::I16)),
+                (TypeId::U16, Ty::UInt(UIntTy::U16)),
+                (TypeId::I32, Ty::Int(IntTy::I32)),
+                (TypeId::U32, Ty::UInt(UIntTy::U32)),
+                (TypeId::I64, Ty::Int(IntTy::I64)),
+                (TypeId::U64, Ty::UInt(UIntTy::U64)),
+                (TypeId::BOOL, Ty::Bool),
+                (TypeId::STR, Ty::Str),
             ]
             .into_iter()
             .collect(),

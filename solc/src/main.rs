@@ -92,7 +92,7 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
     let module_ast = parser.parse()?;
 
-    let mut env = TypeEnv::new(parser.lex.source());
+    let mut env = TypeEnv::new(parser.source());
     let mut scope = Scope::default();
 
     type_checker::check_module(&module_ast, &mut env, &mut scope)?;
@@ -151,7 +151,7 @@ fn main() -> Result<()> {
                 return write_str(stdout, fmt);
             }
 
-            let mut env = TypeEnv::new(parser.lex.source());
+            let mut env = TypeEnv::new(parser.source());
             let mut scope = Scope::default();
             type_checker::check_module(&ast, &mut env, &mut scope)?;
 

@@ -4,13 +4,12 @@ use miette::Diagnostic;
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use crate::hir::FieldId;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::mir::{
     Block, BlockId, Constant, Data, DataId, DataValue, Fn, Instruction, Operand, TempId, Terminator,
 };
-use crate::type_checker::{DefId, TypeEnv, TypeId};
+use crate::type_checker::{DefId, FieldId, MemberResolution, TypeEnv, TypeId};
 use crate::{ast, hir};
 
 #[derive(Debug, Default)]
@@ -449,12 +448,16 @@ impl<'tcx> Builder<'tcx> {
                         // let ptr_dest = self.new_temp(member_access.ty);
 
                         let lhs_ty_id = member_access.lhs.type_id();
-                        let lhs_ty = self.env.types.get(lhs_ty_id).unwrap();
-                        let field_id = lhs_ty
-                            .as_struct()
-                            .unwrap()
-                            .get_field(&member_access.rhs)
-                            .unwrap();
+                        // let lhs_ty = self.env.types.get(lhs_ty_id);
+                        // let (field_id, _) = lhs_ty
+                        //     .as_struct()
+                        //     .unwrap()
+                        //     .get_field(&member_access.rhs)
+                        //     .unwrap();
+
+                        let MemberResolution::Field(field_id) = member_access.resolution else {
+                            todo!();
+                        };
 
                         let (lval, block) = self.lower_expr(&member_access.lhs, block)?;
                         let (val, block) = self.lower_expr(&assign.rhs, block)?;
@@ -532,12 +535,16 @@ impl<'tcx> Builder<'tcx> {
                 let ptr_dest = self.new_temp(member_access.ty);
 
                 let lhs_ty_id = member_access.lhs.type_id();
-                let lhs_ty = self.env.types.get(lhs_ty_id).unwrap();
-                let field_id = lhs_ty
-                    .as_struct()
-                    .expect("member access can only be called on structs (for now)")
-                    .get_field(&member_access.rhs)
-                    .expect("field to exist");
+                let lhs_ty = self.env.types.get(lhs_ty_id);
+                // let (field_id, _) = lhs_ty
+                //     .as_struct()
+                //     .expect("member access can only be called on structs (for now)")
+                //     .get_field(&member_access.rhs)
+                //     .expect("field to exist");
+
+                let MemberResolution::Field(field_id) = member_access.resolution else {
+                    todo!();
+                };
 
                 let (lval, block) = self.lower_expr(&member_access.lhs, block)?;
 
