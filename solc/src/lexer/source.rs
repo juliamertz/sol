@@ -1,17 +1,18 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+/// Cheaply clonable implementation of `miette::SourceCode`
 #[derive(Clone)]
-pub struct SourceInfo(Arc<InnerSource>);
+pub struct SourceInfo(Arc<Source>);
 
-struct InnerSource {
+struct Source {
     name: String,
     source: String,
 }
 
 impl SourceInfo {
     pub fn new(name: impl ToString, source: impl ToString) -> Self {
-        Self(Arc::new(InnerSource {
+        Self(Arc::new(Source {
             name: name.to_string(),
             source: source.to_string(),
         }))
@@ -58,6 +59,8 @@ impl miette::SourceCode for SourceInfo {
     }
 }
 
+
+/// Span within a [`SourceInfo`]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     offset: usize,

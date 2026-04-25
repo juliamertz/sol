@@ -39,7 +39,7 @@ impl Compiler {
         }
     }
 
-    /// build assembly instructions from a qbe ir
+    /// Build assembly instructions from a qbe ir
     pub fn ir_to_asm(&self, input: &Module) -> Result<PathBuf, CompileError> {
         let text = input.to_string();
         let input_file = self.temp_dir.path().join("input.ssa");
@@ -68,7 +68,7 @@ impl Compiler {
         }
     }
 
-    /// build binary executable from asm generated with QBE backend
+    /// Build binary executable from asm generated with QBE backend
     pub fn asm_to_bin(&self, asm_path: &Path) -> Result<PathBuf, CompileError> {
         let output_file = self.output_dir.join("a.out");
         let cmd = self.cc.clone();
