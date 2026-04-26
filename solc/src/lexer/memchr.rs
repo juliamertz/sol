@@ -4,7 +4,11 @@ use std::simd::{Mask, u8x16};
 const CHUNK_SIZE: usize = 16;
 
 #[inline(always)]
-fn simd_find_chunked<const N: usize, F>(needles: [u8; N], haystack: &[u8], callback: F) -> Option<usize>
+fn simd_find_chunked<const N: usize, F>(
+    needles: [u8; N],
+    haystack: &[u8],
+    callback: F,
+) -> Option<usize>
 where
     F: Fn([u8x16; N], u8x16) -> Option<usize>,
 {

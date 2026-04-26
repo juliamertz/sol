@@ -5,8 +5,8 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Impl,
-    Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
+    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Index,
+    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
     StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::id;
@@ -19,6 +19,7 @@ use crate::type_checker::ty::*;
 
 pub mod collect;
 pub mod interner;
+pub mod mangle;
 pub mod ty;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -180,7 +181,7 @@ impl TypeEnv {
         }
     }
 
-    pub fn type_of(&self, node_id: &NodeId, span: &Span) -> TypeId {
+    pub fn type_of(&self, node_id: &NodeId, _span: &Span) -> TypeId {
         *self.nodes.get(node_id)
     }
 
@@ -683,21 +684,15 @@ pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>
     }
 }
 
-pub fn check_assoc_item(item: &AssocItem, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
-    let ident = item.ident().to_owned();
-    let (ty_id, def_id) = infer_assoc_item(item, env, scope)?;
-
+pub fn check_assoc_item(
+    item: &AssocItem,
+    def_id: DefId,
+    env: &mut TypeEnv,
+    scope: &Scope<'_>,
+) -> Result<()> {
     match item {
         AssocItem::Fn(func) => check_func(func, def_id, env, scope),
     }
-}
-
-pub fn check_imp(imp: &Impl, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
-    imp.items
-        .iter()
-        .map(|item| check_assoc_item(item, env, scope))
-        .transpose_vec()
-        .map(|_| ())
 }
 
 pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
@@ -721,7 +716,7 @@ pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
             let def_id = scope.get_definition(&func.ident).copied().unwrap();
             check_func(func, def_id, env, scope)
         }
-        Item::Impl(imp) => check_imp(imp, env, scope),
+        Item::Impl(_) => Ok(()),
         Item::StructDef(def) => check_struct_def(def, env, scope),
     }
 }
@@ -751,15 +746,19 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
         scope.define(&struct_def.ident, def_id);
 
         {
-            let mut scope = scope.new_child();
+            let scope = scope.new_child();
             let impls = inventory.take_impls(&struct_def.ident);
             for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
                 let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
-                check_assoc_item(item, env, &mut scope)?;
+
+                let def_name = Arc::from(mangle::assoc_item(&struct_def.ident, item.ident()));
+                env.def_names.insert(def_id, def_name);
 
                 let key = (ty_id, item.ident().to_string());
                 let item_id = ItemId::from(idx);
                 env.associated_items.insert(key, (def_id, item_id));
+
+                check_assoc_item(item, def_id, env, &scope)?;
             }
         }
     }

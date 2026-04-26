@@ -24,7 +24,7 @@ func main() -> i32
 
   let final = point.add(other_point)
 
-  printf("x: %d, y: %d", point.x, point.y)
+  printf("x: %d, y: %d", final.x, final.y)
 end
 
 -- vim:ft=sol

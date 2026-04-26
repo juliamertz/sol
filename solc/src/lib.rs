@@ -1,12 +1,12 @@
-#![feature(test)]
+#![cfg_attr(test, feature(test))]
 #![feature(portable_simd)]
 
 pub mod ast;
 pub mod codegen;
-pub mod traits;
 pub mod hir;
 pub mod lexer;
 pub mod parser;
+pub mod traits;
 pub mod type_checker;
 #[macro_use]
 pub mod interner;

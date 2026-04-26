@@ -19,7 +19,7 @@ mod test;
 
 pub use crate::lexer::token::{Token, TokenKind};
 
-const ASCII_WHITESPACE_BYTES: [u8; 5] = [b'\t', b'\n', b'\x0C', b'\r', b' '];
+const ASCII_WHITESPACE_BYTES: [u8; 5] = *b"\t\n\x0C\r ";
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::lexer))]
@@ -124,6 +124,7 @@ impl<'src> Lexer<'src> {
         let start = self.pos;
         assert_eq!(self.curr(), Some(b'"'),);
         self.advance();
+        // TODO: we need to handle escaped quotes here
         let text = self.read_while(|ch| ch != b'"');
         if self.curr() != Some(b'"') {
             Err(LexerError::UnterminatedString {

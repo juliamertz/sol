@@ -65,6 +65,12 @@ impl BaseTy {
     }
 }
 
+impl From<BaseTy> for AbiTy {
+    fn from(value: BaseTy) -> Self {
+        Self::Base(value)
+    }
+}
+
 #[derive(Debug)]
 pub enum ExtTy {
     /// base type
@@ -224,7 +230,7 @@ impl TyDef {
             TyDef::Regular { items, .. } => size_of_items(self, items),
             TyDef::Union { variants, .. } => variants
                 .iter()
-                .map(|variant| size_of_items(self, &variant))
+                .map(|variant| size_of_items(self, variant))
                 .max()
                 .unwrap_or(0),
             TyDef::Opaque { size, .. } => *size,

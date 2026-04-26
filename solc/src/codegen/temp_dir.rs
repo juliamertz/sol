@@ -1,5 +1,6 @@
 use std::{env, fs, path};
 
+/// Temporary directory that is deleted when [`Drop::drop`] is called
 #[derive(Debug)]
 pub struct TempDir(path::PathBuf);
 

@@ -1,7 +1,6 @@
 use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::interner::Id;
-use crate::type_checker::ty::Ty;
-use crate::type_checker::{DefId, TypeId, FieldId};
+use crate::type_checker::{DefId, FieldId, TypeId};
 
 mod builder;
 mod fmt;
@@ -13,10 +12,9 @@ id!(TempId);
 id!(DataId);
 id!(BlockId);
 
-
 #[derive(Debug, Clone)]
 pub enum Constant {
-    Int(i128, TypeId),
+    Int(i128, MirTy),
     Bool(bool),
     Unit,
 }
@@ -35,7 +33,7 @@ impl Operand {
 
     pub fn as_temp(&self) -> Option<&TempId> {
         match self {
-            Operand::Temporary(temp_id) => Some(temp_id),
+            Operand::Temporary(temp_id)  => Some(temp_id),
             Operand::Data(_) | Operand::Constant(_) => None,
         }
     }
@@ -59,13 +57,13 @@ pub enum Instruction {
         rhs: Operand,
     },
     Call {
-        dest: TempId,
+        dest: Option<TempId>,
         def: DefId,
         operands: Vec<Operand>,
     },
     Alloc {
         dest: TempId,
-        ty: TypeId,
+        ty: MirTy,
         count: u64,
     },
     Load {
@@ -80,15 +78,54 @@ pub enum Instruction {
         dest: TempId,
         base: Operand,
         index: Operand,
-        elem_ty: TypeId,
+        elem_ty: MirTy,
     },
     FieldPtr {
         dest: TempId,
         lval: Operand,
         field_id: FieldId,
-        base_ty: TypeId,
-        field_ty: TypeId,
+        base_ty: MirTy,
+        field_ty: MirTy,
     },
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Indirection {
+    #[default]
+    None,
+    Ptr,
+}
+
+impl Indirection {
+    pub fn is_ptr(&self) -> bool {
+        matches!(self, Self::Ptr)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MirTy {
+    pub inner: TypeId,
+    pub indirection: Indirection,
+}
+
+impl MirTy {
+    pub fn new(inner: TypeId) -> Self {
+        Self {
+            inner,
+            indirection: Indirection::None,
+        }
+    }
+
+    pub fn new_ptr(inner: TypeId) -> Self {
+        Self {
+            inner,
+            indirection: Indirection::Ptr,
+        }
+    }
+
+    pub fn set_indirection(&mut self, indirection: Indirection) {
+        self.indirection = indirection
+    }
 }
 
 #[derive(Debug)]
@@ -111,25 +148,26 @@ pub struct Block {
 #[derive(Debug)]
 pub struct Fn {
     pub name: String,
-    pub return_ty: TypeId,
-    pub params: Vec<(TempId, TypeId)>,
-    pub temps: Vec<TypeId>,
+    pub return_ty: MirTy,
+    pub params: Vec<(TempId, MirTy)>,
+    pub temps: Vec<MirTy>,
     pub blocks: Vec<Block>,
 }
 
 impl Fn {
-    pub fn temp_ty(&self, id: TempId) -> TypeId {
+    pub fn temp_ty(&self, id: TempId) -> MirTy {
         self.temps[id.into_inner() as usize]
     }
 
-    pub fn operand_ty(&self, op: &Operand) -> TypeId {
+    pub fn operand_ty(&self, op: &Operand) -> MirTy {
         match op {
-            Operand::Temporary(id) => self.temp_ty(*id),
-            Operand::Data(_) => TypeId::STR, // TODO: for now, all data is strings
+            Operand::Temporary(id)  => self.temp_ty(*id),
+            // TODO: for now, all data is strings
+            Operand::Data(_) => MirTy::new(TypeId::STR),
             Operand::Constant(constant) => match constant {
-                Constant::Int(_, ty_id) => *ty_id,
-                Constant::Bool(_) => TypeId::BOOL,
-                Constant::Unit => TypeId::UNIT,
+                Constant::Int(_, inner_ty) => *inner_ty,
+                Constant::Bool(_) => MirTy::new(TypeId::BOOL),
+                Constant::Unit => MirTy::new(TypeId::UNIT),
             },
         }
     }
@@ -148,8 +186,16 @@ pub struct Data {
 }
 
 #[derive(Debug)]
+pub enum TyDef {
+    Struct {
+        name: String,
+        fields: Vec<(FieldId, MirTy)>,
+    },
+}
+
+#[derive(Debug)]
 pub enum Definition {
-    Ty(Ty),
+    Ty(TyDef),
     Data(Data),
     Fn(Fn),
 }
@@ -179,7 +225,7 @@ impl Instruction {
         Self::UnaryOp { dest, op, rhs }
     }
 
-    fn call(dest: TempId, def: DefId, operands: Vec<Operand>) -> Self {
+    fn call(dest: Option<TempId>, def: DefId, operands: Vec<Operand>) -> Self {
         Self::Call {
             dest,
             def,

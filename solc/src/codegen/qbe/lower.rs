@@ -16,7 +16,7 @@ use crate::number::Signedness;
 use crate::number::encode::bijective_base26;
 use crate::traits::AsStr;
 use crate::type_checker::ty::{StructTy, Ty};
-use crate::type_checker::{TypeEnv, TypeError, TypeId};
+use crate::type_checker::{TypeEnv, TypeError};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -81,7 +81,7 @@ impl<'env> Builder<'env> {
         todo!()
     }
 
-    pub fn lower_data<'a>(&self, data: &'a mir::Data) -> Result<Data> {
+    pub fn lower_data(&self, data: &mir::Data) -> Result<Data> {
         Ok(Data {
             linkage: None,
             ident: data_name(data.id), // TODO: unique idents
@@ -96,14 +96,14 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_def<'a>(&mut self, def: &'a mir::Definition) -> Result<Definition> {
+    pub fn lower_def(&mut self, def: &mir::Definition) -> Result<Definition> {
         Ok(match def {
             mir::Definition::Ty(ty) => {
                 let (ident, ty_def) = match ty {
-                    Ty::Struct(StructTy { ident, fields }) => (
-                        ident.as_str(),
+                    mir::TyDef::Struct { name, fields } => (
+                        name.as_str(),
                         Rc::new(TyDef::Regular {
-                            ident: Ident::Ty(ident.as_str().into()),
+                            ident: Ident::Ty(name.to_string()),
                             align: None, // TODO:
                             items: fields
                                 .iter()
@@ -116,8 +116,6 @@ impl<'env> Builder<'env> {
                                 .collect::<Result<Vec<_>>>()?,
                         }),
                     ),
-
-                    _ => todo!("handle non-struct type defs.."),
                 };
 
                 self.type_defs.insert(ident.to_string(), ty_def.clone());
@@ -129,7 +127,7 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_module<'a>(&mut self, module: &'a mir::Module) -> Result<Module> {
+    pub fn lower_module(&mut self, module: &mir::Module) -> Result<Module> {
         let mut result = Module::default();
 
         for def in module.defs.iter() {
@@ -139,8 +137,12 @@ impl<'env> Builder<'env> {
         Ok(result)
     }
 
-    fn assign<'a>(&self, dest: impl IntoOperand, ty: BaseTy, instr: Instruction) -> Statement {
+    fn assign(&self, dest: impl IntoOperand, ty: BaseTy, instr: Instruction) -> Statement {
         Statement::Assign(dest.into_operand(), ty, instr)
+    }
+
+    fn volatile(&self, instr: Instruction) -> Statement {
+        Statement::Volatile(instr)
     }
 
     pub fn lower_instruction<'a>(
@@ -160,7 +162,7 @@ impl<'env> Builder<'env> {
 
             mir::Instruction::BinOp { dest, op, lhs, rhs } => {
                 let val_ty_id = &func.operand_ty(lhs);
-                let val_ty = self.env.types.get(val_ty_id);
+                let val_ty = self.env.types.get(&val_ty_id.inner);
                 let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
                 let lhs = self.lower_operand(lhs);
                 let rhs = self.lower_operand(rhs);
@@ -230,8 +232,8 @@ impl<'env> Builder<'env> {
                 let operands = operands
                     .iter()
                     .map(|operand| {
-                        let ty_id = func.operand_ty(operand);
-                        Ok((self.lower_ty(&ty_id)?, self.lower_operand(operand)))
+                        let ty = func.operand_ty(operand);
+                        Ok((self.lower_ty(&ty)?, self.lower_operand(operand)))
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -241,12 +243,14 @@ impl<'env> Builder<'env> {
                     None
                 };
 
-                let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
-                Ok(vec![self.assign(
-                    *dest,
-                    return_ty.as_base(),
-                    Instruction::Call(name.to_string(), operands, variadic_idx),
-                )])
+                let instr = Instruction::Call(name.to_string(), operands, variadic_idx);
+                match dest {
+                    Some(dest) => {
+                        let return_ty = self.lower_ty(&func.temp_ty(*dest))?;
+                        Ok(vec![self.assign(*dest, return_ty.as_base(), instr)])
+                    }
+                    None => Ok(vec![self.volatile(instr)]),
+                }
             }
             mir::Instruction::Alloc { dest, ty, count } => {
                 let ty = self.lower_ty(ty)?;
@@ -322,7 +326,7 @@ impl<'env> Builder<'env> {
         }
     }
 
-    fn lower_const<'a>(&self, constant: &'a mir::Constant) -> Const {
+    fn lower_const(&self, constant: &mir::Constant) -> Const {
         match constant {
             mir::Constant::Int(val, _) => Const::int(*val),
             mir::Constant::Bool(_) => todo!(),
@@ -330,7 +334,7 @@ impl<'env> Builder<'env> {
         }
     }
 
-    fn lower_operand<'a>(&self, operand: &'a mir::Operand) -> Operand {
+    fn lower_operand(&self, operand: &mir::Operand) -> Operand {
         match operand {
             mir::Operand::Temporary(id) => id.into_operand(),
             mir::Operand::Data(id) => Operand::Var(data_name(*id)),
@@ -338,7 +342,7 @@ impl<'env> Builder<'env> {
         }
     }
 
-    pub fn lower_term<'a>(&self, term: &'a mir::Terminator) -> Result<Jump> {
+    pub fn lower_term(&self, term: &mir::Terminator) -> Result<Jump> {
         Ok(match term {
             mir::Terminator::Goto(block_id) => Jump::Jmp(block_name(block_id)),
             mir::Terminator::Return(operand) => Jump::Ret(self.lower_operand(operand)),
@@ -379,14 +383,17 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_ty<'a>(&self, type_id: &TypeId) -> Result<AbiTy> {
-        let ty = self.env.type_by_id(type_id)?;
+    pub fn lower_ty<'a>(&self, mir_ty: &mir::MirTy) -> Result<AbiTy> {
+        if mir_ty.indirection.is_ptr() {
+            return Ok(BaseTy::Long.into());
+        }
+        let ty = self.env.type_by_id(&mir_ty.inner)?;
         Ok(match ty {
-            Ty::Unit => AbiTy::Base(BaseTy::Word), // TODO: maybe use a custom unit type
-            Ty::Int(_) | Ty::UInt(_) => AbiTy::Base(BaseTy::Word),
-            Ty::Bool => AbiTy::Base(BaseTy::Word),
-            Ty::Str => AbiTy::Base(BaseTy::Long),
-            Ty::List(_ty, _size) => AbiTy::Base(BaseTy::Long),
+            Ty::Unit => BaseTy::Word.into(), // TODO: should be omitted
+            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(),
+            Ty::Bool => BaseTy::Word.into(),
+            Ty::Str => BaseTy::Long.into(),
+            Ty::List(_ty, _size) => BaseTy::Long.into(),
             Ty::Ptr(_type_id) => todo!(),
             Ty::Fn {
                 is_extern: _,
@@ -404,7 +411,7 @@ impl<'env> Builder<'env> {
         })
     }
 
-    pub fn lower_func<'a>(&mut self, func: &'a mir::Fn) -> Result<Function> {
+    pub fn lower_func(&mut self, func: &mir::Fn) -> Result<Function> {
         let linkage = if &func.name == "main" {
             Some(Linkage::Export)
         } else {

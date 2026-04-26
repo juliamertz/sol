@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -162,9 +161,9 @@ impl<'src> Parser<'src> {
             }
 
             self.skip_whitespace()?;
-            match self.item() {
-                Ok(item) => items.push(item),
-                Err(err) => return Err(err),
+            {
+                let item = self.item()?;
+                items.push(item)
             }
         }
 

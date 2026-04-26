@@ -285,18 +285,31 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .copied()
                 .expect("call target should have a resolved DefId");
 
+            let receiver = if let ast::Expr::MemberAccess(member_access) = call_expr.func.as_ref()
+                && matches!(
+                    env.member_resolutions.get(&member_access.id),
+                    Some(MemberResolution::Item(_))
+                ) {
+                Some(lower_expr(&member_access.lhs, env)?)
+            } else {
+                None
+            };
+
+            let mut params = Vec::with_capacity(call_expr.params.len() + 1);
+            if let Some(receiver) = receiver {
+                params.push(receiver);
+            }
+            for param in call_expr.params.iter() {
+                params.push(lower_expr(param, env)?);
+            }
+
             hir::Expr::Call(hir::Call {
                 id: HirId::DUMMY,
                 def_id,
                 ty,
                 span: &call_expr.span,
                 func: lower_expr(&call_expr.func, env)?.boxed(),
-                params: call_expr
-                    .params
-                    .iter()
-                    .map(|param| lower_expr(param, env))
-                    .transpose_vec()?
-                    .into(),
+                params: params.into(),
             })
         }
         ast::Expr::Index(index_expr) => hir::Expr::Index(hir::Index {

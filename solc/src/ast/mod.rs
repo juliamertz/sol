@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use either::Either;
 
-use crate::traits::AsStr;
 use crate::id;
 use crate::lexer::source::Span;
+use crate::traits::AsStr;
 
 pub mod fmt;
 pub mod visit;

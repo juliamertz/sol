@@ -59,7 +59,6 @@ impl miette::SourceCode for SourceInfo {
     }
 }
 
-
 /// Span within a [`SourceInfo`]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Span {

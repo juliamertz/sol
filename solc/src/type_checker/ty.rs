@@ -1,6 +1,6 @@
 use crate::ast;
 use crate::traits::AsStr;
-use crate::type_checker::{TypeId, FieldId};
+use crate::type_checker::{FieldId, TypeId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntTy {
@@ -140,6 +140,10 @@ impl Ty {
             params: params.into(),
             returns,
         }
+    }
+
+    pub fn must_allocate(&self) -> bool {
+        matches!(self, Self::Struct(_) | Self::List(_, _))
     }
 
     pub fn as_struct(&self) -> Option<&StructTy> {

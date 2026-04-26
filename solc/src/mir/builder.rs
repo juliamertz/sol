@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem;
 
 use miette::Diagnostic;
 use smallvec::SmallVec;
@@ -7,7 +8,8 @@ use thiserror::Error;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::mir::{
-    Block, BlockId, Constant, Data, DataId, DataValue, Fn, Instruction, Operand, TempId, Terminator,
+    Block, BlockId, Constant, Data, DataId, DataValue, Fn, Instruction, MirTy, Operand, TempId,
+    Terminator,
 };
 use crate::type_checker::{DefId, FieldId, MemberResolution, TypeEnv, TypeId};
 use crate::{ast, hir};
@@ -66,6 +68,7 @@ impl BlockBuilder {
 pub struct LoopCtx {
     enter_block: BlockId,
     join_block: BlockId,
+    #[allow(dead_code)] // TODO: implement return values for loops
     dest: TempId,
 }
 
@@ -111,9 +114,11 @@ pub type Result<T, E = BuilderError> = std::result::Result<T, E>;
 pub struct Builder<'tcx> {
     env: &'tcx TypeEnv,
     temp_idx: usize,
-    temp_tys: Vec<TypeId>,
+    temp_tys: Vec<MirTy>,
     blocks: Vec<BlockBuilder>,
     locals: HashMap<DefId, Operand>,
+    sret_dest: Option<TempId>,
+    return_dest: Option<TempId>,
     loop_stack: LoopStack,
     data: Vec<Data>,
 }
@@ -126,12 +131,14 @@ impl<'tcx> Builder<'tcx> {
             temp_tys: vec![],
             blocks: vec![],
             locals: HashMap::default(),
+            sret_dest: None,
+            return_dest: None,
             loop_stack: LoopStack::default(),
             data: Vec::default(),
         }
     }
 
-    pub(super) fn new_temp(&mut self, ty: TypeId) -> TempId {
+    pub(super) fn new_temp(&mut self, ty: MirTy) -> TempId {
         let id = TempId::from(self.temp_idx);
         self.temp_tys.push(ty);
         self.temp_idx += 1;
@@ -158,11 +165,19 @@ impl<'tcx> Builder<'tcx> {
         self.locals.insert(def_id, operand);
     }
 
+    pub(super) fn set_return_destination(&mut self, temp_id: TempId) {
+        if self.return_dest.is_some() {
+            todo!("error: cannot overwrite return ptr")
+        }
+
+        self.return_dest = Some(temp_id)
+    }
+
     pub fn build(
         self,
         name: impl ToString,
-        return_ty: TypeId,
-        params: impl Iterator<Item = (TempId, TypeId)>,
+        return_ty_id: MirTy,
+        params: impl Iterator<Item = (TempId, MirTy)>,
     ) -> Result<(Fn, Vec<Data>)> {
         let name = name.to_string();
         let blocks = self
@@ -174,7 +189,7 @@ impl<'tcx> Builder<'tcx> {
         let params = params.into_iter().collect();
         let func = Fn {
             name,
-            return_ty,
+            return_ty: return_ty_id,
             params,
             temps,
             blocks,
@@ -190,10 +205,14 @@ impl<'tcx> Builder<'tcx> {
         for stmnt in block.nodes.iter() {
             block_id = self.lower_stmnt(stmnt, block_id)?;
         }
+
         let (val, block) = block
             .returning
             .as_ref()
-            .map(|expr| self.lower_expr(expr, block_id))
+            .map(|expr| {
+                self.sret_dest = mem::take(&mut self.return_dest);
+                self.lower_expr(expr, block_id)
+            })
             .transpose()?
             .unwrap_or((Operand::unit(), block_id));
 
@@ -210,7 +229,7 @@ impl<'tcx> Builder<'tcx> {
                 let (val, block) = self.lower_expr(&binding.val, block)?;
 
                 if binding.mutable {
-                    let ty = binding.ty;
+                    let ty = MirTy::new(binding.ty);
                     let dest = self.new_temp(ty);
                     self.locals.insert(binding.def_id, Operand::Temporary(dest));
                     self.get_block_mut(&block)
@@ -224,6 +243,8 @@ impl<'tcx> Builder<'tcx> {
             }
             hir::Stmnt::Ret(ret) => {
                 let (val, block) = self.lower_expr(&ret.val, block)?;
+                self.sret_dest = mem::take(&mut self.return_dest);
+
                 self.get_block_mut(&block)
                     .terminate(Terminator::Return(val))?;
                 block
@@ -244,7 +265,7 @@ impl<'tcx> Builder<'tcx> {
             hir::Expr::BinOp(bin_op) => {
                 let (lhs, block) = self.lower_expr(&bin_op.lhs, block)?;
                 let (rhs, block) = self.lower_expr(&bin_op.rhs, block)?;
-                let dest = self.new_temp(bin_op.ty);
+                let dest = self.new_temp(MirTy::new(bin_op.ty));
                 let op = bin_op.op;
                 self.get_block_mut(&block)
                     .push_instr(Instruction::bin_op(dest, op.kind, lhs, rhs));
@@ -253,7 +274,7 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::IfElse(if_else) => {
-                let dest = self.new_temp(if_else.ty);
+                let dest = self.new_temp(MirTy::new(if_else.ty));
                 let conseq_block = self.new_block();
                 let alt_block = if_else.alternative.as_ref().map(|_| self.new_block());
                 let join_block = self.new_block();
@@ -289,7 +310,7 @@ impl<'tcx> Builder<'tcx> {
             hir::Expr::Literal(literal) => Ok((
                 match literal.kind {
                     ast::LiteralKind::Int(val) => {
-                        Operand::Constant(Constant::Int(*val, literal.ty))
+                        Operand::Constant(Constant::Int(*val, MirTy::new(literal.ty)))
                     }
                     ast::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(*val)),
                     ast::LiteralKind::Str(val) => {
@@ -301,7 +322,7 @@ impl<'tcx> Builder<'tcx> {
             )),
 
             hir::Expr::Unary(unary) => {
-                let dest = self.new_temp(unary.ty);
+                let dest = self.new_temp(MirTy::new(unary.ty));
                 let op = &unary.op;
                 let rhs = &unary.rhs;
                 let (rhs, block) = self.lower_expr(rhs, block)?;
@@ -313,18 +334,39 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Call(call) => {
-                let dest = self.new_temp(call.ty);
-                let (operands, block) = call.params.iter().try_fold(
-                    (Vec::with_capacity(16), block),
-                    |(mut acc, block), expr| {
-                        let (val, block) = self.lower_expr(expr, block)?;
-                        acc.push(val);
-                        Ok::<_, BuilderError>((acc, block))
-                    },
-                )?;
+                let return_ty_id = call.ty;
+                let return_ty = self.env.types.get(&return_ty_id);
+                let must_allocate = return_ty.must_allocate();
+                let return_ty = if must_allocate {
+                    MirTy::new_ptr(return_ty_id)
+                } else {
+                    MirTy::new(return_ty_id)
+                };
+                let dest = self.new_temp(return_ty);
+
+                // to prevent returning dangling pointers we must preallocate any non-basic types
+                // and pass that address to the function we're calling
+                let mut acc = Vec::with_capacity(16);
+                if must_allocate {
+                    self.get_block_mut(&block).push_instr(Instruction::Alloc {
+                        dest,
+                        ty: return_ty,
+                        count: 1,
+                    });
+                    acc.push(Operand::Temporary(dest));
+                }
+
+                let (operands, block) =
+                    call.params
+                        .iter()
+                        .try_fold((acc, block), |(mut acc, block), expr| {
+                            let (val, block) = self.lower_expr(expr, block)?;
+                            acc.push(val);
+                            Ok::<_, BuilderError>((acc, block))
+                        })?;
 
                 self.get_block_mut(&block).push_instr(Instruction::call(
-                    dest,
+                    if must_allocate { None } else { Some(dest) },
                     call.def_id,
                     operands,
                 ));
@@ -345,7 +387,7 @@ impl<'tcx> Builder<'tcx> {
 
                 if ident.mutability.is_mutable() {
                     let addr = val.as_temp().copied().expect("value to be a local"); // TODO: error handling
-                    let dest = self.new_temp(ident.ty);
+                    let dest = self.new_temp(MirTy::new(ident.ty));
                     self.get_block_mut(&block)
                         .push_instr(Instruction::Load { dest, addr });
                     Ok((Operand::Temporary(dest), block))
@@ -355,10 +397,10 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::List(list) => {
-                let dest = self.new_temp(list.ty);
+                let dest = self.new_temp(MirTy::new(list.ty));
                 self.get_block_mut(&block).push_instr(Instruction::Alloc {
                     dest,
-                    ty: list.ty,
+                    ty: MirTy::new_ptr(list.ty),
                     count: list.size,
                 });
 
@@ -367,14 +409,17 @@ impl<'tcx> Builder<'tcx> {
                     .enumerate()
                     .try_fold(block, |block, (idx, expr)| {
                         let (val, block) = self.lower_expr(expr, block)?;
-                        let ptr_dest = self.new_temp(list.ty);
+                        let ptr_dest = self.new_temp(MirTy::new_ptr(list.ty));
 
                         self.get_block_mut(&block)
                             .push_instr(Instruction::IndexPtr {
                                 dest: ptr_dest,
                                 base: Operand::Temporary(dest),
-                                index: Operand::Constant(Constant::Int(idx as i128, TypeId::I64)),
-                                elem_ty: list.ty,
+                                index: Operand::Constant(Constant::Int(
+                                    idx as i128,
+                                    MirTy::new(TypeId::I64),
+                                )),
+                                elem_ty: MirTy::new(list.ty),
                             })
                             .push_instr(Instruction::Store {
                                 addr: ptr_dest,
@@ -388,11 +433,11 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Index(index) => {
-                let dest = self.new_temp(index.ty);
-                let ptr_dest = self.new_temp(index.ty);
+                let dest = self.new_temp(MirTy::new(index.ty));
+                let ptr_dest = self.new_temp(MirTy::new_ptr(index.ty));
                 let (base_val, block) = self.lower_expr(&index.expr, block)?;
                 let (index_val, block) = self.lower_expr(&index.idx, block)?;
-                let elem_ty = index.expr.type_id().to_owned();
+                let elem_ty = MirTy::new(index.expr.type_id().to_owned());
 
                 self.get_block_mut(&block)
                     .push_instr(Instruction::IndexPtr {
@@ -428,12 +473,12 @@ impl<'tcx> Builder<'tcx> {
                             .push_instr(Instruction::Store { addr, val });
                     }
                     hir::Expr::Index(index) => {
-                        let addr = self.new_temp(index.ty);
+                        let addr = self.new_temp(MirTy::new_ptr(index.ty));
                         let (base_val, block) = self.lower_expr(&index.expr, block)?;
                         let (index_val, block) = self.lower_expr(&index.idx, block)?;
                         let (val, block) = self.lower_expr(&assign.rhs, block)?;
 
-                        let elem_ty = index.expr.type_id().to_owned();
+                        let elem_ty = MirTy::new(index.expr.type_id().to_owned());
 
                         self.get_block_mut(&block)
                             .push_instr(Instruction::IndexPtr {
@@ -445,16 +490,10 @@ impl<'tcx> Builder<'tcx> {
                             .push_instr(Instruction::Store { addr, val });
                     }
                     hir::Expr::MemberAccess(member_access) => {
-                        let addr = self.new_temp(member_access.ty);
+                        let addr = self.new_temp(MirTy::new_ptr(member_access.ty));
                         // let ptr_dest = self.new_temp(member_access.ty);
 
-                        let lhs_ty_id = member_access.lhs.type_id();
-                        // let lhs_ty = self.env.types.get(lhs_ty_id);
-                        // let (field_id, _) = lhs_ty
-                        //     .as_struct()
-                        //     .unwrap()
-                        //     .get_field(&member_access.rhs)
-                        //     .unwrap();
+                        let _lhs_ty_id = member_access.lhs.type_id();
 
                         let MemberResolution::Field(field_id) = member_access.resolution else {
                             todo!();
@@ -468,8 +507,8 @@ impl<'tcx> Builder<'tcx> {
                                 dest: addr,
                                 lval,
                                 field_id,
-                                base_ty: *member_access.lhs.type_id(),
-                                field_ty: member_access.ty,
+                                base_ty: MirTy::new(*member_access.lhs.type_id()),
+                                field_ty: MirTy::new(member_access.ty),
                             })
                             .push_instr(Instruction::Store { addr, val });
                     }
@@ -481,7 +520,7 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Loop(inner) => {
-                let dest = self.new_temp(inner.ty);
+                let dest = self.new_temp(MirTy::new(inner.ty));
                 let loop_block = self.new_block();
                 let join_block = self.new_block();
 
@@ -501,17 +540,22 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Constructor(constructor) => {
-                let dest = self.new_temp(constructor.ty);
+                let dest = mem::take(&mut self.sret_dest).unwrap_or_else(|| {
+                    let ty = MirTy::new(constructor.ty);
+                    let dest = self.new_temp(ty);
 
-                self.get_block_mut(&block).push_instr(Instruction::Alloc {
-                    dest,
-                    ty: constructor.ty,
-                    count: 1,
+                    self.get_block_mut(&block).push_instr(Instruction::Alloc {
+                        dest,
+                        ty,
+                        count: 1,
+                    });
+
+                    dest
                 });
 
                 for (idx, (_, expr)) in constructor.fields.iter().enumerate() {
-                    let field_ty = *expr.type_id();
-                    let ptr_dest = self.new_temp(field_ty);
+                    let field_ty_id = *expr.type_id();
+                    let ptr_dest = self.new_temp(MirTy::new_ptr(field_ty_id));
                     let (val, block) = self.lower_expr(expr, block)?;
 
                     self.get_block_mut(&block)
@@ -519,8 +563,8 @@ impl<'tcx> Builder<'tcx> {
                             dest: ptr_dest,
                             lval: Operand::Temporary(dest),
                             field_id: FieldId::new(idx as u32),
-                            base_ty: constructor.ty,
-                            field_ty,
+                            base_ty: MirTy::new(constructor.ty),
+                            field_ty: MirTy::new(field_ty_id),
                         })
                         .push_instr(Instruction::Store {
                             addr: ptr_dest,
@@ -532,11 +576,12 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::MemberAccess(member_access) => {
-                let dest = self.new_temp(member_access.ty);
-                let ptr_dest = self.new_temp(member_access.ty);
+                let field_ty = MirTy::new(member_access.ty);
+                let dest = self.new_temp(field_ty);
+                let ptr_dest = self.new_temp(MirTy::new(member_access.ty));
 
                 let lhs_ty_id = member_access.lhs.type_id();
-                let lhs_ty = self.env.types.get(lhs_ty_id);
+                let _lhs_ty = self.env.types.get(lhs_ty_id);
                 // let (field_id, _) = lhs_ty
                 //     .as_struct()
                 //     .expect("member access can only be called on structs (for now)")
@@ -554,8 +599,8 @@ impl<'tcx> Builder<'tcx> {
                         dest: ptr_dest,
                         lval,
                         field_id,
-                        base_ty: *member_access.lhs.type_id(),
-                        field_ty: member_access.ty,
+                        base_ty: MirTy::new(*member_access.lhs.type_id()),
+                        field_ty,
                     })
                     .push_instr(Instruction::Load {
                         dest,

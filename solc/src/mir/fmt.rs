@@ -77,7 +77,10 @@ impl Display for Instruction {
                 def,
                 operands,
             } => {
-                write!(f, "{dest} = call def{}(", def.0)?;
+                if let Some(dest) = dest {
+                    write!(f, "{dest} = ")?;
+                }
+                write!(f, "call def{}(", def.0)?;
                 for (idx, op) in operands.iter().enumerate() {
                     if idx > 0 {
                         f.write_str(", ")?;
@@ -154,6 +157,12 @@ impl Display for Data {
             DataValue::String(ref inner) => f.write_str(inner),
         }?;
         writeln!(f)
+    }
+}
+
+impl Display for TyDef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "typedef: todo")
     }
 }
 
