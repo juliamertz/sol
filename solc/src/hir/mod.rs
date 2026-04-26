@@ -64,26 +64,7 @@ pub struct Block<'ast> {
     pub ty: TypeId,
     pub span: &'ast Span,
     pub nodes: Box<[Stmnt<'ast>]>,
-}
-
-impl<'ast> Block<'ast> {
-    /// collect all statements in the block splitting off the returning expression if present
-    pub fn split_off_returning(&self) -> (Vec<&Stmnt<'ast>>, Option<&Expr<'ast>>) {
-        let count = self.nodes.len();
-        let iter = self.nodes.iter().enumerate();
-        let mut stmnts = Vec::with_capacity(count);
-
-        for (idx, stmnt) in iter {
-            let is_last = idx == count - 1;
-            if is_last && let Stmnt::Expr(expr) = stmnt {
-                return (stmnts, Some(expr));
-            } else {
-                stmnts.push(stmnt);
-            }
-        }
-
-        (stmnts, None)
-    }
+    pub returning: Option<Box<Expr<'ast>>>,
 }
 
 #[derive(Debug, Clone)]

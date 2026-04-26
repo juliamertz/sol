@@ -187,11 +187,12 @@ impl<'tcx> Builder<'tcx> {
         block: &hir::Block<'_>,
         mut block_id: BlockId,
     ) -> Result<(Operand, BlockId)> {
-        let (stmnts, returning) = block.split_off_returning();
-        for stmnt in stmnts.into_iter() {
+        for stmnt in block.nodes.iter() {
             block_id = self.lower_stmnt(stmnt, block_id)?;
         }
-        let (val, block) = returning
+        let (val, block) = block
+            .returning
+            .as_ref()
             .map(|expr| self.lower_expr(expr, block_id))
             .transpose()?
             .unwrap_or((Operand::unit(), block_id));

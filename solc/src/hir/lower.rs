@@ -145,16 +145,21 @@ pub fn lower_module<'ast>(
 }
 
 pub fn lower_block<'ast>(block: &'ast ast::Block, env: &mut TypeEnv) -> Result<hir::Block<'ast>> {
+    let (nodes, returning) = block.split_off_returning();
+
     Ok(hir::Block {
         id: HirId::DUMMY,
         ty: TypeId::NONE,
         span: &block.span,
-        nodes: block
-            .nodes
+        nodes: nodes
             .iter()
             .map(|stmnt| lower_stmnt(stmnt, env))
             .transpose_vec()?
             .into(),
+        returning: returning
+            .map(|expr| lower_expr(expr, env))
+            .transpose()?
+            .map(Box::new),
     })
 }
 
@@ -279,6 +284,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                 .get(&call_expr.func.id())
                 .copied()
                 .expect("call target should have a resolved DefId");
+
             hir::Expr::Call(hir::Call {
                 id: HirId::DUMMY,
                 def_id,
@@ -381,13 +387,14 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
                     id: HirId::DUMMY,
                     ty: TypeId::UNIT,
                     span: &inner.consequence.span,
-                    nodes: Box::from([hir::Stmnt::Expr(hir::Expr::Break(hir::Break {
+                    nodes: Box::from([]),
+                    returning: Some(Box::new(hir::Expr::Break(hir::Break {
                         id: HirId::DUMMY,
                         ty: TypeId::UNIT,
                         span: &inner.span,
                         label: None,
                         val: None, // TODO: can be return val from loop body?
-                    }))]),
+                    }))),
                 },
                 alternative: None,
             }));
