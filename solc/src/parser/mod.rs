@@ -11,6 +11,8 @@ use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::traits::AsStr;
 
+pub mod num;
+
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::parser))]
 pub enum ParseError {
@@ -54,6 +56,10 @@ pub enum ParseError {
 
     #[error(transparent)]
     Lexer(#[from] crate::lexer::LexerError),
+    #[error("failed to parse integer: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("failed to parse float: {0}")]
+    ParseFloat(#[from] std::num::ParseFloatError),
 }
 
 type Result<T, E = ParseError> = core::result::Result<T, E>;
@@ -289,26 +295,14 @@ impl<'src> Parser<'src> {
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
         let ident = self.ident()?;
-        let kind = match ident.as_str() {
-            "i8" => TyKind::Int(IntTy::I8),
-            "i16" => TyKind::Int(IntTy::I16),
-            "i32" => TyKind::Int(IntTy::I32),
-            "i64" => TyKind::Int(IntTy::I64),
-            "u8" => TyKind::UInt(UIntTy::U8),
-            "u16" => TyKind::UInt(UIntTy::U16),
-            "u32" => TyKind::UInt(UIntTy::U32),
-            "u64" => TyKind::UInt(UIntTy::U64),
-            "Bool" => TyKind::Bool,
-            "Str" => TyKind::Str,
-            _ => TyKind::Var(ident),
-        };
+        let kind = TyKind::from_ident(ident);
         let id = self.ctx.next_id();
         let span = span.enclosing_to(&self.curr.span);
         let mut ty = Ty { kind, id, span };
 
         if self.accept(TokenKind::LBracket)?.is_some() {
-            let size = if self.at(TokenKind::Int) {
-                let lit = self.int_lit()?;
+            let size = if let TokenKind::Num(num) = self.curr.kind {
+                let lit = self.num_lit(num)?;
                 // this is janky 😭
                 let LiteralKind::Int(size) = lit.kind else {
                     unreachable!();
@@ -317,6 +311,7 @@ impl<'src> Parser<'src> {
             } else {
                 None
             };
+
             self.consume(TokenKind::RBracket)?;
             let kind = TyKind::List {
                 inner: Arc::from(ty),
@@ -635,18 +630,6 @@ impl<'src> Parser<'src> {
         }))
     }
 
-    fn int_lit(&mut self) -> Result<Literal> {
-        let text = &self.curr.text;
-        let span = self.curr.span;
-        let kind = text
-            .parse()
-            .map(LiteralKind::Int)
-            .expect("unable to parse integer");
-        self.advance()?;
-        let id = self.ctx.next_id();
-        Ok(Literal { id, span, kind })
-    }
-
     fn bool_lit(&mut self) -> Result<Literal> {
         let span = self.curr.span;
         let val = if self.at(TokenKind::True) {
@@ -692,7 +675,7 @@ impl<'src> Parser<'src> {
 
     fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
-            TokenKind::Int => Expr::Literal(self.int_lit()?),
+            TokenKind::Num(num) => Expr::Literal(self.num_lit(num)?),
             TokenKind::True | TokenKind::False => Expr::Literal(self.bool_lit()?),
             TokenKind::String => Expr::Literal(self.str_lit()?),
             TokenKind::Ident => Expr::Ident(self.ident()?),

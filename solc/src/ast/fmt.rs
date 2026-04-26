@@ -25,6 +25,16 @@ impl Display for UIntTy {
     }
 }
 
+impl Display for FloatTy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            FloatTy::F16 => "f16",
+            FloatTy::F32 => "f32",
+            FloatTy::F64 => "f64",
+        })
+    }
+}
+
 pub struct PrettyPrinter {
     line_starts: Vec<usize>,
 }
@@ -74,6 +84,7 @@ impl PrettyPrinter {
         match &ty.kind {
             TyKind::Int(t) => write!(f, " {t}")?,
             TyKind::UInt(t) => write!(f, " {t}")?,
+            TyKind::Float(t) => write!(f, " {t}")?,
             TyKind::Bool => write!(f, " bool")?,
             TyKind::Str => write!(f, " str")?,
             TyKind::List { inner, size } => {
@@ -125,6 +136,7 @@ impl PrettyPrinter {
                 match &lit.kind {
                     LiteralKind::Str(s) => write!(f, " \"{}\")", s),
                     LiteralKind::Int(v) => write!(f, " {v})"),
+                    LiteralKind::Float(v) => write!(f, " {v:.1})"),
                     LiteralKind::Bool(v) => write!(f, " {v})"),
                 }
             }

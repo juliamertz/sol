@@ -109,6 +109,20 @@ pub enum TypeError {
         span: Span,
     },
 
+    #[error("cannot add `{first_ty}` to `{other_ty}`")]
+    NonNumericOperand {
+        #[source_code]
+        src: SourceInfo,
+
+        first_ty: Ty,
+        #[label("first element has type `{first_ty}`")]
+        first_span: Span,
+
+        other_ty: Ty,
+        #[label("this element has type `{other_ty}`")]
+        other_span: Span,
+    },
+
     #[error("internal type checker error")]
     Internal,
 }
@@ -194,6 +208,7 @@ impl TypeEnv {
         let ty = match &ast_ty.kind {
             ast::TyKind::Int(kind) => Ty::Int(kind.into()),
             ast::TyKind::UInt(kind) => Ty::UInt(kind.into()),
+            ast::TyKind::Float(kind) => Ty::Float(kind.into()),
             ast::TyKind::Bool => Ty::Bool,
             ast::TyKind::Str => Ty::Str,
             ast::TyKind::Var(ident) => {
@@ -318,6 +333,13 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 env.nodes.insert(*id, ty_id);
                 Ok(ty_id)
             }
+            LiteralKind::Float(_) => {
+                // TODO: i still need a way to infer these types. for now
+                // im defaulting to f64 because f32's are quite annoying to work with in qbe
+                let ty_id = TypeId::F64;
+                env.nodes.insert(*id, ty_id);
+                Ok(ty_id)
+            }
             LiteralKind::Bool(_) => {
                 let ty_id = TypeId::BOOL;
                 env.nodes.insert(*id, ty_id);
@@ -329,18 +351,18 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             infer_block(block, env, scope)
         }
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
-            let lhs_ty = infer(lhs.as_ref(), env, scope)?;
-            let rhs_ty = infer(rhs.as_ref(), env, scope)?;
+            let lhs_ty_id = infer(lhs.as_ref(), env, scope)?;
+            let rhs_ty_id = infer(rhs.as_ref(), env, scope)?;
 
             match op.kind {
                 BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt => {
-                    if lhs_ty != rhs_ty {
+                    if lhs_ty_id != rhs_ty_id {
                         Err(TypeError::ComparisonMismatch {
                             src: env.src.clone(),
                             lhs_span: lhs.span(),
-                            lhs_ty: env.types.get(&lhs_ty).clone(),
+                            lhs_ty: env.types.get(&lhs_ty_id).clone(),
                             rhs_span: rhs.span(),
-                            rhs_ty: env.types.get(&rhs_ty).clone(),
+                            rhs_ty: env.types.get(&rhs_ty_id).clone(),
                             help: None,
                         })
                     } else {
@@ -349,17 +371,17 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 BinOpKind::And | BinOpKind::Or => {
-                    if lhs_ty != TypeId::BOOL {
+                    if lhs_ty_id != TypeId::BOOL {
                         Err(TypeError::InvalidType {
                             expected: Ty::Bool,
-                            actual: env.types.get(&lhs_ty).clone(),
+                            actual: env.types.get(&lhs_ty_id).clone(),
                             src: env.src.clone(),
                             span: lhs.span(),
                         })
-                    } else if rhs_ty != TypeId::BOOL {
+                    } else if rhs_ty_id != TypeId::BOOL {
                         Err(TypeError::InvalidType {
                             expected: Ty::Bool,
-                            actual: env.types.get(&rhs_ty).clone(),
+                            actual: env.types.get(&rhs_ty_id).clone(),
                             src: env.src.clone(),
                             span: rhs.span(),
                         })
@@ -368,17 +390,32 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     }
                 }
 
-                _ => {
-                    let lhs_type = env.types.get(&lhs_ty);
-                    match lhs_type {
-                        Ty::Int(_) | Ty::UInt(_) => match op.kind {
-                            BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
-                                Ok(lhs_ty)
-                            }
-                            _ => todo!(),
-                        },
-                        _ => todo!(),
+                BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
+                    let lhs_ty = env.types.get(&lhs_ty_id);
+                    let rhs_ty = env.types.get(&rhs_ty_id);
+
+                    if !lhs_ty.is_number() || !rhs_ty.is_number() {
+                        return Err(TypeError::NonNumericOperand {
+                            src: env.src.clone(),
+                            first_ty: lhs_ty.to_owned(),
+                            first_span: lhs.span(),
+                            other_ty: rhs_ty.to_owned(),
+                            other_span: rhs.span(),
+                        });
                     }
+
+                    if lhs_ty_id != rhs_ty_id {
+                        return Err(TypeError::ComparisonMismatch {
+                            src: env.src.clone(),
+                            lhs_ty: lhs_ty.to_owned(),
+                            lhs_span: lhs.span(),
+                            rhs_ty: rhs_ty.to_owned(),
+                            rhs_span: rhs.span(),
+                            help: None,
+                        });
+                    }
+
+                    Ok(lhs_ty_id)
                 }
             }
         }

@@ -1,5 +1,7 @@
 extern crate test;
 
+use std::assert_matches;
+
 use test::Bencher;
 
 use crate::lexer::{
@@ -20,22 +22,31 @@ fn lex(source: &'static str) -> Vec<TokenKind> {
 #[test]
 fn math_expr() {
     let tokens = lex(r"10 / 2 * 50 - 5");
-    assert_eq!(tokens, vec![Int, Slash, Int, Asterisk, Int, Sub, Int]);
+    assert_matches!(
+        tokens.as_slice(),
+        &[Num(_), Slash, Num(_), Asterisk, Num(_), Sub, Num(_)]
+    );
 }
 
 #[test]
 fn literals() {
     let tokens = lex(r#"10 true false "hello world""#);
-    assert_eq!(tokens, vec![Int, True, False, String]);
+    assert_matches!(tokens.as_slice(), &[Num(_), True, False, String]);
 }
 
 #[test]
 fn keywords() {
     let tokens = lex(r"extern variadic func struct then end if else");
-    assert_eq!(
-        tokens,
-        vec![Extern, Variadic, Fn, Struct, Then, End, If, Else]
+    assert_matches!(
+        tokens.as_slice(),
+        &[Extern, Variadic, Fn, Struct, Then, End, If, Else]
     );
+}
+
+#[test]
+fn integers() {
+    let tokens = lex(r"128 -64");
+    assert_matches!(tokens.as_slice(), &[Num(_), Sub, Num(_)]);
 }
 
 #[bench]

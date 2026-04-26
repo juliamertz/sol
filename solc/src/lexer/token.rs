@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 use strum::EnumIs;
 
 use crate::lexer::source::Span;
+use crate::lexer::num::{ReadNumber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
 pub enum TokenKind {
@@ -13,7 +14,7 @@ pub enum TokenKind {
     Newline,
 
     // Literals
-    Int,
+    Num(ReadNumber),
     String,
     Ident,
     True,

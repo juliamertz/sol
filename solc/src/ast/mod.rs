@@ -135,9 +135,14 @@ impl<K> Op<K> {
 #[derive(Debug, Clone)]
 pub enum LiteralKind {
     Str(String),
-    Int(i128),
+    Int(i128), // using `i128` so both `i64` and `u64` can fit in here
+    Float(f64),
     Bool(bool),
 }
+
+// pub LiteralSuffix {
+//
+// }
 
 #[derive(Debug, Clone)]
 pub struct Literal {
@@ -170,10 +175,18 @@ pub enum UIntTy {
     U64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum FloatTy {
+    F16,
+    F32,
+    F64,
+}
+
 #[derive(Debug, Clone)]
 pub enum TyKind {
     Int(IntTy),
     UInt(UIntTy),
+    Float(FloatTy),
     Bool,
     Str,
     List {
@@ -186,6 +199,27 @@ pub enum TyKind {
         is_extern: bool,
     },
     Var(Ident),
+}
+
+impl TyKind {
+    pub fn from_ident(ident: Ident) -> Self {
+        match ident.as_str() {
+            "i8" => TyKind::Int(IntTy::I8),
+            "i16" => TyKind::Int(IntTy::I16),
+            "i32" => TyKind::Int(IntTy::I32),
+            "i64" => TyKind::Int(IntTy::I64),
+            "u8" => TyKind::UInt(UIntTy::U8),
+            "u16" => TyKind::UInt(UIntTy::U16),
+            "u32" => TyKind::UInt(UIntTy::U32),
+            "u64" => TyKind::UInt(UIntTy::U64),
+            "f16" => TyKind::Float(FloatTy::F16),
+            "f32" => TyKind::Float(FloatTy::F32),
+            "f64" => TyKind::Float(FloatTy::F64),
+            "Bool" => TyKind::Bool,
+            "Str" => TyKind::Str,
+            _ => TyKind::Var(ident),
+        }
+    }
 }
 
 /// A block of nodes, for example the body of a function or module

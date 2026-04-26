@@ -15,6 +15,7 @@ id!(BlockId);
 #[derive(Debug, Clone)]
 pub enum Constant {
     Int(i128, MirTy),
+    Float(f64, MirTy),
     Bool(bool),
     Unit,
 }
@@ -33,7 +34,7 @@ impl Operand {
 
     pub fn as_temp(&self) -> Option<&TempId> {
         match self {
-            Operand::Temporary(temp_id)  => Some(temp_id),
+            Operand::Temporary(temp_id) => Some(temp_id),
             Operand::Data(_) | Operand::Constant(_) => None,
         }
     }
@@ -161,11 +162,11 @@ impl Fn {
 
     pub fn operand_ty(&self, op: &Operand) -> MirTy {
         match op {
-            Operand::Temporary(id)  => self.temp_ty(*id),
+            Operand::Temporary(id) => self.temp_ty(*id),
             // TODO: for now, all data is strings
             Operand::Data(_) => MirTy::new(TypeId::STR),
             Operand::Constant(constant) => match constant {
-                Constant::Int(_, inner_ty) => *inner_ty,
+                Constant::Int(_, inner_ty) | Constant::Float(_, inner_ty) => *inner_ty,
                 Constant::Bool(_) => MirTy::new(TypeId::BOOL),
                 Constant::Unit => MirTy::new(TypeId::UNIT),
             },

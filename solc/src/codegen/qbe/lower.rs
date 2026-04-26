@@ -7,16 +7,16 @@ use thiserror::Error;
 use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::codegen::qbe::{
     AbiTy, BaseTy, Block, Cmp, Const, Data, DataItem, DataValue, Definition, ExtTy, Function,
-    Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, RegularParam,
-    Statement, TyDef,
+    Ident, Instruction, IntoOperand, Jump, Linkage, Module, Operand, Param, Precision,
+    RegularParam, Statement, TyDef,
 };
 use crate::interner::Id;
 use crate::mir::{self, BlockId};
 use crate::number::Signedness;
 use crate::number::encode::bijective_base26;
 use crate::traits::AsStr;
-use crate::type_checker::ty::{StructTy, Ty};
-use crate::type_checker::{TypeEnv, TypeError};
+use crate::type_checker::ty::{FloatTy, StructTy, Ty};
+use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum LowerError {
@@ -329,6 +329,14 @@ impl<'env> Builder<'env> {
     fn lower_const(&self, constant: &mir::Constant) -> Const {
         match constant {
             mir::Constant::Int(val, _) => Const::int(*val),
+            mir::Constant::Float(val, mir_ty) => {
+                let precision = match mir_ty.inner {
+                    TypeId::F16 | TypeId::F32 => Precision::Single,
+                    TypeId::F64 => Precision::Double,
+                    _ => unreachable!(),
+                };
+                Const::Float(precision, *val)
+            },
             mir::Constant::Bool(_) => todo!(),
             mir::Constant::Unit => unreachable!(), // TODO: this is deffo not unreachable, but ideally it should be :)
         }
@@ -390,7 +398,11 @@ impl<'env> Builder<'env> {
         let ty = self.env.type_by_id(&mir_ty.inner)?;
         Ok(match ty {
             Ty::Unit => BaseTy::Word.into(), // TODO: should be omitted
-            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(),
+            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(),// TODO: size
+            Ty::Float(float_ty) => match float_ty {
+                FloatTy::F16 | FloatTy::F32 => BaseTy::Single.into(),
+                FloatTy::F64 => BaseTy::Double.into(),
+            }
             Ty::Bool => BaseTy::Word.into(),
             Ty::Str => BaseTy::Long.into(),
             Ty::List(_ty, _size) => BaseTy::Long.into(),

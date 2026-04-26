@@ -84,6 +84,33 @@ impl std::fmt::Display for UIntTy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FloatTy {
+    F16,
+    F32,
+    F64,
+}
+
+impl From<&ast::FloatTy> for FloatTy {
+    fn from(value: &ast::FloatTy) -> Self {
+        match value {
+            ast::FloatTy::F16 => FloatTy::F16,
+            ast::FloatTy::F32 => FloatTy::F32,
+            ast::FloatTy::F64 => FloatTy::F64,
+        }
+    }
+}
+
+impl std::fmt::Display for FloatTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            FloatTy::F16 => "f16",
+            FloatTy::F32 => "f32",
+            FloatTy::F64 => "f64",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructTy {
     pub ident: Box<ast::Ident>,
@@ -106,6 +133,7 @@ pub enum Ty {
     Unit,
     Int(IntTy),
     UInt(UIntTy),
+    Float(FloatTy),
     Bool,
     Str,
     List(TypeId, Option<usize>), // TODO: probably want to just have this be a sized array, then implement lists in the stdlib?
@@ -146,6 +174,10 @@ impl Ty {
         matches!(self, Self::Struct(_) | Self::List(_, _))
     }
 
+    pub fn is_number(&self) -> bool {
+        matches!(self, Self::Int(_) | Self::UInt(_) | Self::Float(_))
+    }
+
     pub fn as_struct(&self) -> Option<&StructTy> {
         match self {
             Self::Struct(struct_ty) => Some(struct_ty),
@@ -160,6 +192,7 @@ impl std::fmt::Display for Ty {
             Ty::Unit => f.write_str("()"),
             Ty::Int(int_ty) => int_ty.fmt(f),
             Ty::UInt(uint_ty) => uint_ty.fmt(f),
+            Ty::Float(float_ty) => float_ty.fmt(f),
             Ty::Bool => f.write_str("bool"),
             Ty::Str => f.write_str("str"),
             // TODO: it's kind of annoying that we only know the id of the inner type.

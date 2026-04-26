@@ -331,10 +331,6 @@ impl Const {
     pub fn int(val: i128) -> Self {
         Self::Int(Sign::None, val)
     }
-
-    pub fn neg_int(val: i128) -> Self {
-        Self::Int(Sign::Minus, val)
-    }
 }
 
 #[derive(Debug)]

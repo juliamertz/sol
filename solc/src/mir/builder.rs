@@ -312,6 +312,9 @@ impl<'tcx> Builder<'tcx> {
                     ast::LiteralKind::Int(val) => {
                         Operand::Constant(Constant::Int(*val, MirTy::new(literal.ty)))
                     }
+                    ast::LiteralKind::Float(val) => {
+                        Operand::Constant(Constant::Float(*val, MirTy::new(literal.ty)))
+                    }
                     ast::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(*val)),
                     ast::LiteralKind::Str(val) => {
                         let data_id = self.new_data(DataValue::String(val.to_string()));

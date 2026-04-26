@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::interner::{self, Id};
+use crate::type_checker::ty::FloatTy;
 use crate::type_checker::{IntTy, Ty, TypeId, UIntTy};
 
 impl TypeId {
@@ -13,9 +14,12 @@ impl TypeId {
     pub const U32: TypeId = TypeId(6);
     pub const I64: TypeId = TypeId(7);
     pub const U64: TypeId = TypeId(8);
-    pub const BOOL: TypeId = TypeId(9);
-    pub const STR: TypeId = TypeId(10);
-    pub const UNIT: TypeId = TypeId(11);
+    pub const F16: TypeId = TypeId(8);
+    pub const F32: TypeId = TypeId(9);
+    pub const F64: TypeId = TypeId(10);
+    pub const BOOL: TypeId = TypeId(11);
+    pub const STR: TypeId = TypeId(12);
+    pub const UNIT: TypeId = TypeId(13);
 }
 
 #[derive(Debug)]
@@ -35,7 +39,7 @@ impl TypeInterner {
 impl Default for TypeInterner {
     fn default() -> Self {
         Self {
-            idx: 12,
+            idx: 14,
             lookup: HashMap::default(),
         }
     }
@@ -57,6 +61,11 @@ impl interner::Strategy<TypeId, Ty> for TypeInterner {
                 UIntTy::U32 => TypeId::U32,
                 UIntTy::U64 => TypeId::U64,
             },
+            Ty::Float(float_ty) => match float_ty {
+                FloatTy::F16 => TypeId::F16,
+                FloatTy::F32 => TypeId::F32,
+                FloatTy::F64 => TypeId::F64,
+            }
             Ty::Bool => TypeId::BOOL,
             Ty::Str => TypeId::STR,
             Ty::List(..) | Ty::Ptr(_) | Ty::Fn { .. } => {
@@ -84,6 +93,9 @@ impl interner::Strategy<TypeId, Ty> for TypeInterner {
                 (TypeId::U32, Ty::UInt(UIntTy::U32)),
                 (TypeId::I64, Ty::Int(IntTy::I64)),
                 (TypeId::U64, Ty::UInt(UIntTy::U64)),
+                (TypeId::F16, Ty::Float(FloatTy::F16)),
+                (TypeId::F32, Ty::Float(FloatTy::F32)),
+                (TypeId::F64, Ty::Float(FloatTy::F64)),
                 (TypeId::BOOL, Ty::Bool),
                 (TypeId::STR, Ty::Str),
             ]

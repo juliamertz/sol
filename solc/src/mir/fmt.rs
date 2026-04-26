@@ -24,6 +24,7 @@ impl Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Constant::Int(v, _) => write!(f, "{v}"),
+            Constant::Float(v, _) => write!(f, "{v}"),
             Constant::Bool(v) => write!(f, "{v}"),
             Constant::Unit => f.write_str("()"),
         }

@@ -5,11 +5,13 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::lexer::memchr::FindByte;
+use crate::lexer::num::ReadNumber;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::KEYWORD_LOOKUP;
 use crate::lexer::unescape::unescape_literal;
 
 pub mod memchr;
+pub mod num;
 pub mod source;
 pub mod token;
 pub mod unescape;
@@ -41,6 +43,8 @@ pub enum LexerError {
     },
     #[error(transparent)]
     EscapeLiteral(#[from] unescape::EscapeError),
+    #[error(transparent)]
+    ReadNumber(#[from] num::ReadNumberError),
 }
 
 pub type Result<T> = std::result::Result<T, LexerError>;
@@ -85,7 +89,11 @@ impl<'src> Lexer<'src> {
         self.content.as_bytes().get(self.pos + 1).copied()
     }
 
-    fn remaining(&self) -> &[u8] {
+    fn remaining(&self) -> &'src str {
+        &self.content[self.pos..self.content.len()]
+    }
+
+    fn remaining_bytes(&self) -> &'src [u8] {
         &self.content.as_bytes()[self.pos..self.content.len()]
     }
 
@@ -94,8 +102,15 @@ impl<'src> Lexer<'src> {
         self.curr()
     }
 
+    fn advance_n(&mut self, n: usize) {
+        self.pos += n;
+    }
+
     fn skip_whitespace(&mut self) {
-        if let Some(offset) = self.remaining().find_byte_not_in(ASCII_WHITESPACE_BYTES) {
+        if let Some(offset) = self
+            .remaining_bytes()
+            .find_byte_not_in(ASCII_WHITESPACE_BYTES)
+        {
             self.pos += offset;
         } else {
             // if we didn't find any matching byte we can assume we reached eof
@@ -121,7 +136,7 @@ impl<'src> Lexer<'src> {
     }
 
     fn read_string(&mut self) -> Result<Cow<'src, str>> {
-        let start = self.pos;
+        let start = self.pos();
         assert_eq!(self.curr(), Some(b'"'),);
         self.advance();
         // TODO: we need to handle escaped quotes here
@@ -129,7 +144,7 @@ impl<'src> Lexer<'src> {
         if self.curr() != Some(b'"') {
             Err(LexerError::UnterminatedString {
                 src: self.source(),
-                span: (start, self.pos - start).into(),
+                span: (start, self.pos() - start).into(),
             })
         } else {
             self.advance();
@@ -199,8 +214,15 @@ impl<'src> Lexer<'src> {
             b',' => Token::new(TokenKind::Comma, ",", start),
             b'\n' => Token::new(TokenKind::Newline, "\n", start),
             ch if ch.is_ascii_digit() => {
-                let text = self.read_while(|ch| ch.is_ascii_digit());
-                return Some(Ok(Token::new(TokenKind::Int, text, start)));
+                let start = self.pos();
+                let remaining = self.remaining();
+                let num = match ReadNumber::try_read(remaining) {
+                    Ok(val) => val,
+                    Err(err) => return Some(Err(LexerError::ReadNumber(err))),
+                };
+                let text = &remaining[0..num.len];
+                self.advance_n(num.len);
+                return Some(Ok(Token::new(TokenKind::Num(num), text, start)));
             }
             ch if ch.is_ascii_alphabetic() || ch == b'_' => {
                 let text = self
