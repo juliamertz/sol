@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::LazyLock;
@@ -160,10 +161,10 @@ pub(super) static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
     ])
 });
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'src> {
     pub kind: Kind,
-    pub text: &'src str,
+    pub text: Cow<'src, str>,
     pub span: Span,
 }
 
@@ -175,11 +176,12 @@ pub struct OwnedToken {
 }
 
 impl<'src> Token<'src> {
-    pub fn new(kind: Kind, text: &'src str, start_pos: usize) -> Self {
+    pub fn new(kind: Kind, text: impl Into<Cow<'src, str>>, start_pos: usize) -> Self {
+        let text = text.into();
         Self {
+            span: (start_pos, text.len()).into(),
             kind,
             text,
-            span: (start_pos, text.len()).into(),
         }
     }
 

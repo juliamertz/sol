@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use miette::Diagnostic;
@@ -6,10 +7,12 @@ use thiserror::Error;
 use crate::lexer::memchr::FindByte;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::KEYWORD_LOOKUP;
+use crate::lexer::unescape::unescape_literal;
 
 pub mod memchr;
 pub mod source;
 pub mod token;
+pub mod unescape;
 
 #[cfg(test)]
 mod test;
@@ -36,6 +39,8 @@ pub enum LexerError {
         #[label("here")]
         span: Span,
     },
+    #[error(transparent)]
+    EscapeLiteral(#[from] unescape::EscapeError),
 }
 
 pub type Result<T> = std::result::Result<T, LexerError>;
@@ -115,7 +120,7 @@ impl<'src> Lexer<'src> {
         &self.content[start..self.pos]
     }
 
-    fn read_string(&mut self) -> Result<&'src str> {
+    fn read_string(&mut self) -> Result<Cow<'src, str>> {
         let start = self.pos;
         assert_eq!(self.curr(), Some(b'"'),);
         self.advance();
@@ -127,7 +132,7 @@ impl<'src> Lexer<'src> {
             })
         } else {
             self.advance();
-            Ok(text)
+            Ok(unescape_literal(text)?)
         }
     }
 

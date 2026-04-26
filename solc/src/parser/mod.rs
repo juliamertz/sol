@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -663,9 +664,9 @@ impl<'src> Parser<'src> {
     }
 
     fn str_lit(&mut self) -> Result<Literal> {
-        let text = self.curr.text;
+        let text = &self.curr.text;
         let span = self.curr.span;
-        let kind = LiteralKind::Str(Arc::from(text));
+        let kind = LiteralKind::Str(text.to_string());
         self.advance()?;
         let id = self.ctx.next_id();
         Ok(Literal { id, span, kind })

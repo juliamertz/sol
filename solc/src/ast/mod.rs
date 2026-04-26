@@ -134,7 +134,7 @@ impl<K> Op<K> {
 /// A literal value within the source code
 #[derive(Debug, Clone)]
 pub enum LiteralKind {
-    Str(Arc<str>),
+    Str(String),
     Int(i128),
     Bool(bool),
 }
