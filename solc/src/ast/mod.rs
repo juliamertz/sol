@@ -347,6 +347,12 @@ pub struct StructDef {
     pub fields: Arc<[(Name, Ty)]>,
 }
 
+impl StructDef {
+    pub fn ident(&self) -> &Ident {
+        &self.ident
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum AssocItem {
     Fn(Fn),

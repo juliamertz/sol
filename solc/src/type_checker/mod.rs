@@ -15,6 +15,7 @@ use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{AsStr, Boxed, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::interner::TypeInterner;
+use crate::type_checker::mangle::Mangle;
 use crate::type_checker::ty::*;
 
 pub mod collect;
@@ -751,7 +752,8 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
             for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
                 let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
 
-                let def_name = Arc::from(mangle::assoc_item(&struct_def.ident, item.ident()));
+                let mangled = Mangle::AssocItem(struct_def.ident(), item.ident());
+                let def_name = Arc::from(mangled.to_string());
                 env.def_names.insert(def_id, def_name);
 
                 let key = (ty_id, item.ident().to_string());
