@@ -118,7 +118,7 @@ impl MirTy {
         }
     }
 
-    pub fn new_ptr(inner: TypeId) -> Self {
+    pub fn new_indirect(inner: TypeId) -> Self {
         Self {
             inner,
             indirection: Indirection::Ptr,
@@ -127,6 +127,10 @@ impl MirTy {
 
     pub fn set_indirection(&mut self, indirection: Indirection) {
         self.indirection = indirection
+    }
+
+    pub fn strip_indirection(&mut self) {
+        self.indirection = Indirection::None;
     }
 }
 

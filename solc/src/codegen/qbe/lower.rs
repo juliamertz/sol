@@ -231,8 +231,17 @@ impl<'env> Builder<'env> {
 
                 let operands = operands
                     .iter()
-                    .map(|operand| {
-                        let ty = func.operand_ty(operand);
+                    .enumerate()
+                    .map(|(idx, operand)| {
+                        let mut ty = func.operand_ty(operand);
+                        if idx != 0 {
+                            // FIXME:
+                            // this is just a hack to prevent pre-allocated structs having
+                            // their type reduced to `l` instead of using the full type name when
+                            // passing structs that are not in a sret position.
+                            // i'm quite sure this will break in many ways
+                            ty.strip_indirection();
+                        }
                         Ok((self.lower_ty(&ty)?, self.lower_operand(operand)))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -336,7 +345,7 @@ impl<'env> Builder<'env> {
                     _ => unreachable!(),
                 };
                 Const::Float(precision, *val)
-            },
+            }
             mir::Constant::Bool(_) => todo!(),
             mir::Constant::Unit => unreachable!(), // TODO: this is deffo not unreachable, but ideally it should be :)
         }
@@ -398,11 +407,11 @@ impl<'env> Builder<'env> {
         let ty = self.env.type_by_id(&mir_ty.inner)?;
         Ok(match ty {
             Ty::Unit => BaseTy::Word.into(), // TODO: should be omitted
-            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(),// TODO: size
+            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(), // TODO: size
             Ty::Float(float_ty) => match float_ty {
                 FloatTy::F16 | FloatTy::F32 => BaseTy::Single.into(),
                 FloatTy::F64 => BaseTy::Double.into(),
-            }
+            },
             Ty::Bool => BaseTy::Word.into(),
             Ty::Str => BaseTy::Long.into(),
             Ty::List(_ty, _size) => BaseTy::Long.into(),

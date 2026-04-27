@@ -341,7 +341,7 @@ impl<'tcx> Builder<'tcx> {
                 let return_ty = self.env.types.get(&return_ty_id);
                 let must_allocate = return_ty.must_allocate();
                 let return_ty = if must_allocate {
-                    MirTy::new_ptr(return_ty_id)
+                    MirTy::new_indirect(return_ty_id)
                 } else {
                     MirTy::new(return_ty_id)
                 };
@@ -403,7 +403,7 @@ impl<'tcx> Builder<'tcx> {
                 let dest = self.new_temp(MirTy::new(list.ty));
                 self.get_block_mut(&block).push_instr(Instruction::Alloc {
                     dest,
-                    ty: MirTy::new_ptr(list.ty),
+                    ty: MirTy::new_indirect(list.ty),
                     count: list.size,
                 });
 
@@ -412,7 +412,7 @@ impl<'tcx> Builder<'tcx> {
                     .enumerate()
                     .try_fold(block, |block, (idx, expr)| {
                         let (val, block) = self.lower_expr(expr, block)?;
-                        let ptr_dest = self.new_temp(MirTy::new_ptr(list.ty));
+                        let ptr_dest = self.new_temp(MirTy::new_indirect(list.ty));
 
                         self.get_block_mut(&block)
                             .push_instr(Instruction::IndexPtr {
@@ -437,7 +437,7 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Index(index) => {
                 let dest = self.new_temp(MirTy::new(index.ty));
-                let ptr_dest = self.new_temp(MirTy::new_ptr(index.ty));
+                let ptr_dest = self.new_temp(MirTy::new_indirect(index.ty));
                 let (base_val, block) = self.lower_expr(&index.expr, block)?;
                 let (index_val, block) = self.lower_expr(&index.idx, block)?;
                 let elem_ty = MirTy::new(index.expr.type_id().to_owned());
@@ -476,7 +476,7 @@ impl<'tcx> Builder<'tcx> {
                             .push_instr(Instruction::Store { addr, val });
                     }
                     hir::Expr::Index(index) => {
-                        let addr = self.new_temp(MirTy::new_ptr(index.ty));
+                        let addr = self.new_temp(MirTy::new_indirect(index.ty));
                         let (base_val, block) = self.lower_expr(&index.expr, block)?;
                         let (index_val, block) = self.lower_expr(&index.idx, block)?;
                         let (val, block) = self.lower_expr(&assign.rhs, block)?;
@@ -493,7 +493,7 @@ impl<'tcx> Builder<'tcx> {
                             .push_instr(Instruction::Store { addr, val });
                     }
                     hir::Expr::MemberAccess(member_access) => {
-                        let addr = self.new_temp(MirTy::new_ptr(member_access.ty));
+                        let addr = self.new_temp(MirTy::new_indirect(member_access.ty));
                         // let ptr_dest = self.new_temp(member_access.ty);
 
                         let _lhs_ty_id = member_access.lhs.type_id();
@@ -558,7 +558,7 @@ impl<'tcx> Builder<'tcx> {
 
                 for (idx, (_, expr)) in constructor.fields.iter().enumerate() {
                     let field_ty_id = *expr.type_id();
-                    let ptr_dest = self.new_temp(MirTy::new_ptr(field_ty_id));
+                    let ptr_dest = self.new_temp(MirTy::new_indirect(field_ty_id));
                     let (val, block) = self.lower_expr(expr, block)?;
 
                     self.get_block_mut(&block)
