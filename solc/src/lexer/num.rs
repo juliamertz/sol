@@ -35,7 +35,6 @@ impl ReadNumber {
 
         while let Some((idx, ch)) = chars.next() {
             match ch {
-                ' ' => break,
                 '_' => {
                     if let Some(NumberKind::Float { radix_point_idx }) = kind {
                         if radix_point_idx == idx - 1 {
@@ -70,7 +69,7 @@ impl ReadNumber {
                 },
                 ch if ch.is_ascii_digit() => (),
                 ch if ch.is_ascii_whitespace() => break,
-                ch => {
+                ch if ch.is_ascii_alphanumeric() => {
                     if suffix_start.is_none() {
                         if let Some(NumberKind::Hex) = kind
                             && ch.is_ascii_hexdigit()
@@ -81,6 +80,7 @@ impl ReadNumber {
                         }
                     }
                 }
+                _ => break,
             }
 
             len += 1;
@@ -123,6 +123,15 @@ mod test {
         );
         assert_eq!(
             ReadNumber::try_read("100_000_000").unwrap(),
+            ReadNumber {
+                len: 11,
+                prefix_end: None,
+                suffix_start: None,
+                kind: NumberKind::Int,
+            }
+        );
+        assert_eq!(
+            ReadNumber::try_read("100_000_000)").unwrap(),
             ReadNumber {
                 len: 11,
                 prefix_end: None,
