@@ -1,24 +1,32 @@
-struct Vector2 =
+extern use stdio
+extern variadic func printf(fmt: Str) -> i32
+
+struct Vec2 =
   x : f64
   y : f64
 end
 
-impl Vector2 =
-  func add(self: Vector2, other: Vector2) -> Vector2
-    Vector2 {
+impl Vec2 =
+  func add(self: Vec2, other: Vec2) -> Vec2
+    Vec2 {
       x: self.x + other.x
       y: self.y + other.y
     }
   end
-end
 
-extern use stdio
-extern variadic func printf(format: Str) -> i32
+  func sub(self: Vec2, other: Vec2) -> Vec2
+    Vec2 {
+      x: self.x - other.x
+      y: self.y - other.y
+    }
+  end
+end
 
 func main() -> i32
-  let point = Vector2 { x: 10.0, y: 20.0 }
+  let base = Vec2 { x: 10.0, y: 20.0 }
+  let to_add = Vec2 { x: 5.0, y: 10.0 }
+  let to_sub = Vec2 { x: 2.5, y: 5.0 }
 
-  printf("x: %f, y: %f", point.x, point.y)
+  let result = base.add(to_add).sub(to_sub)
+  printf("x: %f, y: %f", result.x, result.y)
 end
-
--- vim:ft=sol

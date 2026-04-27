@@ -162,7 +162,8 @@ fn main() -> Result<()> {
 
             let mir = mir::lower_module(&hir, &env)?;
             if let DumpCommand::Mir = cmd {
-                return write_str(stdout, mir);
+                let printer = mir::fmt::MirPrinter::new(mir, &env);
+                return write_str(stdout, printer);
             }
 
             let mut qbe = qbe::lower::Builder::new(&env);

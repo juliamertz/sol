@@ -2,9 +2,10 @@ use crate::ast::{BinOpKind, UnaryOpKind};
 use crate::interner::Id;
 use crate::type_checker::{DefId, FieldId, TypeId};
 
-mod builder;
-mod fmt;
-mod lower;
+pub mod builder;
+pub mod fmt;
+pub mod lower;
+pub mod visit;
 
 pub use lower::lower_module;
 
