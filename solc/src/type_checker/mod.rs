@@ -319,24 +319,41 @@ pub fn infer_member_access(
     }
 }
 
+fn type_id_from_suffix(suffix: &ast::LiteralSuffix) -> TypeId {
+    match suffix {
+        ast::LiteralSuffix::Int(int_ty) => int_ty.into(),
+        ast::LiteralSuffix::UInt(uint_ty) => uint_ty.into(),
+        ast::LiteralSuffix::Float(float_ty) => float_ty.into(),
+    }
+}
+
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
         Expr::Ident(ident) => infer_ident(ident, env, scope),
-        Expr::Literal(Literal { id, kind, .. }) => match kind {
+        Expr::Literal(Literal {
+            id, kind, suffix, ..
+        }) => match kind {
             LiteralKind::Str(_) => {
                 let ty_id = TypeId::STR;
                 env.nodes.insert(*id, ty_id);
                 Ok(ty_id)
             }
             LiteralKind::Int(_) => {
-                let ty_id = TypeId::I32; // TODO: infer the correct size
+                let ty_id: TypeId = suffix
+                    .as_ref()
+                    .map(type_id_from_suffix)
+                    .unwrap_or(TypeId::I32); // TODO: infer the correct type if ommited
                 env.nodes.insert(*id, ty_id);
                 Ok(ty_id)
             }
             LiteralKind::Float(_) => {
-                // TODO: i still need a way to infer these types. for now
-                // im defaulting to f64 because f32's are quite annoying to work with in qbe
-                let ty_id = TypeId::F64;
+                let ty_id: TypeId = suffix
+                    .as_ref()
+                    .map(type_id_from_suffix)
+                    // TODO: i still need a way to infer these types. for now
+                    // im defaulting to f64 because f32's are quite annoying to work with in qbe
+                    .unwrap_or(TypeId::F64);
+
                 env.nodes.insert(*id, ty_id);
                 Ok(ty_id)
             }

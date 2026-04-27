@@ -641,7 +641,12 @@ impl<'src> Parser<'src> {
         let kind = LiteralKind::Bool(val);
         self.advance()?;
         let id = self.ctx.next_id();
-        Ok(Literal { id, span, kind })
+        Ok(Literal {
+            id,
+            span,
+            kind,
+            suffix: None,
+        })
     }
 
     fn str_lit(&mut self) -> Result<Literal> {
@@ -650,7 +655,12 @@ impl<'src> Parser<'src> {
         let kind = LiteralKind::Str(text.to_string());
         self.advance()?;
         let id = self.ctx.next_id();
-        Ok(Literal { id, span, kind })
+        Ok(Literal {
+            id,
+            span,
+            kind,
+            suffix: None,
+        })
     }
 
     fn while_loop(&mut self) -> Result<While> {

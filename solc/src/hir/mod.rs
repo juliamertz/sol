@@ -50,12 +50,20 @@ pub struct Name<'ast> {
 
 pub type Label<'ast> = Name<'ast>;
 
+#[derive(Debug, Clone, Copy)]
+pub enum LiteralKind<'ast> {
+    Str(&'ast str),
+    Int(i128),
+    Float(f64),
+    Bool(bool),
+}
+
 #[derive(Debug, Clone)]
 pub struct Literal<'ast> {
     pub id: HirId,
     pub ty: TypeId,
     pub span: &'ast Span,
-    pub kind: &'ast ast::LiteralKind,
+    pub kind: LiteralKind<'ast>,
 }
 
 #[derive(Debug, Clone)]

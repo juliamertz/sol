@@ -140,15 +140,19 @@ pub enum LiteralKind {
     Bool(bool),
 }
 
-// pub LiteralSuffix {
-//
-// }
+#[derive(Debug, Clone)]
+pub enum LiteralSuffix {
+    Int(IntTy),
+    UInt(UIntTy),
+    Float(FloatTy),
+}
 
 #[derive(Debug, Clone)]
 pub struct Literal {
     pub id: NodeId,
     pub span: Span,
     pub kind: LiteralKind,
+    pub suffix: Option<LiteralSuffix>,
 }
 
 /// A type expression

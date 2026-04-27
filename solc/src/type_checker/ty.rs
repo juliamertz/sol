@@ -32,6 +32,17 @@ impl From<&ast::IntTy> for IntTy {
     }
 }
 
+impl From<&ast::IntTy> for TypeId {
+    fn from(value: &ast::IntTy) -> Self {
+        match value {
+            ast::IntTy::I8 => TypeId::I8,
+            ast::IntTy::I16 => TypeId::I16,
+            ast::IntTy::I32 => TypeId::I32,
+            ast::IntTy::I64 => TypeId::I64,
+        }
+    }
+}
+
 impl std::fmt::Display for IntTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -73,6 +84,17 @@ impl From<&ast::UIntTy> for UIntTy {
     }
 }
 
+impl From<&ast::UIntTy> for TypeId {
+    fn from(value: &ast::UIntTy) -> Self {
+        match value {
+            ast::UIntTy::U8 => TypeId::U8,
+            ast::UIntTy::U16 => TypeId::U16,
+            ast::UIntTy::U32 => TypeId::U32,
+            ast::UIntTy::U64 => TypeId::U64,
+        }
+    }
+}
+
 impl std::fmt::Display for UIntTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -97,6 +119,17 @@ impl From<&ast::FloatTy> for FloatTy {
             ast::FloatTy::F16 => FloatTy::F16,
             ast::FloatTy::F32 => FloatTy::F32,
             ast::FloatTy::F64 => FloatTy::F64,
+        }
+    }
+}
+
+impl From<&ast::FloatTy> for TypeId {
+    fn from(value: &ast::FloatTy) -> Self {
+        match value {
+            ast::FloatTy::F16 => TypeId::F16,
+            ast::FloatTy::F32 => TypeId::F32,
+            ast::FloatTy::F64 => TypeId::F64,
+
         }
     }
 }

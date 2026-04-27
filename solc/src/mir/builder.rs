@@ -309,14 +309,14 @@ impl<'tcx> Builder<'tcx> {
 
             hir::Expr::Literal(literal) => Ok((
                 match literal.kind {
-                    ast::LiteralKind::Int(val) => {
-                        Operand::Constant(Constant::Int(*val, MirTy::new(literal.ty)))
+                    hir::LiteralKind::Int(val) => {
+                        Operand::Constant(Constant::Int(val, MirTy::new(literal.ty)))
                     }
-                    ast::LiteralKind::Float(val) => {
-                        Operand::Constant(Constant::Float(*val, MirTy::new(literal.ty)))
+                    hir::LiteralKind::Float(val) => {
+                        Operand::Constant(Constant::Float(val, MirTy::new(literal.ty)))
                     }
-                    ast::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(*val)),
-                    ast::LiteralKind::Str(val) => {
+                    hir::LiteralKind::Bool(val) => Operand::Constant(Constant::Bool(val)),
+                    hir::LiteralKind::Str(val) => {
                         let data_id = self.new_data(DataValue::String(val.to_string()));
                         Operand::Data(data_id)
                     }

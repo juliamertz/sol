@@ -1,7 +1,7 @@
 use std::assert_matches;
 use std::borrow::Cow;
 
-use crate::ast::{Literal, LiteralKind};
+use crate::ast::{FloatTy, IntTy, Literal, LiteralKind, LiteralSuffix, UIntTy};
 use crate::lexer::num::{NumberKind, ReadNumber};
 use crate::lexer::token::TokenKind;
 
@@ -36,6 +36,26 @@ fn split_digit_str<'a>(
 }
 
 impl Parser<'_> {
+    fn num_lit_suffix(&self, suffix: &str) -> Result<LiteralSuffix> {
+        use LiteralSuffix::*;
+
+        Ok(match suffix {
+            "i8" => Int(IntTy::I8),
+            "i16" => Int(IntTy::I16),
+            "i32" => Int(IntTy::I32),
+            "i64" => Int(IntTy::I64),
+            "u8" => UInt(UIntTy::U8),
+            "u16" => UInt(UIntTy::U16),
+            "u32" => UInt(UIntTy::U32),
+            "u64" => UInt(UIntTy::U64),
+            "f16" => Float(FloatTy::F16),
+            "f32" => Float(FloatTy::F32),
+            "f64" => Float(FloatTy::F64),
+
+            _ => todo!("invalid number suffix: `{suffix}`"),
+        })
+    }
+
     pub(super) fn num_lit(&mut self, num: ReadNumber) -> Result<Literal> {
         assert_matches!(
             self.curr.kind,
@@ -46,7 +66,7 @@ impl Parser<'_> {
         let id = self.ctx.next_id();
         let span = self.curr.span();
         let text = self.curr.text.as_ref();
-        let (_, digit_str, _) = split_digit_str(&text, &num);
+        let (_, digit_str, suffix) = split_digit_str(&text, &num);
         let digit_str = clean_digit_str(digit_str);
 
         let kind = match num.kind {
@@ -64,8 +84,15 @@ impl Parser<'_> {
             }
         };
 
+        let suffix = suffix.map(|text| self.num_lit_suffix(text)).transpose()?;
+
         self.advance()?;
 
-        Ok(Literal { id, kind, span })
+        Ok(Literal {
+            id,
+            kind,
+            span,
+            suffix,
+        })
     }
 }

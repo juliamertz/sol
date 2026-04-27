@@ -8,6 +8,7 @@ use crate::hir::{self, HirId, Locality, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
+use crate::type_checker::ty::Ty;
 use crate::type_checker::{FieldId, ItemId, MemberResolution, TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -252,17 +253,38 @@ fn lower_member_access<'ast>(
     })
 }
 
+fn lower_literal<'ast>(literal: &'ast ast::Literal, env: &TypeEnv) -> Result<hir::Literal<'ast>> {
+    use ast::LiteralKind as AstKind;
+    use hir::LiteralKind as HirKind;
+
+    let ty_id = env.type_of(&literal.id, &literal.span);
+    let ty = env.types.get(&ty_id);
+
+    let kind = match (ty, &literal.kind) {
+        (Ty::Int(_) | Ty::UInt(_), AstKind::Int(val)) => HirKind::Int(*val),
+        (Ty::Float(_), AstKind::Float(val)) => HirKind::Float(*val),
+        // if the type id does not match the literal kind this means the type checker knows
+        // something we don't. we should cast accordingly
+        (Ty::Float(_), AstKind::Int(val)) => HirKind::Float(*val as f64),
+        (Ty::Int(_) | Ty::UInt(_), AstKind::Float(val)) => HirKind::Int(*val as i128),
+        (_, AstKind::Str(val)) => HirKind::Str(val),
+        (_, AstKind::Bool(val)) => HirKind::Bool(*val),
+        _ => todo!(),
+    };
+    Ok(hir::Literal {
+        id: HirId::DUMMY,
+        ty: ty_id,
+        span: &literal.span,
+        kind,
+    })
+}
+
 pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir::Expr<'ast>> {
     let ty = env.type_of(&expr.id(), &expr.span());
     let lowered = match expr {
-        ast::Expr::Ident(ident) => hir::Expr::Ident(lower_ident(ident, env)?),
-        ast::Expr::Literal(literal) => hir::Expr::Literal(hir::Literal {
-            id: HirId::DUMMY,
-            ty,
-            span: &literal.span,
-            kind: &literal.kind,
-        }),
-        ast::Expr::Block(block) => hir::Expr::Block(lower_block(block, env)?),
+        ast::Expr::Ident(ident) => lower_ident(ident, env).map(hir::Expr::Ident)?,
+        ast::Expr::Literal(literal) => lower_literal(literal, env).map(hir::Expr::Literal)?,
+        ast::Expr::Block(block) => lower_block(block, env).map(hir::Expr::Block)?,
         ast::Expr::BinOp(bin_op) => hir::Expr::BinOp(hir::BinOp {
             id: HirId::DUMMY,
             ty,
