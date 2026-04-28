@@ -1,5 +1,8 @@
 use std::assert_matches;
 use std::borrow::Cow;
+use std::str::FromStr;
+
+use thiserror::Error;
 
 use crate::ast::{FloatTy, IntTy, Literal, LiteralKind, LiteralSuffix, UIntTy};
 use crate::lexer::num::{NumberKind, ReadNumber};
@@ -35,10 +38,17 @@ fn split_digit_str<'a>(
     (prefix, buf, suffix)
 }
 
-impl Parser<'_> {
-    fn num_lit_suffix(&self, suffix: &str) -> Result<LiteralSuffix> {
-        use LiteralSuffix::*;
+#[derive(Debug, Error)]
+pub enum ParseSuffixError {
+    #[error("invalid literal suffix: `{0}`")]
+    Invalid(String),
+}
 
+impl std::str::FromStr for LiteralSuffix {
+    type Err = ParseSuffixError;
+
+    fn from_str(suffix: &str) -> Result<Self, ParseSuffixError> {
+        use LiteralSuffix::*;
         Ok(match suffix {
             "i8" => Int(IntTy::I8),
             "i16" => Int(IntTy::I16),
@@ -51,11 +61,22 @@ impl Parser<'_> {
             "f16" => Float(FloatTy::F16),
             "f32" => Float(FloatTy::F32),
             "f64" => Float(FloatTy::F64),
-
-            _ => todo!("invalid number suffix: `{suffix}`"),
+            _ => return Err(ParseSuffixError::Invalid(suffix.into())),
         })
     }
+}
 
+#[derive(Debug, Error)]
+pub enum ParseNumberError {
+    #[error(transparent)]
+    Suffix(#[from] ParseSuffixError),
+    #[error("failed to parse integer: {0}")]
+    Int(#[from] std::num::ParseIntError),
+    #[error("failed to parse float: {0}")]
+    Float(#[from] std::num::ParseFloatError),
+}
+
+impl Parser<'_> {
     pub(super) fn num_lit(&mut self, num: ReadNumber) -> Result<Literal> {
         assert_matches!(
             self.curr.kind,
@@ -71,20 +92,23 @@ impl Parser<'_> {
 
         let kind = match num.kind {
             NumberKind::Int => {
-                let value = i128::from_str_radix(&digit_str, 10)?;
+                let value = i128::from_str_radix(&digit_str, 10).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
             NumberKind::Float { radix_point_idx: _ } => {
-                let value = digit_str.parse()?;
+                let value = digit_str.parse().map_err(ParseNumberError::Float)?;
                 LiteralKind::Float(value)
             }
             NumberKind::Hex => {
-                let value = i128::from_str_radix(&digit_str, 16)?;
+                let value = i128::from_str_radix(&digit_str, 16).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
         };
 
-        let suffix = suffix.map(|text| self.num_lit_suffix(text)).transpose()?;
+        let suffix = suffix
+            .map(LiteralSuffix::from_str)
+            .transpose()
+            .map_err(ParseNumberError::Suffix)?;
 
         self.advance()?;
 

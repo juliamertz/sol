@@ -56,10 +56,8 @@ pub enum ParseError {
 
     #[error(transparent)]
     Lexer(#[from] crate::lexer::LexerError),
-    #[error("failed to parse integer: {0}")]
-    ParseInt(#[from] std::num::ParseIntError),
-    #[error("failed to parse float: {0}")]
-    ParseFloat(#[from] std::num::ParseFloatError),
+    #[error(transparent)]
+    ParseNumber(#[from] num::ParseNumberError),
 }
 
 type Result<T, E = ParseError> = core::result::Result<T, E>;
