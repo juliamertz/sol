@@ -413,9 +413,7 @@ impl<'env> Builder<'env> {
                 FloatTy::F64 => BaseTy::Double.into(),
             },
             Ty::Bool => BaseTy::Word.into(),
-            Ty::Str => BaseTy::Long.into(),
-            Ty::List(_ty, _size) => BaseTy::Long.into(),
-            Ty::Ptr(_type_id) => todo!(),
+            Ty::Str | Ty::List(_, _) | Ty::Ptr(_) => BaseTy::Long.into(),
             Ty::Fn {
                 is_extern: _,
                 is_variadic: _,

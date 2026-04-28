@@ -3,7 +3,7 @@ use std::fmt::{self, Write as _};
 use crate::{
     interner::Id,
     mir::{visit::Visitor, *},
-    type_checker::TypeEnv,
+    type_checker::{TypeEnv, fmt::FmtTy},
 };
 
 pub struct MirPrinter<'env> {
@@ -76,11 +76,16 @@ impl super::visit::Visitor<fmt::Result> for FmtMir<'_, '_, '_> {
                 for (field_id, mir_ty) in fields {
                     let ty = self.env.types.get(&mir_ty.inner);
                     self.write_indent()?;
-                    writeln!(self.f, "{} = {ty}", field_id.into_inner())?;
+                    writeln!(
+                        self.f,
+                        "{} = {}",
+                        field_id.into_inner(),
+                        FmtTy::new(ty, self.env)
+                    )?;
                 }
                 self.leave();
                 Ok(())
-            },
+            }
         }
     }
 
@@ -167,10 +172,7 @@ impl super::visit::Visitor<fmt::Result> for FmtMir<'_, '_, '_> {
                     self.visit_temp_id(dest)?;
                     self.f.write_str(" = ")?;
                 }
-                let def_name = self
-                    .env
-                    .def_names
-                    .get(def).unwrap();
+                let def_name = self.env.def_names.get(def).unwrap();
                 write!(self.f, "call {def_name}(")?;
                 for (idx, op) in operands.iter().enumerate() {
                     if idx > 0 {
@@ -191,7 +193,7 @@ impl super::visit::Visitor<fmt::Result> for FmtMir<'_, '_, '_> {
                     self.f.write_char('*')?;
                 }
                 let ty = self.env.types.get(&mir_ty.inner);
-                write!(self.f, "{ty}")
+                write!(self.f, "{}", FmtTy::new(ty, self.env))
             }
             Instruction::Store { addr, val } => {
                 self.f.write_str("store ")?;

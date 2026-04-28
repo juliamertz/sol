@@ -5,6 +5,7 @@ use miette::Diagnostic;
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use crate::hir;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::mir::{
@@ -12,7 +13,6 @@ use crate::mir::{
     Terminator,
 };
 use crate::type_checker::{DefId, FieldId, MemberResolution, TypeEnv, TypeId};
-use crate::{ast, hir};
 
 #[derive(Debug, Default)]
 pub(super) struct BlockBuilder {
@@ -614,6 +614,19 @@ impl<'tcx> Builder<'tcx> {
             }
 
             hir::Expr::Ref(_expr) => todo!(),
+
+            hir::Expr::Deref(expr) => {
+                let ty = MirTy::new(*expr.type_id());
+                let dest = self.new_temp(ty);
+                let (addr, block) = self.lower_expr(expr, block)?;
+
+                self.get_block_mut(&block).push_instr(Instruction::Load {
+                    dest,
+                    addr: addr.as_temp().copied().expect("deref target to be a temp"),
+                });
+
+                Ok((Operand::Temporary(dest), block))
+            }
 
             hir::Expr::Break(_inner) => {
                 let ctx = self

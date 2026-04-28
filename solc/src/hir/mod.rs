@@ -197,6 +197,7 @@ pub enum Expr<'ast> {
     Constructor(Constructor<'ast>),
     MemberAccess(MemberAccess<'ast>),
     Ref(Box<Expr<'ast>>),
+    Deref(Box<Expr<'ast>>),
     Assign(Assign<'ast>),
     Break(Break<'ast>),
     Continue(Continue<'ast>),
@@ -347,7 +348,8 @@ impl Expr<'_> {
             Expr::List(list) => &list.ty,
             Expr::Constructor(constructor) => &constructor.ty,
             Expr::MemberAccess(member_access) => &member_access.ty,
-            Expr::Ref(expr) => expr.type_id(),
+            Expr::Ref(expr) => expr.type_id(), // TODO: this is not correct. should be pointer to this type
+            Expr::Deref(expr) => expr.type_id(),
             // TODO: this should probably be NEVER type
             Expr::Assign(_assign) => &TypeId::UNIT,
             Expr::Break(_inner) => &TypeId::UNIT,
@@ -370,6 +372,7 @@ impl Expr<'_> {
             Expr::Constructor(constructor) => constructor.span,
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
+            Expr::Deref(expr) => expr.span(),
             Expr::Assign(assign) => assign.span,
             Expr::Break(_inner) => todo!(),
             Expr::Continue(_inner) => todo!(),

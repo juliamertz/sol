@@ -1,4 +1,4 @@
-use std::fmt::{self, Display};
+use std::fmt::{self, Display, Write};
 
 use crate::ast::*;
 use crate::lexer::source::Span;
@@ -116,6 +116,10 @@ impl PrettyPrinter {
                 self.fmt_ty(f, returns, depth + 2)?;
                 write!(f, ")")?;
             }
+            TyKind::Ptr(inner) => {
+                f.write_char('*')?;
+                self.fmt_ty(f, inner, depth)?;
+            },
             TyKind::Var(ident) => write!(f, " {ident}")?,
         }
         write!(f, ")")
@@ -244,6 +248,14 @@ impl PrettyPrinter {
             Expr::Ref(inner) => {
                 Self::indent(f, depth)?;
                 write!(f, "(ref ")?;
+                self.fmt_span(f, inner.span())?;
+                writeln!(f)?;
+                self.fmt_expr(f, inner, depth + 1)?;
+                write!(f, ")")
+            }
+            Expr::Deref(inner) => {
+                Self::indent(f, depth)?;
+                write!(f, "(deref ")?;
                 self.fmt_span(f, inner.span())?;
                 writeln!(f)?;
                 self.fmt_expr(f, inner, depth + 1)?;

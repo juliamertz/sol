@@ -381,6 +381,7 @@ pub fn lower_expr<'ast>(expr: &'ast ast::Expr, env: &mut TypeEnv) -> Result<hir:
             lower_member_access(member_access, env).map(hir::Expr::MemberAccess)?
         }
         ast::Expr::Ref(expr) => hir::Expr::Ref(lower_expr(expr, env)?.into()),
+        ast::Expr::Deref(expr) => hir::Expr::Deref(lower_expr(expr, env)?.into()),
         ast::Expr::Assign(assign) => hir::Expr::Assign(hir::Assign {
             id: HirId::DUMMY,
             span: &assign.span,

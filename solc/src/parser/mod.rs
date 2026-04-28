@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use miette::Diagnostic;
@@ -293,19 +294,28 @@ impl<'src> Parser<'src> {
 
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
-        let ident = self.ident()?;
-        let kind = TyKind::from_ident(ident);
         let id = self.ctx.next_id();
+        let is_ptr = self.accept(TokenKind::Asterisk)?.is_some();
+        let ident = self.ident()?;
+        let bare_kind = TyKind::from_ident(ident);
+        let kind = if is_ptr {
+            TyKind::Ptr(Rc::new(Ty {
+                id: self.ctx.next_id(),
+                span: self.curr.span, // TODO: not correct
+                kind: bare_kind,
+            }))
+        } else {
+            bare_kind
+        };
         let span = span.enclosing_to(&self.curr.span);
         let mut ty = Ty { kind, id, span };
 
         if self.accept(TokenKind::LBracket)?.is_some() {
             let size = if let TokenKind::Num(num) = self.curr.kind {
-                let lit = self.num_lit(num)?;
-                // this is janky 😭
-                let LiteralKind::Int(size) = lit.kind else {
-                    unreachable!();
-                };
+                let size = self
+                    .num_lit(num)?
+                    .as_int()
+                    .expect("TODO: error message when array size is not an int literal");
                 Some(size as usize)
             } else {
                 None
@@ -690,6 +700,10 @@ impl<'src> Parser<'src> {
             TokenKind::Ident => Expr::Ident(self.ident()?),
             TokenKind::If => Expr::IfElse(self.r#if()?),
             TokenKind::LBracket => Expr::List(self.list()?),
+            TokenKind::Asterisk => {
+                self.advance()?;
+                Expr::Deref(self.expr(prec)?.into())
+            },
             TokenKind::While => Expr::While(self.while_loop()?),
 
             tok if tok.is_unary_op() => {

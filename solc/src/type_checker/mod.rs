@@ -14,11 +14,13 @@ use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{AsStr, Boxed, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
+use crate::type_checker::fmt::TyDisplay;
 use crate::type_checker::interner::TypeInterner;
 use crate::type_checker::mangle::Mangle;
 use crate::type_checker::ty::*;
 
 pub mod collect;
+pub mod fmt;
 pub mod interner;
 pub mod mangle;
 pub mod ty;
@@ -48,7 +50,7 @@ pub enum TypeError {
 
         name: Name,
 
-        ty: Ty,
+        ty: TyDisplay,
 
         #[label("here")]
         span: Span,
@@ -71,11 +73,11 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
-        lhs_ty: Ty,
+        lhs_ty: TyDisplay,
         #[label("has type `{lhs_ty}`")]
         lhs_span: Span,
 
-        rhs_ty: Ty,
+        rhs_ty: TyDisplay,
         #[label("has type `{rhs_ty}`")]
         rhs_span: Span,
 
@@ -88,11 +90,11 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
-        first_ty: Ty,
+        first_ty: TyDisplay,
         #[label("first element has type `{first_ty}`")]
         first_span: Span,
 
-        other_ty: Ty,
+        other_ty: TyDisplay,
         #[label("this element has type `{other_ty}`")]
         other_span: Span,
 
@@ -114,11 +116,11 @@ pub enum TypeError {
         #[source_code]
         src: SourceInfo,
 
-        first_ty: Ty,
+        first_ty: TyDisplay,
         #[label("first element has type `{first_ty}`")]
         first_span: Span,
 
-        other_ty: Ty,
+        other_ty: TyDisplay,
         #[label("this element has type `{other_ty}`")]
         other_span: Span,
     },
@@ -243,6 +245,7 @@ impl TypeEnv {
                     returns: return_id,
                 }
             }
+            ast::TyKind::Ptr(inner) => Ty::Ptr(self.type_from_ast_ty(inner, scope)?),
         };
 
         let ty_id = self.types.intern(ty);
@@ -312,7 +315,7 @@ pub fn infer_member_access(
                 // TODO: or item...
                 src: env.src.clone(),
                 name: member_access.rhs.clone(),
-                ty: lhs_ty.clone(),
+                ty: TyDisplay::new(lhs_ty, env),
                 span: member_access.span,
             })
         }
@@ -371,15 +374,18 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let lhs_ty_id = infer(lhs.as_ref(), env, scope)?;
             let rhs_ty_id = infer(rhs.as_ref(), env, scope)?;
 
+            let lhs_ty = env.types.get(&lhs_ty_id);
+            let rhs_ty = env.types.get(&rhs_ty_id);
+
             match op.kind {
                 BinOpKind::Eq | BinOpKind::Ne | BinOpKind::Lt | BinOpKind::Gt => {
                     if lhs_ty_id != rhs_ty_id {
                         Err(TypeError::ComparisonMismatch {
                             src: env.src.clone(),
                             lhs_span: lhs.span(),
-                            lhs_ty: env.types.get(&lhs_ty_id).clone(),
+                            lhs_ty: TyDisplay::new(lhs_ty, env),
                             rhs_span: rhs.span(),
-                            rhs_ty: env.types.get(&rhs_ty_id).clone(),
+                            rhs_ty: TyDisplay::new(rhs_ty, env),
                             help: None,
                         })
                     } else {
@@ -408,15 +414,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
-                    let lhs_ty = env.types.get(&lhs_ty_id);
-                    let rhs_ty = env.types.get(&rhs_ty_id);
-
                     if !lhs_ty.is_number() || !rhs_ty.is_number() {
                         return Err(TypeError::NonNumericOperand {
                             src: env.src.clone(),
-                            first_ty: lhs_ty.to_owned(),
+                            first_ty: TyDisplay::new(lhs_ty, env),
                             first_span: lhs.span(),
-                            other_ty: rhs_ty.to_owned(),
+                            other_ty: TyDisplay::new(rhs_ty, env),
                             other_span: rhs.span(),
                         });
                     }
@@ -424,9 +427,9 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                     if lhs_ty_id != rhs_ty_id {
                         return Err(TypeError::ComparisonMismatch {
                             src: env.src.clone(),
-                            lhs_ty: lhs_ty.to_owned(),
+                            lhs_ty: TyDisplay::new(lhs_ty, env),
                             lhs_span: lhs.span(),
-                            rhs_ty: rhs_ty.to_owned(),
+                            rhs_ty: TyDisplay::new(rhs_ty, env),
                             rhs_span: rhs.span(),
                             help: None,
                         });
@@ -496,34 +499,36 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             }
 
             let block_scope = &mut scope.new_child();
-            let consequence_ty = infer(&Expr::Block(consequence.to_owned()), env, block_scope)?;
+            let consequence_ty_id = infer(&Expr::Block(consequence.to_owned()), env, block_scope)?;
             let alternative_ty = alternative
                 .clone()
                 .map(|alternative| infer(&Expr::Block(alternative), env, block_scope))
                 .transpose()?;
 
-            if let Some(alternative_ty) = alternative_ty
+            if let Some(alternative_ty_id) = alternative_ty
                 && let Some(alternative) = alternative
-                && alternative_ty != consequence_ty
+                && alternative_ty_id != consequence_ty_id
             {
+                let consequence_ty = env.types.get(&consequence_ty_id);
+                let alternative_ty = env.types.get(&alternative_ty_id);
                 return Err(TypeError::ComparisonMismatch {
                     src: env.src.clone(),
                     lhs_span: consequence.span,
-                    lhs_ty: env.types.get(&consequence_ty).clone(),
+                    lhs_ty: TyDisplay::new(consequence_ty, env),
                     rhs_span: alternative.span,
-                    rhs_ty: env.types.get(&alternative_ty).clone(),
+                    rhs_ty: TyDisplay::new(alternative_ty, env),
                     help: None,
                 });
             }
 
-            Ok(consequence_ty)
+            Ok(consequence_ty_id)
         }
         Expr::List(List { items, .. }) => {
             let size = items.len();
             let mut iter = items.iter();
             let first_item = iter.next();
 
-            let inner_type = first_item
+            let inner_ty_id = first_item
                 .map(|expr| infer(expr, env, scope))
                 .transpose()?
                 .unwrap_or(TypeId::NONE);
@@ -531,20 +536,22 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             while let Some(item) = iter.next()
                 && let Some(first_item) = first_item
             {
-                let ty = infer(item, env, scope)?;
-                if ty != inner_type {
+                let ty_id = infer(item, env, scope)?;
+                if ty_id != inner_ty_id {
+                    let inner_ty = env.types.get(&inner_ty_id);
+                    let ty = env.types.get(&ty_id);
                     return Err(TypeError::HeterogeneousList {
                         src: env.src.clone(),
-                        first_ty: env.types.get(&inner_type).clone(),
+                        first_ty: TyDisplay::new(inner_ty, env),
                         first_span: first_item.span(),
-                        other_ty: env.types.get(&ty).clone(),
+                        other_ty: TyDisplay::new(ty, env),
                         other_span: item.span(),
                         help: Some("pick a type and commit to it".into()),
                     });
                 }
             }
 
-            let ty = Ty::List(inner_type, Some(size));
+            let ty = Ty::List(inner_ty_id, Some(size));
             let ty_id = env.types.intern(ty);
             Ok(ty_id)
         }
@@ -582,6 +589,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let inner_ty_id = infer(expr, env, scope)?;
             Ok(env.types.intern(Ty::Ptr(inner_ty_id)))
         }
+        Expr::Deref(expr) => infer(expr, env, scope),
         Expr::Assign(assign) => {
             let _lhs_ty_id = infer(&assign.lhs, env, scope)?;
             let _rhs_ty_id = infer(&assign.rhs, env, scope)?;

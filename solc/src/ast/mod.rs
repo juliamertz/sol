@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::rc::Rc;
 
 use either::Either;
 
@@ -155,6 +156,15 @@ pub struct Literal {
     pub suffix: Option<LiteralSuffix>,
 }
 
+impl Literal {
+    pub fn as_int(&self) -> Option<i128> {
+        match self.kind {
+            LiteralKind::Int(val) => Some(val),
+            _ => None,
+        }
+    }
+}
+
 /// A type expression
 #[derive(Debug, Clone)]
 pub struct Ty {
@@ -202,6 +212,7 @@ pub enum TyKind {
         returns: Arc<Ty>,
         is_extern: bool,
     },
+    Ptr(Rc<Ty>),
     Var(Ident),
 }
 
@@ -472,7 +483,8 @@ pub enum Expr {
     List(List),
     Constructor(Constructor),
     MemberAccess(MemberAccess),
-    Ref(Arc<Expr>), // TODO: why is this unused?
+    Ref(Arc<Expr>),
+    Deref(Arc<Expr>),
     Assign(Assign),
     Break(Break),
     Continue(Continue),
@@ -494,6 +506,7 @@ impl Expr {
             Expr::Constructor(constructor) => constructor.span,
             Expr::MemberAccess(member_access) => member_access.span,
             Expr::Ref(expr) => expr.span(),
+            Expr::Deref(expr) => expr.span(),
             Expr::Assign(assign) => assign.span,
             Expr::While(inner) => inner.span,
             Expr::Break(inner) => inner.span,
@@ -514,7 +527,8 @@ impl Expr {
             Expr::List(list) => list.id,
             Expr::Constructor(constructor) => constructor.id,
             Expr::MemberAccess(member_access) => member_access.id,
-            Expr::Ref(r#ref) => r#ref.id(),
+            Expr::Ref(expr) => expr.id(),
+            Expr::Deref(expr) => expr.id(),
             Expr::Assign(assign) => assign.id,
             Expr::While(inner) => inner.id,
             Expr::Break(inner) => inner.id,

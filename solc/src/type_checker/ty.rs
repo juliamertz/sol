@@ -129,7 +129,6 @@ impl From<&ast::FloatTy> for TypeId {
             ast::FloatTy::F16 => TypeId::F16,
             ast::FloatTy::F32 => TypeId::F32,
             ast::FloatTy::F64 => TypeId::F64,
-
         }
     }
 }
@@ -215,25 +214,6 @@ impl Ty {
         match self {
             Self::Struct(struct_ty) => Some(struct_ty),
             _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Ty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Ty::Unit => f.write_str("()"),
-            Ty::Int(int_ty) => int_ty.fmt(f),
-            Ty::UInt(uint_ty) => uint_ty.fmt(f),
-            Ty::Float(float_ty) => float_ty.fmt(f),
-            Ty::Bool => f.write_str("bool"),
-            Ty::Str => f.write_str("str"),
-            // TODO: it's kind of annoying that we only know the id of the inner type.
-            Ty::List(type_id, len) => write!(f, "[{type_id:?}; {len:?}]"),
-            // same here
-            Ty::Ptr(type_id) => write!(f, "*{type_id:?}"),
-            Ty::Fn { .. } => f.write_str("func"),
-            Ty::Struct(struct_ty) => f.write_str(struct_ty.ident.as_str()),
         }
     }
 }
