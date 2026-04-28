@@ -1,6 +1,5 @@
 use std::assert_matches;
 use std::borrow::Cow;
-use std::str::FromStr;
 
 use thiserror::Error;
 
@@ -38,32 +37,63 @@ fn split_digit_str<'a>(
     (prefix, buf, suffix)
 }
 
+fn digit_from_byte<T: From<u8>>(byte: u8) -> T {
+    T::from(byte - b'0')
+}
+
 #[derive(Debug, Error)]
 pub enum ParseSuffixError {
     #[error("invalid literal suffix: `{0}`")]
     Invalid(String),
 }
 
-impl std::str::FromStr for LiteralSuffix {
-    type Err = ParseSuffixError;
+fn parse_suffix(suffix: &str) -> Result<LiteralSuffix, ParseSuffixError> {
+    use LiteralSuffix::*;
+    Ok(match suffix {
+        "i8" => Int(IntTy::I8),
+        "i16" => Int(IntTy::I16),
+        "i32" => Int(IntTy::I32),
+        "i64" => Int(IntTy::I64),
+        "u8" => UInt(UIntTy::U8),
+        "u16" => UInt(UIntTy::U16),
+        "u32" => UInt(UIntTy::U32),
+        "u64" => UInt(UIntTy::U64),
+        "f16" => Float(FloatTy::F16),
+        "f32" => Float(FloatTy::F32),
+        "f64" => Float(FloatTy::F64),
+        _ => return Err(ParseSuffixError::Invalid(suffix.into())),
+    })
+}
 
-    fn from_str(suffix: &str) -> Result<Self, ParseSuffixError> {
-        use LiteralSuffix::*;
-        Ok(match suffix {
-            "i8" => Int(IntTy::I8),
-            "i16" => Int(IntTy::I16),
-            "i32" => Int(IntTy::I32),
-            "i64" => Int(IntTy::I64),
-            "u8" => UInt(UIntTy::U8),
-            "u16" => UInt(UIntTy::U16),
-            "u32" => UInt(UIntTy::U32),
-            "u64" => UInt(UIntTy::U64),
-            "f16" => Float(FloatTy::F16),
-            "f32" => Float(FloatTy::F32),
-            "f64" => Float(FloatTy::F64),
-            _ => return Err(ParseSuffixError::Invalid(suffix.into())),
-        })
+/// Parse a valid floating point number from string
+fn parse_float_unchecked(text: &str, radix_point_idx: usize) -> f64 {
+    let (integer_str, rhs) = text.split_at(radix_point_idx);
+    let fractional_str = &rhs[1..];
+
+    let mut result = 0.0;
+    let mut multiplier = 1.0;
+
+    for byte in integer_str.bytes().rev() {
+        if byte == b'_' {
+            continue;
+        }
+        let digit = digit_from_byte::<f64>(byte);
+        result += digit * multiplier;
+        multiplier *= 10.0;
     }
+
+    let mut divider = 10.0;
+
+    for byte in fractional_str.bytes() {
+        if byte == b'_' {
+            continue;
+        }
+        let digit = digit_from_byte::<f64>(byte);
+        result += digit / divider;
+        divider *= 10.0;
+    }
+
+    result
 }
 
 #[derive(Debug, Error)]
@@ -72,8 +102,6 @@ pub enum ParseNumberError {
     Suffix(#[from] ParseSuffixError),
     #[error("failed to parse integer: {0}")]
     Int(#[from] std::num::ParseIntError),
-    #[error("failed to parse float: {0}")]
-    Float(#[from] std::num::ParseFloatError),
 }
 
 impl Parser<'_> {
@@ -88,25 +116,26 @@ impl Parser<'_> {
         let span = self.curr.span();
         let text = self.curr.text.as_ref();
         let (_, digit_str, suffix) = split_digit_str(&text, &num);
-        let digit_str = clean_digit_str(digit_str);
 
         let kind = match num.kind {
             NumberKind::Int => {
+                let digit_str = clean_digit_str(text);
                 let value = i128::from_str_radix(&digit_str, 10).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
-            NumberKind::Float { radix_point_idx: _ } => {
-                let value = digit_str.parse().map_err(ParseNumberError::Float)?;
+            NumberKind::Float { radix_point_idx } => {
+                let value = parse_float_unchecked(&digit_str, radix_point_idx);
                 LiteralKind::Float(value)
             }
             NumberKind::Hex => {
+                let digit_str = clean_digit_str(text);
                 let value = i128::from_str_radix(&digit_str, 16).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
         };
 
         let suffix = suffix
-            .map(LiteralSuffix::from_str)
+            .map(parse_suffix)
             .transpose()
             .map_err(ParseNumberError::Suffix)?;
 
@@ -118,5 +147,34 @@ impl Parser<'_> {
             span,
             suffix,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_float() {
+        assert_matches!(
+            parse_float_unchecked("123.4", 3),
+            123.4,
+            "parse basic float without radix point"
+        );
+        assert_matches!(
+            parse_float_unchecked("01234.0", 5),
+            1234.0,
+            "parse float with leading 0"
+        );
+        assert_matches!(
+            parse_float_unchecked("100_000.5", 7),
+            100_000.5,
+            "parse float with underscores"
+        );
+        assert_matches!(
+            parse_float_unchecked("1234.56", 4),
+            1234.56,
+            "parse float with radix point"
+        );
     }
 }
