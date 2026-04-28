@@ -1,14 +1,15 @@
 #![cfg_attr(test, feature(test))]
 #![feature(portable_simd)]
 
+#[macro_use]
+mod interner;
+mod number;
+mod traits;
+
 pub mod ast;
 pub mod codegen;
 pub mod hir;
 pub mod lexer;
-pub mod parser;
-pub mod traits;
-pub mod type_checker;
-#[macro_use]
-pub mod interner;
 pub mod mir;
-pub mod number;
+pub mod parser;
+pub mod type_checker;

@@ -1,5 +1,5 @@
 [package]
-name = "solc"
+name = "solc-bin"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,13 +8,12 @@ name = "solc"
 path = "src/main.rs"
 
 [dependencies]
-thiserror = { workspace = true }
-miette = { workspace = true }
+thiserror.workspace = true
+miette.workspace = true
+lib = { path = "../lib", package = "solc-lib" }
+
 clap = { version = "4", default-features = false, features = [
   "std",
   "derive",
   "help",
 ] }
-strum = { version = "0.28.0", features = ["derive"] }
-either = "1.15.0"
-smallvec = "1.15.1"

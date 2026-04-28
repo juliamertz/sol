@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use either::Either;
 
-use crate::id;
 use crate::lexer::source::Span;
 use crate::traits::AsStr;
 

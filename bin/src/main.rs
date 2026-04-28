@@ -7,11 +7,8 @@ use std::{
 use clap::Parser;
 use miette::{IntoDiagnostic, Result};
 
-use solc::{
-    codegen::{self, qbe},
-    hir, lexer, mir, parser,
-    type_checker::{self, Scope, TypeEnv},
-};
+use lib::codegen::qbe;
+use lib::{ast, hir, lexer, mir, parser, type_checker};
 
 #[derive(clap::Parser)]
 #[command(version, about, long_about = None)]
@@ -92,18 +89,17 @@ fn build(file_path: &Path, opts: &BuildOpts) -> Result<PathBuf> {
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
     let module_ast = parser.parse()?;
 
-    let mut env = TypeEnv::new(parser.source());
-    let mut scope = Scope::default();
-
+    let mut env = type_checker::TypeEnv::new(parser.source());
+    let mut scope = type_checker::Scope::default();
     type_checker::check_module(&module_ast, &mut env, &mut scope)?;
 
     let module_hir = hir::lower_module(&module_ast, &mut env)?;
     let module_mir = mir::lower_module(&module_hir, &env)?;
 
-    let mut qbe_builder = codegen::qbe::lower::Builder::new(&env);
+    let mut qbe_builder = qbe::lower::Builder::new(&env);
     let qbe_module = qbe_builder.lower_module(&module_mir)?;
 
-    let compiler = codegen::qbe::compile::Compiler::new(&opts.outdir);
+    let compiler = qbe::compile::Compiler::new(&opts.outdir);
     let out_path = compiler.ir_to_bin(&qbe_module)?;
 
     Ok(out_path)
@@ -147,12 +143,12 @@ fn main() -> Result<()> {
             let mut parser = parser::Parser::new(file_path, &content)?;
             let ast = parser.parse()?;
             if let DumpCommand::Ast = cmd {
-                let fmt = solc::ast::fmt::FmtModule::new(&ast, &content).to_string();
+                let fmt = ast::fmt::FmtModule::new(&ast, &content).to_string();
                 return write_str(stdout, fmt);
             }
 
-            let mut env = TypeEnv::new(parser.source());
-            let mut scope = Scope::default();
+            let mut env = type_checker::TypeEnv::new(parser.source());
+            let mut scope = type_checker::Scope::default();
             type_checker::check_module(&ast, &mut env, &mut scope)?;
 
             let hir = hir::lower_module(&ast, &mut env)?;

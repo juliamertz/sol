@@ -9,7 +9,6 @@ use crate::ast::{
     Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
     StructDef, Unary, UnaryOpKind, Use,
 };
-use crate::id;
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{AsStr, Boxed, TransposeVec};
