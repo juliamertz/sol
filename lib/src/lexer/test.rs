@@ -2,17 +2,15 @@ extern crate test;
 
 use std::assert_matches;
 
-use test::Bencher;
-
 use crate::lexer::{
     Lexer,
     TokenKind::{self, *},
 };
 
 fn lex(source: &'static str) -> Vec<TokenKind> {
-    let mut lexer = Lexer::new("inline".into(), source);
+    let lexer = Lexer::new("inline".into(), source);
     lexer
-        .read_until_eof()
+        .collect::<Result<Vec<_>, _>>()
         .unwrap()
         .into_iter()
         .map(|tok| tok.kind)
@@ -24,14 +22,15 @@ fn math_expr() {
     let tokens = lex(r"10 / 2 * 50 - 5");
     assert_matches!(
         tokens.as_slice(),
-        &[Num(_), Slash, Num(_), Asterisk, Num(_), Sub, Num(_)]
+        &[Num(_), Slash, Num(_), Asterisk, Num(_), Sub, Num(_), Eof]
     );
 }
 
 #[test]
 fn literals() {
-    let tokens = lex(r#"10 true false "hello world""#);
-    assert_matches!(tokens.as_slice(), &[Num(_), True, False, String]);
+    let tokens = lex(r#"10 true false 
+    "hello world""#);
+    assert_matches!(tokens.as_slice(), &[Num(_), True, False, Newline, String, Eof]);
 }
 
 #[test]
@@ -39,23 +38,12 @@ fn keywords() {
     let tokens = lex(r"extern variadic func struct then end if else");
     assert_matches!(
         tokens.as_slice(),
-        &[Extern, Variadic, Fn, Struct, Then, End, If, Else]
+        &[Extern, Variadic, Fn, Struct, Then, End, If, Else, Eof]
     );
 }
 
 #[test]
 fn integers() {
     let tokens = lex(r"128 -64");
-    assert_matches!(tokens.as_slice(), &[Num(_), Sub, Num(_)]);
-}
-
-#[bench]
-fn bench_complex_expression(b: &mut Bencher) {
-    let source = "((1 + 2) * 3 - 4 / (5 + 6) + 7 * (8 - 9 * (10 + 11)) - ((12 + 13) * (14 - 15) + 16) / 17 + 18 * 19 - 20 + (21 - (22 + 23) * 24 + 25 * (26 - 27 * (28 + 29))) / ((30 + 31) * 32 - 33) + 34 * (35 + 36 - (37 * 38 + 39) / 40) - ((41 + 42) * (43 - 44) + 45 * 46 - (47 + 48 * (49 - 50))))";
-    let mut lexer = Lexer::new("inline".into(), source);
-
-    b.iter(|| {
-        let _ = lexer.read_until_eof();
-        lexer.reset();
-    });
+    assert_matches!(tokens.as_slice(), &[Num(_), Sub, Num(_), Eof]);
 }

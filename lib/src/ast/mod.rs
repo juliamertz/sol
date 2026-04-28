@@ -1,7 +1,6 @@
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
-use std::rc::Rc;
 
 use either::Either;
 
@@ -211,7 +210,7 @@ pub enum TyKind {
         returns: Arc<Ty>,
         is_extern: bool,
     },
-    Ptr(Rc<Ty>),
+    Ptr(Arc<Ty>),
     Var(Ident),
 }
 

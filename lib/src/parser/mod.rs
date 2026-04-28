@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use miette::Diagnostic;
@@ -11,7 +10,12 @@ use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
 
-pub mod num;
+use prec::Prec;
+
+mod num;
+mod prec;
+#[cfg(test)]
+mod test;
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::parser))]
@@ -62,57 +66,6 @@ pub enum ParseError {
 
 type Result<T, E = ParseError> = core::result::Result<T, E>;
 
-/// precedence of a token produced by the lexer
-///
-/// this dictates the order in which expressions are traversed in the parser
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Default)]
-pub enum Prec {
-    #[default]
-    /// lowest precedence, this is the default
-    Lowest,
-    /// `a = 10`
-    Assign,
-    /// `&&` or `||` lower precedence than equality
-    AndOr,
-    /// `==` or `!=`
-    Eq,
-    /// `>` or `<`
-    Cmp,
-    /// `+`
-    Sum,
-    /// `*`
-    Product,
-    /// `-a`, `!a` or `&a`
-    Unary,
-    /// `func()`
-    Call,
-    /// `Point { x : 10, y : 5 }`
-    Construct,
-    /// `list[0]`
-    Index,
-    /// `mod.field`
-    Chain,
-}
-
-impl From<&Token<'_>> for Prec {
-    fn from(token: &Token) -> Self {
-        match token.kind {
-            TokenKind::Add | TokenKind::Sub => Self::Sum,
-            TokenKind::Assign => Self::Assign,
-            TokenKind::Eq | TokenKind::Ne => Self::Eq,
-            TokenKind::LParen => Self::Call,
-            TokenKind::LSquirly => Self::Construct,
-            TokenKind::LBracket => Self::Index,
-            TokenKind::LAngle | TokenKind::RAngle => Self::Cmp,
-            TokenKind::Asterisk => Self::Product,
-            TokenKind::And | TokenKind::Or => Self::AndOr,
-            TokenKind::Dot => Self::Chain,
-            TokenKind::Bang | TokenKind::Ampersand => Self::Unary,
-            _ => Self::Lowest,
-        }
-    }
-}
-
 #[derive(Default)]
 struct Context {
     id: u32,
@@ -138,10 +91,10 @@ impl<'src> Parser<'src> {
     pub fn new(file_path: PathBuf, content: &'src str) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
         let curr =
-            lex.read_token()
+            lex.next()
                 .transpose()?
                 .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos()));
-        let next = lex.read_token().transpose()?;
+        let next = lex.next().transpose()?;
         let ctx = Context::default();
         Ok(Self {
             lex,
@@ -182,7 +135,7 @@ impl<'src> Parser<'src> {
             self.curr = next;
         }
 
-        self.next = self.lex.read_token().transpose()?;
+        self.next = self.lex.next().transpose()?;
         Ok(if let Some(next) = &self.next {
             self.tokens.push(next.clone());
             curr
@@ -297,7 +250,7 @@ impl<'src> Parser<'src> {
         let ident = self.ident()?;
         let bare_kind = TyKind::from_ident(ident);
         let kind = if is_ptr {
-            TyKind::Ptr(Rc::new(Ty {
+            TyKind::Ptr(Arc::new(Ty {
                 id: self.ctx.next_id(),
                 span: self.curr.span, // TODO: not correct
                 kind: bare_kind,
@@ -690,7 +643,7 @@ impl<'src> Parser<'src> {
         })
     }
 
-    fn expr(&mut self, prec: Prec) -> Result<Expr> {
+    pub(crate) fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
             TokenKind::Num(num) => Expr::Literal(self.num_lit(num)?),
             TokenKind::True | TokenKind::False => Expr::Literal(self.bool_lit()?),
@@ -700,8 +653,8 @@ impl<'src> Parser<'src> {
             TokenKind::LBracket => Expr::List(self.list()?),
             TokenKind::Asterisk => {
                 self.advance()?;
-                Expr::Deref(self.expr(prec)?.into())
-            },
+                Expr::Deref(self.expr(Prec::Unary)?.into())
+            }
             TokenKind::While => Expr::While(self.while_loop()?),
 
             tok if tok.is_unary_op() => {

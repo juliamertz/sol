@@ -1,3 +1,5 @@
+use strum::EnumIs;
+
 use crate::ast;
 use crate::traits::AsStr;
 use crate::type_checker::{FieldId, TypeId};
@@ -160,7 +162,7 @@ impl StructTy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIs)]
 pub enum Ty {
     Unit,
     Int(IntTy),
@@ -213,6 +215,13 @@ impl Ty {
     pub fn as_struct(&self) -> Option<&StructTy> {
         match self {
             Self::Struct(struct_ty) => Some(struct_ty),
+            _ => None,
+        }
+    }
+
+    pub fn as_ptr_inner(&self) -> Option<&TypeId> {
+        match self {
+            Ty::Ptr(inner) => Some(inner),
             _ => None,
         }
     }

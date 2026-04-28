@@ -21,8 +21,6 @@ mod test;
 
 pub use crate::lexer::token::{Token, TokenKind};
 
-const ASCII_WHITESPACE_BYTES: [u8; 5] = *b"\t\n\x0C\r ";
-
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::lexer))]
 pub enum LexerError {
@@ -48,6 +46,13 @@ pub enum LexerError {
 }
 
 pub type Result<T> = std::result::Result<T, LexerError>;
+
+const ASCII_WHITESPACE_BYTES: [u8; 4] = *b"\t\x0C\r ";
+
+/// check if byte is ascii whitespace EXCLUDING the newline character
+fn is_ascii_whitespace(byte: &u8) -> bool {
+    ASCII_WHITESPACE_BYTES.contains(byte)
+}
 
 #[derive(Debug)]
 pub struct Lexer<'src> {
@@ -114,7 +119,7 @@ impl<'src> Lexer<'src> {
             self.pos += offset;
         } else {
             // if we didn't find any matching byte we can assume we reached eof
-            self.eof = true;
+            self.pos = self.content.len() - 1
         }
     }
 
@@ -152,10 +157,13 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    pub fn read_token(&mut self) -> Option<Result<Token<'src>>> {
-        self.skip_whitespace();
+    fn read_token(&mut self) -> Option<Result<Token<'src>>> {
+        if self.eof {
+            return None;
+        }
 
-        if self.curr().is_none() || self.eof {
+        if self.curr().is_none() {
+            self.eof = true;
             return Some(Ok(Token::new(TokenKind::Eof, "", self.pos)));
         }
 
@@ -236,6 +244,10 @@ impl<'src> Lexer<'src> {
 
                 return Some(Ok(token));
             }
+            ch if is_ascii_whitespace(&ch) => {
+                self.skip_whitespace();
+                return self.read_token();
+            }
             ch => {
                 return Some(Err(LexerError::Illegal {
                     src: self.source(),
@@ -248,18 +260,12 @@ impl<'src> Lexer<'src> {
         self.advance();
         Some(Ok(token))
     }
+}
 
-    pub fn read_until_eof(&mut self) -> Result<Vec<Token<'_>>> {
-        let mut buf = vec![];
+impl<'src> Iterator for Lexer<'src> {
+    type Item = Result<Token<'src>>;
 
-        while let Some(token) = self.read_token() {
-            match token {
-                Ok(tok) if tok.kind == TokenKind::Eof => break,
-                Ok(tok) => buf.push(tok),
-                Err(err) => panic!("failed to read token: {err}"), // TODO: return err variant here
-            }
-        }
-
-        Ok(buf)
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_token()
     }
 }

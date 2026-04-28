@@ -132,7 +132,7 @@ impl super::visit::Visitor<fmt::Result> for FmtMir<'_, '_, '_> {
         match instruction {
             Instruction::Copy { dest, val } => {
                 self.visit_temp_id(dest)?;
-                self.f.write_str(" = ")?;
+                self.f.write_str(" = copy ")?;
                 self.visit_operand(val)
             }
             Instruction::BinOp { dest, op, lhs, rhs } => {
@@ -203,7 +203,7 @@ impl super::visit::Visitor<fmt::Result> for FmtMir<'_, '_, '_> {
             }
             Instruction::Load { dest, addr } => {
                 self.visit_temp_id(dest)?;
-                self.f.write_str(" = ")?;
+                self.f.write_str(" = load ")?;
                 self.visit_temp_id(addr)
             }
             Instruction::IndexPtr {

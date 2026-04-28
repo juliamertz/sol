@@ -464,6 +464,7 @@ impl<'tcx> Builder<'tcx> {
                         if ident.mutability.is_immutable() {
                             todo!("error for assigning to non-mut variable");
                         }
+
                         let addr = self
                             .locals
                             .get(&ident.def_id)
@@ -474,6 +475,29 @@ impl<'tcx> Builder<'tcx> {
 
                         self.get_block_mut(&block)
                             .push_instr(Instruction::Store { addr, val });
+                    }
+                    hir::Expr::Deref(inner) => {
+                        let hir::Expr::Ident(ident) = inner.as_ref() else {
+                            // TODO:
+                            todo!(
+                                "this is kind of janky but you can only use an ident for a deref assign"
+                            )
+                        };
+
+                        let ptr_addr = self
+                            .locals
+                            .get(&ident.def_id)
+                            .and_then(|operand| operand.as_temp())
+                            .copied()
+                            .expect("addr for lhs");
+
+                        let (val, block) = self.lower_expr(&assign.rhs, block)?;
+
+                        self.get_block_mut(&block)
+                            .push_instr(Instruction::Store {
+                                addr: ptr_addr,
+                                val,
+                            });
                     }
                     hir::Expr::Index(index) => {
                         let addr = self.new_temp(MirTy::new_indirect(index.ty));
@@ -516,7 +540,7 @@ impl<'tcx> Builder<'tcx> {
                             .push_instr(Instruction::Store { addr, val });
                     }
 
-                    _ => todo!("nice error for invalid lvalue"),
+                    _ => todo!("nice error for invalid lvalue, {:?}", assign.lhs),
                 }
 
                 Ok((Operand::unit(), block))
@@ -616,8 +640,10 @@ impl<'tcx> Builder<'tcx> {
             hir::Expr::Ref(_expr) => todo!(),
 
             hir::Expr::Deref(expr) => {
-                let ty = MirTy::new(*expr.type_id());
-                let dest = self.new_temp(ty);
+                let ptr_ty = self.env.types.get(expr.type_id());
+                let mir_ty =
+                    MirTy::new(ptr_ty.as_ptr_inner().copied().expect("deref on a pointer"));
+                let dest = self.new_temp(mir_ty);
                 let (addr, block) = self.lower_expr(expr, block)?;
 
                 self.get_block_mut(&block).push_instr(Instruction::Load {

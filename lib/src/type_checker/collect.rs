@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, CollectError>;
 
 #[derive(Debug, Default)]
 pub struct Inventory<'ast> {
-    impls: HashMap<&'ast str, Vec<&'ast Impl>>, // TODO: Could be Map<Name, Impl>
+    impls: HashMap<&'ast str, Vec<&'ast Impl>>,
     fns: Vec<&'ast Fn>,
     structs: Vec<&'ast StructDef>,
 }
