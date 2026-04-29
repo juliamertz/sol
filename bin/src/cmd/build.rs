@@ -10,7 +10,6 @@ use lib::{hir, mir, parser, type_checker};
 #[derive(clap::Args)]
 pub struct BuildOpts {
     /// Path to source code
-    #[arg(short, long)]
     pub file_path: PathBuf,
 
     /// Path to directory which all build artifacts get written to

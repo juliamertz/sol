@@ -9,11 +9,16 @@ struct String =
 end
 
 func main() -> i32
-  let ptr = malloc(10)
-  let ptr_with_offset = ptr + 8u64
-  *ptr = 255
-  *ptr_with_offset = 22
-  printf("ptr: %u\n", *ptr)
-  printf("ptr_with_offset: %u\n", *ptr_with_offset)
+  let numbers = malloc(10)
+
+  let mut idx = 0u64
+  while idx < 10u64 do
+    let ptr = numbers + idx * 8u64
+    let value = idx * 32u64
+    *ptr = value
+    printf("idx: %u, val: %u\n", idx, *ptr)
+    idx = idx + 1u64
+  end
+
   0
 end

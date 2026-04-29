@@ -15,7 +15,7 @@ use crate::mir::{self, BlockId};
 use crate::number::Signedness;
 use crate::number::encode::bijective_base26;
 use crate::traits::AsStr;
-use crate::type_checker::ty::{FloatTy, StructTy, Ty};
+use crate::type_checker::ty::{FloatTy, IntTy, StructTy, Ty, UIntTy};
 use crate::type_checker::{TypeEnv, TypeError, TypeId};
 
 #[derive(Error, Diagnostic, Debug)]
@@ -407,7 +407,14 @@ impl<'env> Builder<'env> {
         let ty = self.env.type_by_id(&mir_ty.inner)?;
         Ok(match ty {
             Ty::Unit => BaseTy::Word.into(), // TODO: should be omitted
-            Ty::Int(_) | Ty::UInt(_) => BaseTy::Word.into(), // TODO: size
+            Ty::Int(int_ty) => match int_ty {
+                IntTy::I8 | IntTy::I16 | IntTy::I32 => BaseTy::Word.into(),
+                IntTy::I64 => BaseTy::Long.into(),
+            },
+            Ty::UInt(uint_ty) => match uint_ty {
+                UIntTy::U8 | UIntTy::U16 | UIntTy::U32 => BaseTy::Word.into(),
+                UIntTy::U64 => BaseTy::Long.into(),
+            },
             Ty::Float(float_ty) => match float_ty {
                 FloatTy::F16 | FloatTy::F32 => BaseTy::Single.into(),
                 FloatTy::F64 => BaseTy::Double.into(),

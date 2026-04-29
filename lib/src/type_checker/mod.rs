@@ -428,7 +428,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                         }
                     } else {
                         match (lhs_ty, rhs_ty) {
-                            (Ty::Ptr(_), Ty::UInt(_)) => Ok(lhs_ty_id),
+                            (Ty::Ptr(_), Ty::UInt(UIntTy::U64)) => Ok(lhs_ty_id),
                             _ => {
                                 return Err(TypeError::NonNumericOperand {
                                     src: env.src.clone(),
