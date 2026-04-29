@@ -119,7 +119,7 @@ impl Parser<'_> {
 
         let kind = match num.kind {
             NumberKind::Int => {
-                let digit_str = clean_digit_str(text);
+                let digit_str = clean_digit_str(digit_str);
                 let value = i128::from_str_radix(&digit_str, 10).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
@@ -128,7 +128,7 @@ impl Parser<'_> {
                 LiteralKind::Float(value)
             }
             NumberKind::Hex => {
-                let digit_str = clean_digit_str(text);
+                let digit_str = clean_digit_str(digit_str);
                 let value = i128::from_str_radix(&digit_str, 16).map_err(ParseNumberError::Int)?;
                 LiteralKind::Int(value)
             }
