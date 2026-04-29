@@ -413,28 +413,33 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
 
                 BinOpKind::Add | BinOpKind::Sub | BinOpKind::Mul | BinOpKind::Div => {
-                    if !lhs_ty.is_number() || !rhs_ty.is_number() {
-                        return Err(TypeError::NonNumericOperand {
-                            src: env.src.clone(),
-                            first_ty: TyDisplay::new(lhs_ty, env),
-                            first_span: lhs.span(),
-                            other_ty: TyDisplay::new(rhs_ty, env),
-                            other_span: rhs.span(),
-                        });
+                    if lhs_ty.is_number() && rhs_ty.is_number() {
+                        if lhs_ty_id == rhs_ty_id {
+                            Ok(lhs_ty_id)
+                        } else {
+                            return Err(TypeError::ComparisonMismatch {
+                                src: env.src.clone(),
+                                lhs_ty: TyDisplay::new(lhs_ty, env),
+                                lhs_span: lhs.span(),
+                                rhs_ty: TyDisplay::new(rhs_ty, env),
+                                rhs_span: rhs.span(),
+                                help: None,
+                            });
+                        }
+                    } else {
+                        match (lhs_ty, rhs_ty) {
+                            (Ty::Ptr(_), Ty::UInt(_)) => Ok(lhs_ty_id),
+                            _ => {
+                                return Err(TypeError::NonNumericOperand {
+                                    src: env.src.clone(),
+                                    first_ty: TyDisplay::new(lhs_ty, env),
+                                    first_span: lhs.span(),
+                                    other_ty: TyDisplay::new(rhs_ty, env),
+                                    other_span: rhs.span(),
+                                });
+                            }
+                        }
                     }
-
-                    if lhs_ty_id != rhs_ty_id {
-                        return Err(TypeError::ComparisonMismatch {
-                            src: env.src.clone(),
-                            lhs_ty: TyDisplay::new(lhs_ty, env),
-                            lhs_span: lhs.span(),
-                            rhs_ty: TyDisplay::new(rhs_ty, env),
-                            rhs_span: rhs.span(),
-                            help: None,
-                        });
-                    }
-
-                    Ok(lhs_ty_id)
                 }
             }
         }

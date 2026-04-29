@@ -10,7 +10,10 @@ end
 
 func main() -> i32
   let ptr = malloc(10)
+  let ptr_with_offset = ptr + 8u64
   *ptr = 255
-  printf("ptr: %u", *ptr)
+  *ptr_with_offset = 22
+  printf("ptr: %u\n", *ptr)
+  printf("ptr_with_offset: %u\n", *ptr_with_offset)
   0
 end
