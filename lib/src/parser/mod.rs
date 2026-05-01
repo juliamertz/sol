@@ -3,12 +3,14 @@ use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::{debug_span, instrument};
 
 use crate::ast::*;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
+use crate::traits::AsStr;
 
 use prec::Prec;
 
@@ -90,10 +92,10 @@ pub struct Parser<'src> {
 impl<'src> Parser<'src> {
     pub fn new(file_path: PathBuf, content: &'src str) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
-        let curr =
-            lex.next()
-                .transpose()?
-                .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos()));
+        let curr = lex
+            .next()
+            .transpose()?
+            .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos()));
         let next = lex.next().transpose()?;
         let ctx = Context::default();
         Ok(Self {
@@ -109,6 +111,7 @@ impl<'src> Parser<'src> {
         self.lex.source()
     }
 
+    #[instrument(skip_all, err(Debug))]
     pub fn parse(&mut self) -> Result<Module> {
         let mut items = vec![];
 
@@ -177,6 +180,7 @@ impl<'src> Parser<'src> {
         self.curr.kind == kind
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn skip_whitespace(&mut self) -> Result<()> {
         while self.at(TokenKind::Newline) {
             self.advance()?;
@@ -184,6 +188,7 @@ impl<'src> Parser<'src> {
         Ok(())
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn item(&mut self) -> Result<Item> {
         let item = match self.curr.kind {
             TokenKind::Fn => Item::Fn(self.func()?),
@@ -208,6 +213,7 @@ impl<'src> Parser<'src> {
         Ok(item)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn block(&mut self) -> Result<Block> {
         let span = self.curr.span;
         let mut nodes = vec![];
@@ -224,6 +230,7 @@ impl<'src> Parser<'src> {
         Ok(Block { nodes, id, span })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn ident(&mut self) -> Result<Ident> {
         let token = self.consume(TokenKind::Ident)?;
         let id = self.ctx.next_id();
@@ -235,6 +242,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn name(&mut self) -> Result<Name> {
         let token = self.consume(TokenKind::Ident)?;
         Ok(Name {
@@ -243,6 +251,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
         let id = self.ctx.next_id();
@@ -285,6 +294,7 @@ impl<'src> Parser<'src> {
         Ok(ty)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
         self.consume(TokenKind::Fn)?;
@@ -322,6 +332,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn extern_func(&mut self) -> Result<Fn> {
         let span = self.curr.span;
         self.consume(TokenKind::Extern)?;
@@ -349,6 +360,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn r#use(&mut self) -> Result<Use> {
         let span = self.curr.span;
         let is_extern = self.accept(TokenKind::Extern)?.is_some();
@@ -362,6 +374,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn params<K, V>(
         &mut self,
         parse_key: fn(&mut Parser<'src>) -> Result<K>,
@@ -391,6 +404,7 @@ impl<'src> Parser<'src> {
         Ok(args)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn stmnt(&mut self) -> Result<Stmnt> {
         let stmnt = match self.curr.kind {
             TokenKind::Let => Stmnt::Let(self.r#let()?),
@@ -409,6 +423,7 @@ impl<'src> Parser<'src> {
         Ok(stmnt)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn r#let(&mut self) -> Result<Let> {
         let span = self.curr.span;
         self.consume(TokenKind::Let)?;
@@ -433,6 +448,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn r#if(&mut self) -> Result<IfElse> {
         let span = self.curr.span;
         self.consume(TokenKind::If)?;
@@ -461,6 +477,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn unary_op(&mut self) -> Result<(Op<UnaryOpKind>, Prec)> {
         let prec = Prec::from(&self.curr);
         let span = self.curr.span;
@@ -479,6 +496,7 @@ impl<'src> Parser<'src> {
         Ok((Op { span, kind }, prec))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn unary(&mut self, op: Op<UnaryOpKind>) -> Result<Unary> {
         let rhs = self.expr(Prec::default())?;
         let id = self.ctx.next_id();
@@ -492,6 +510,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn bin_op(&mut self) -> Result<(Op<BinOpKind>, Prec)> {
         let prec = Prec::from(&self.curr);
         let span = self.curr.span;
@@ -518,6 +537,7 @@ impl<'src> Parser<'src> {
         Ok((Op { span, kind }, prec))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
         let (op, prec) = self.bin_op()?;
         let rhs = self.expr(prec)?;
@@ -533,6 +553,7 @@ impl<'src> Parser<'src> {
         }))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn call_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LParen)?;
         let params = if self.at(TokenKind::RParen) {
@@ -552,6 +573,7 @@ impl<'src> Parser<'src> {
         }))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn index_expr(&mut self, expr: Expr) -> Result<Expr> {
         self.consume(TokenKind::LBracket)?;
         let idx = self.expr(Prec::default())?;
@@ -567,6 +589,7 @@ impl<'src> Parser<'src> {
         }))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn member_access(&mut self, lhs: Expr) -> Result<Expr> {
         self.consume(TokenKind::Dot)?;
         let rhs = self.name()?;
@@ -576,6 +599,7 @@ impl<'src> Parser<'src> {
         Ok(Expr::MemberAccess(MemberAccess { id, span, lhs, rhs }))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn assign(&mut self, lhs: Expr) -> Result<Expr> {
         self.consume(TokenKind::Assign)?;
         let id = self.ctx.next_id();
@@ -590,6 +614,7 @@ impl<'src> Parser<'src> {
         }))
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn bool_lit(&mut self) -> Result<Literal> {
         let span = self.curr.span;
         let val = if self.at(TokenKind::True) {
@@ -610,6 +635,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn str_lit(&mut self) -> Result<Literal> {
         let text = &self.curr.text;
         let span = self.curr.span;
@@ -624,6 +650,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn while_loop(&mut self) -> Result<While> {
         let span = self.curr.span();
         self.consume(TokenKind::While)?;
@@ -643,6 +670,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     pub(crate) fn expr(&mut self, prec: Prec) -> Result<Expr> {
         let mut lhs = match self.curr.kind {
             TokenKind::Num(num) => Expr::Literal(self.num_lit(num)?),
@@ -715,10 +743,12 @@ impl<'src> Parser<'src> {
         Ok(lhs)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn expr_lowest(&mut self) -> Result<Expr> {
         self.expr(Prec::Lowest)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn expr_list(&mut self) -> Result<Vec<Expr>> {
         if self.at(TokenKind::RBracket) {
             return Ok(vec![]);
@@ -740,6 +770,7 @@ impl<'src> Parser<'src> {
         Ok(tail)
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn list(&mut self) -> Result<List> {
         let span = self.curr.span();
         self.consume(TokenKind::LBracket)?;
@@ -752,6 +783,7 @@ impl<'src> Parser<'src> {
         Ok(List { items, id, span })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn struct_def(&mut self) -> Result<StructDef> {
         let span = self.curr.span();
         self.consume(TokenKind::Struct)?;
@@ -770,6 +802,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn imp(&mut self) -> Result<Impl> {
         let span = self.curr.span();
         self.consume(TokenKind::Impl)?;
@@ -796,6 +829,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    #[instrument(skip_all, err(Debug))]
     fn struct_constructor(&mut self, ident: Ident) -> Result<Expr> {
         self.consume(TokenKind::LSquirly)?;
         let fields = self.params(Self::name, Self::expr_lowest)?;

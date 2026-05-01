@@ -20,7 +20,23 @@ enum Command {
     Dump(DumpOpts),
 }
 
-fn init_miette() {
+fn setup_tracing() {
+    use tracing_subscriber::{Registry, layer::SubscriberExt};
+    use tracing_tree::HierarchicalLayer;
+
+    let layer = HierarchicalLayer::default()
+        .with_writer(std::io::stderr)
+        .with_indent_lines(true)
+        .with_indent_amount(2)
+        .with_verbose_exit(true)
+        .with_verbose_entry(true)
+        .with_targets(true);
+
+    let subscriber = Registry::default().with(layer);
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+}
+
+fn setup_miette() {
     miette::set_hook(Box::new(|_| {
         let theme = miette::GraphicalTheme {
             characters: miette::ThemeCharacters::unicode(),
@@ -39,7 +55,11 @@ fn init_miette() {
 
 fn main() -> Result<()> {
     let opts = Cli::parse();
-    init_miette();
+
+    #[cfg(debug_assertions)]
+    setup_tracing();
+
+    setup_miette();
 
     match opts.command {
         Command::Build(opts) => cmd::build::handle(opts),

@@ -17,3 +17,6 @@ clap = { version = "4", default-features = false, features = [
   "derive",
   "help",
 ] }
+tracing-tree = "0.4.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+tracing = "0.1.44"

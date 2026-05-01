@@ -9,3 +9,4 @@ miette.workspace = true
 strum = { version = "0.28.0", features = ["derive"] }
 either = "1.15.0"
 smallvec = "1.15.1"
+tracing = "0.1.44"

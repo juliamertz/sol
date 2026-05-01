@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use miette::Diagnostic;
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::lexer::memchr::FindByte;
 use crate::lexer::num::ReadNumber;
@@ -118,7 +119,7 @@ impl<'src> Lexer<'src> {
         {
             self.pos += offset;
         } else {
-            // if we didn't find any matching byte we can assume we reached eof
+            tracing::debug!("did not find non whitespace char, assuming EOF");
             self.pos = self.content.len() - 1
         }
     }
@@ -258,6 +259,12 @@ impl<'src> Lexer<'src> {
         };
 
         self.advance();
+
+        tracing::debug!(
+            { kind = ?token.kind(), text = token.text.as_ref() },
+            "read token"
+        );
+
         Some(Ok(token))
     }
 }
