@@ -65,7 +65,7 @@ impl interner::Strategy<TypeId, Ty> for TypeInterner {
                 FloatTy::F16 => TypeId::F16,
                 FloatTy::F32 => TypeId::F32,
                 FloatTy::F64 => TypeId::F64,
-            }
+            },
             Ty::Bool => TypeId::BOOL,
             Ty::Str => TypeId::STR,
             Ty::List(..) | Ty::Ptr(_) | Ty::Fn { .. } => {

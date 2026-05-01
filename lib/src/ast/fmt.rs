@@ -119,7 +119,7 @@ impl PrettyPrinter {
             TyKind::Ptr(inner) => {
                 f.write_char('*')?;
                 self.fmt_ty(f, inner, depth)?;
-            },
+            }
             TyKind::Var(ident) => write!(f, " {ident}")?,
         }
         write!(f, ")")

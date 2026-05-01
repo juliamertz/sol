@@ -493,11 +493,10 @@ impl<'tcx> Builder<'tcx> {
 
                         let (val, block) = self.lower_expr(&assign.rhs, block)?;
 
-                        self.get_block_mut(&block)
-                            .push_instr(Instruction::Store {
-                                addr: ptr_addr,
-                                val,
-                            });
+                        self.get_block_mut(&block).push_instr(Instruction::Store {
+                            addr: ptr_addr,
+                            val,
+                        });
                     }
                     hir::Expr::Index(index) => {
                         let addr = self.new_temp(MirTy::new_indirect(index.ty));

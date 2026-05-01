@@ -30,7 +30,10 @@ fn math_expr() {
 fn literals() {
     let tokens = lex(r#"10 true false 
     "hello world""#);
-    assert_matches!(tokens.as_slice(), &[Num(_), True, False, Newline, String, Eof]);
+    assert_matches!(
+        tokens.as_slice(),
+        &[Num(_), True, False, Newline, String, Eof]
+    );
 }
 
 #[test]

@@ -30,7 +30,7 @@ impl std::fmt::Display for FmtTy<'_> {
             Ty::Ptr(ty_id) => {
                 let inner_ty = env.types.get(ty_id);
                 write!(f, "*{}", FmtTy::new(inner_ty, env))
-            },
+            }
             Ty::Fn { .. } => f.write_str("func"),
             Ty::Struct(struct_ty) => f.write_str(struct_ty.ident.as_str()),
         }
