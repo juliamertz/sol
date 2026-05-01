@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::instrument;
 
 use crate::lexer::memchr::FindByte;
 use crate::lexer::num::ReadNumber;
@@ -95,6 +94,10 @@ impl<'src> Lexer<'src> {
         self.content.as_bytes().get(self.pos + 1).copied()
     }
 
+    fn jump_to_eof(&mut self) {
+        self.pos = self.content.len() - 1
+    }
+
     fn remaining(&self) -> &'src str {
         &self.content[self.pos..self.content.len()]
     }
@@ -120,7 +123,23 @@ impl<'src> Lexer<'src> {
             self.pos += offset;
         } else {
             tracing::debug!("did not find non whitespace char, assuming EOF");
-            self.pos = self.content.len() - 1
+            self.jump_to_eof();
+        }
+    }
+
+    fn skip_comments(&mut self) {
+        loop {
+            match (self.curr(), self.peek()) {
+                (Some(b'-'), Some(b'-')) => {
+                    if let Some(end_of_line) = self.remaining_bytes().find_byte(b'\n') {
+                        self.pos += end_of_line;
+                    } else {
+                        tracing::debug!("did not find newline ending comment, assuming EOF");
+                        self.jump_to_eof();
+                    }
+                }
+                _ => break,
+            }
         }
     }
 
@@ -158,6 +177,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
+    #[inline(always)]
     fn consume_char(&mut self, kind: TokenKind, text: &'static str) -> Token<'src> {
         let token = Token::new(kind, text, self.pos);
         self.advance();
@@ -169,14 +189,13 @@ impl<'src> Lexer<'src> {
             return None;
         }
 
-        if self.curr().is_none() {
+        let start = self.pos;
+        let Some(ch) = self.curr() else {
             self.eof = true;
             return Some(Ok(Token::new(TokenKind::Eof, "", self.pos)));
-        }
+        };
 
-        let start = self.pos;
-
-        let token = match self.curr()? {
+        let token = match ch {
             b'"' => match self.read_string() {
                 Ok(text) => Token::new(TokenKind::String, text, start),
                 Err(err) => return Some(Err(err)),
@@ -194,8 +213,10 @@ impl<'src> Lexer<'src> {
                 if self.peek() == Some(b'>') {
                     self.advance_n(2);
                     Token::new(TokenKind::Arrow, "->", start)
-                } else if self.peek() == Some(b'-') {
-                    self.read_while(|ch| ch != b'\n');
+                }
+                // if we encounter a `--` that means we're reading a comment
+                else if self.peek() == Some(b'-') {
+                    self.skip_comments();
                     return self.read_token();
                 } else {
                     self.consume_char(TokenKind::Sub, "-")
