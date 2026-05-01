@@ -200,11 +200,10 @@ impl fmt::Display for Instruction {
             Self::Div(lhs, rhs) => write!(f, "div {lhs}, {rhs}"),
             Self::Rem(lhs, rhs) => write!(f, "rem {lhs}, {rhs}"),
             Self::Cmp(ty, cmp, lhs, rhs) => {
-                // TODO:!
-                // assert!(
-                //     !matches!(ty, Type::Aggregate(_)),
-                //     "cannot compare aggregate types"
-                // );
+                assert!(
+                    !matches!(ty, AbiTy::Aggregate(_)),
+                    "cannot compare aggregate types"
+                );
 
                 write!(
                     f,
@@ -233,19 +232,11 @@ impl fmt::Display for Instruction {
             Self::Xor(lhs, rhs) => write!(f, "xor {lhs}, {rhs}"),
             Self::Neg(val) => write!(f, "neg {val}"),
             Self::Copy(val) => write!(f, "copy {val}"),
-            // Self::Ret(val) => match val {
-            //     Some(val) => write!(f, "ret {val}"),
-            //     None => write!(f, "ret"),
-            // },
             Self::DbgFile(val) => write!(f, r#"dbgfile "{val}""#),
             Self::DbgLoc(lineno, column) => match column {
                 Some(val) => write!(f, "dbgloc {lineno}, {val}"),
                 None => write!(f, "dbgloc {lineno}"),
             },
-            // Self::Jnz(val, if_nonzero, if_zero) => {
-            //     write!(f, "jnz {val}, @{if_nonzero}, @{if_zero}")
-            // }
-            // Self::Jmp(label) => write!(f, "jmp @{label}"),
             Self::Call(name, args, opt_variadic_i) => {
                 let mut args_fmt = args
                     .iter()
@@ -262,20 +253,19 @@ impl fmt::Display for Instruction {
             Self::Alloc16(size) => write!(f, "alloc16 {size}"),
             Self::Store(ty, dest, value) => {
                 let suffix = match ty {
-                    // TODO:!
-                    // Type::SignedByte | Type::UnsignedByte => "b".to_string(),
-                    // Type::SignedHalfword | Type::UnsignedHalfword => "h".to_string(),
-                    // Type::Aggregate(_) => panic!("cannot store to an aggregate type"),
+                    AbiTy::SubWord(SubWordTy::SignedByte | SubWordTy::UnsignedByte) => {
+                        "b".to_string()
+                    }
+                    AbiTy::SubWord(SubWordTy::SingedHalfWord | SubWordTy::UnsingedHalfWord) => {
+                        "h".to_string()
+                    }
+                    AbiTy::Aggregate(_) => panic!("cannot store to an aggregate type"),
                     _ => ty.to_string(),
                 };
                 write!(f, "store{suffix} {value}, {dest}")
             }
             Self::Load(ty, src) => match ty {
-                // TODO:!
-                // Type::Byte | Type::Halfword => panic!(
-                //     "ambiguous sub-word load: use SignedByte/UnsignedByte or SignedHalfword/UnsignedHalfword"
-                // ),
-                // Type::Aggregate(_) => panic!("cannot load aggregate type"),
+                AbiTy::Aggregate(_) => panic!("cannot load aggregate type"),
                 _ => write!(f, "load{ty} {src}"),
             },
             Self::Blit(src, dst, n) => write!(f, "blit {src}, {dst}, {n}"),
