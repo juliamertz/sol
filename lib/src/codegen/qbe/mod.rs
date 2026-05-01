@@ -277,20 +277,88 @@ impl TyDef {
     }
 }
 
-// LINKAGE :=
-//     'export' [NL]
-//   | 'thread' [NL]
-//   | 'section' SECNAME [NL]
-//   | 'section' SECNAME SECFLAGS [NL]
-//
-// SECNAME  := '"' .... '"'
-// SECFLAGS := '"' .... '"'
-#[derive(Debug)]
-pub enum Linkage {
-    Export,
-    Thread,
-    // SecName,
-    // SecFlags,
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
+pub struct Linkage {
+    /// Specifies whether the target is going to be accessible publicly
+    pub exported: bool,
+
+    /// Specifies target's section
+    pub section: Option<String>,
+
+    /// Specifies target's section flags
+    pub secflags: Option<String>,
+
+    /// Specifies whether the target is stored in thread-local storage
+    pub thread_local: bool,
+}
+
+impl Linkage {
+    /// Returns the default configuration for private linkage
+    pub fn private() -> Linkage {
+        Linkage {
+            exported: false,
+            section: None,
+            secflags: None,
+            thread_local: false,
+        }
+    }
+
+    /// Returns the configuration for private linkage with a provided section
+    pub fn private_with_section(section: impl Into<String>) -> Linkage {
+        Linkage {
+            exported: false,
+            section: Some(section.into()),
+            secflags: None,
+            thread_local: false,
+        }
+    }
+
+    /// Returns the default configuration for public linkage
+    pub fn public() -> Linkage {
+        Linkage {
+            exported: true,
+            section: None,
+            secflags: None,
+            thread_local: false,
+        }
+    }
+
+    /// Returns the configuration for public linkage with a provided section
+    pub fn public_with_section(section: impl Into<String>) -> Linkage {
+        Linkage {
+            exported: true,
+            section: Some(section.into()),
+            secflags: None,
+            thread_local: false,
+        }
+    }
+
+    pub fn thread_local() -> Linkage {
+        Linkage {
+            exported: false,
+            thread_local: true,
+            section: None,
+            secflags: None,
+        }
+    }
+
+    pub fn exported_thread_local() -> Linkage {
+        Linkage {
+            exported: true,
+            thread_local: true,
+            section: None,
+            secflags: None,
+        }
+    }
+
+    pub fn thread_local_with_section(section: impl Into<String>) -> Linkage {
+        Linkage {
+            exported: false,
+            thread_local: true,
+            section: Some(section.into()),
+            secflags: None,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -118,10 +118,20 @@ impl Display for TyDef {
 
 impl Display for Linkage {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(match self {
-            Linkage::Export => "export",
-            Linkage::Thread => "thread",
-        })
+        if self.exported {
+            write!(f, "export ")?;
+        }
+        if self.thread_local {
+            write!(f, "thread ")?;
+        }
+        if let Some(section) = &self.section {
+            write!(f, "section \"{section}\"")?;
+            if let Some(secflags) = &self.secflags {
+                write!(f, " \"{secflags}\"")?;
+            }
+            write!(f, " ")?;
+        }
+        Ok(())
     }
 }
 
@@ -377,7 +387,6 @@ impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         if let Some(linkage) = self.linkage.as_ref() {
             linkage.fmt(f)?;
-            f.write_char(' ')?;
         }
         f.write_str("function ")?;
         if let Some(return_ty) = self.return_ty.as_ref() {

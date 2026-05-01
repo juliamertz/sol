@@ -438,14 +438,8 @@ impl<'env> Builder<'env> {
     }
 
     pub fn lower_func(&mut self, func: &mir::Fn) -> Result<Function> {
-        let linkage = if &func.name == "main" {
-            Some(Linkage::Export)
-        } else {
-            None
-        };
-
         Ok(Function {
-            linkage,
+            linkage: Some(Linkage::public()),
             ident: Ident::global(&func.name),
             return_ty: Some(self.lower_ty(&func.return_ty)?),
             params: func
