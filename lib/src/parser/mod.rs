@@ -59,6 +59,15 @@ pub enum ParseError {
         span: Span,
     },
 
+    #[error("array size must be a constant integer literal")]
+    NonLiteralArraySize {
+        #[source_code]
+        src: SourceInfo,
+
+        #[label("here")]
+        span: Span,
+    },
+
     #[error(transparent)]
     Lexer(#[from] crate::lexer::LexerError),
     #[error(transparent)]
@@ -275,7 +284,10 @@ impl<'src> Parser<'src> {
                 let size = self
                     .num_lit(num)?
                     .as_int()
-                    .expect("TODO: error message when array size is not an int literal");
+                    .ok_or(ParseError::NonLiteralArraySize {
+                        src: self.source(),
+                        span,
+                    })?;
                 Some(size as usize)
             } else {
                 None

@@ -14,6 +14,11 @@ pub mod encode {
             n /= 26;
         }
         buf.reverse();
-        String::from_utf8(buf).unwrap()
+
+        debug_assert!(buf.iter().all(|ch| (b'a'..=b'z').contains(&ch)));
+
+        // SAFETY: we only ever push bytes to `buf` between 97 and 122
+        // since the max output of `n % 26` is 25, and the raw byte value of 'a' is 97 and 97 + 25 = 122
+        unsafe { String::from_utf8_unchecked(buf) }
     }
 }

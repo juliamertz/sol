@@ -267,11 +267,21 @@ impl PrettyPrinter {
                 write!(f, " = ")?;
                 self.fmt_expr(f, &assign.rhs, depth)
             }
-            Expr::Break(_inner) => {
-                todo!("fmt break")
+            Expr::Break(inner) => {
+                Self::indent(f, depth)?;
+                write!(f, "break ")?;
+                if let Some(expr) = inner.val.as_ref() {
+                self.fmt_span(f, expr.span())?;
+                    self.fmt_expr(f, expr, depth + 1)?;
+                }
+                writeln!(f)?;
+                write!(f, ")")
             }
-            Expr::Continue(_inner) => {
-                todo!("fmt continue")
+            Expr::Continue(_) => {
+                Self::indent(f, depth)?;
+                write!(f, "continue ")?;
+                writeln!(f)?;
+                write!(f, ")")
             }
             Expr::While(_inner) => {
                 todo!("fmt while loop")

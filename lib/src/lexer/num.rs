@@ -54,12 +54,12 @@ impl ReadNumber {
                     }
                 },
                 '0' => {
-                    if let Some((_, 'x')) = chars.peek() {
+                    if let Some((idx, 'x')) = chars.peek() {
                         match kind {
                             Some(_) => return Err(ReadNumberError::RepeatedRadixPrefix),
                             None => {
                                 // consume peeked char
-                                let (idx, _) = chars.next().unwrap();
+                                chars.next();
                                 len += 1;
 
                                 prefix_end = Some(idx);
@@ -102,10 +102,16 @@ impl ReadNumber {
 mod test {
     use super::*;
 
+    impl ReadNumber {
+        fn read(source: &str) -> Self {
+            Self::try_read(source).expect("to scan number")
+        }
+    }
+
     #[test]
     fn read_int() {
         assert_eq!(
-            ReadNumber::try_read("100").unwrap(),
+            ReadNumber::read("100"),
             ReadNumber {
                 len: 3,
                 prefix_end: None,
@@ -114,7 +120,7 @@ mod test {
             }
         );
         assert_eq!(
-            ReadNumber::try_read("100_u32").unwrap(),
+            ReadNumber::read("100_u32"),
             ReadNumber {
                 len: 7,
                 prefix_end: None,
@@ -123,7 +129,7 @@ mod test {
             }
         );
         assert_eq!(
-            ReadNumber::try_read("100_000_000").unwrap(),
+            ReadNumber::read("100_000_000"),
             ReadNumber {
                 len: 11,
                 prefix_end: None,
@@ -132,7 +138,7 @@ mod test {
             }
         );
         assert_eq!(
-            ReadNumber::try_read("100_000_000)").unwrap(),
+            ReadNumber::read("100_000_000)"),
             ReadNumber {
                 len: 11,
                 prefix_end: None,
@@ -145,7 +151,7 @@ mod test {
     #[test]
     fn read_float() {
         assert_eq!(
-            ReadNumber::try_read("10.00").unwrap(),
+            ReadNumber::read("10.00"),
             ReadNumber {
                 len: 5,
                 prefix_end: None,
@@ -154,7 +160,7 @@ mod test {
             }
         );
         assert_eq!(
-            ReadNumber::try_read("100_000.000_f64").unwrap(),
+            ReadNumber::read("100_000.000_f64"),
             ReadNumber {
                 len: 15,
                 prefix_end: None,
@@ -167,7 +173,7 @@ mod test {
     #[test]
     fn read_hex() {
         assert_eq!(
-            ReadNumber::try_read("0xFF").unwrap(),
+            ReadNumber::read("0xFF"),
             ReadNumber {
                 len: 4,
                 prefix_end: Some(1),
@@ -176,7 +182,7 @@ mod test {
             }
         );
         assert_eq!(
-            ReadNumber::try_read("0xFF_u32").unwrap(),
+            ReadNumber::read("0xFF_u32"),
             ReadNumber {
                 len: 8,
                 prefix_end: Some(1),
