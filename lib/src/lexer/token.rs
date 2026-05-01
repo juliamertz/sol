@@ -1,12 +1,11 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::LazyLock;
 
 use strum::EnumIs;
 
+use crate::lexer::num::ReadNumber;
 use crate::lexer::source::Span;
-use crate::lexer::num::{ReadNumber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
 pub enum TokenKind {
@@ -136,31 +135,30 @@ impl Display for Kind {
     }
 }
 
-type TokenLookup = HashMap<&'static str, Kind>;
-
-pub(super) static KEYWORD_LOOKUP: LazyLock<TokenLookup> = LazyLock::new(|| {
-    TokenLookup::from([
-        ("let", Kind::Let),
-        ("mut", Kind::Mut),
-        ("func", Kind::Fn),
-        ("return", Kind::Ret),
-        ("if", Kind::If),
-        ("else", Kind::Else),
-        ("then", Kind::Then),
-        ("end", Kind::End),
-        ("use", Kind::Use),
-        ("and", Kind::And),
-        ("or", Kind::Or),
-        ("extern", Kind::Extern),
-        ("struct", Kind::Struct),
-        ("impl", Kind::Impl),
-        ("true", Kind::True),
-        ("false", Kind::False),
-        ("variadic", Kind::Variadic),
-        ("while", Kind::While),
-        ("do", Kind::Do),
-    ])
-});
+pub(super) fn lookup_keyword(text: &str) -> Option<Kind> {
+    Some(match text {
+        "let" => Kind::Let,
+        "mut" => Kind::Mut,
+        "func" => Kind::Fn,
+        "return" => Kind::Ret,
+        "if" => Kind::If,
+        "else" => Kind::Else,
+        "then" => Kind::Then,
+        "end" => Kind::End,
+        "use" => Kind::Use,
+        "and" => Kind::And,
+        "or" => Kind::Or,
+        "extern" => Kind::Extern,
+        "struct" => Kind::Struct,
+        "impl" => Kind::Impl,
+        "true" => Kind::True,
+        "false" => Kind::False,
+        "variadic" => Kind::Variadic,
+        "while" => Kind::While,
+        "do" => Kind::Do,
+        _ => return None,
+    })
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'src> {

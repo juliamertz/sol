@@ -7,7 +7,6 @@ use thiserror::Error;
 use crate::lexer::memchr::FindByte;
 use crate::lexer::num::ReadNumber;
 use crate::lexer::source::{SourceInfo, Span};
-use crate::lexer::token::KEYWORD_LOOKUP;
 use crate::lexer::unescape::unescape_literal;
 
 pub mod memchr;
@@ -261,8 +260,8 @@ impl<'src> Lexer<'src> {
                 let text = self
                     .read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == b'_');
 
-                if let Some(kind) = KEYWORD_LOOKUP.get(text) {
-                    Token::new(*kind, text, start)
+                if let Some(kind) = token::lookup_keyword(text) {
+                    Token::new(kind, text, start)
                 } else {
                     Token::new(TokenKind::Ident, text, start)
                 }
