@@ -3,14 +3,13 @@ use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
-use tracing::{debug_span, instrument};
+use tracing::instrument;
 
 use crate::ast::*;
 use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::traits::AsStr;
 
 use prec::Prec;
 
@@ -192,6 +191,7 @@ impl<'src> Parser<'src> {
     fn item(&mut self) -> Result<Item> {
         let item = match self.curr.kind {
             TokenKind::Fn => Item::Fn(self.func()?),
+            TokenKind::Use => Item::Use(self.r#use()?),
             TokenKind::Extern => match self.next.as_ref().map(|tok| tok.kind) {
                 Some(TokenKind::Fn | TokenKind::Variadic) => Item::Fn(self.extern_func()?),
                 Some(TokenKind::Use) => Item::Use(self.r#use()?),
