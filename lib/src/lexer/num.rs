@@ -36,11 +36,10 @@ impl ReadNumber {
         while let Some((idx, ch)) = chars.next() {
             match ch {
                 '_' => {
-                    if let Some(NumberKind::Float { radix_point_idx }) = kind {
-                        if radix_point_idx == idx - 1 {
+                    if let Some(NumberKind::Float { radix_point_idx }) = kind
+                        && radix_point_idx == idx - 1 {
                             return Err(ReadNumberError::Unexpected('_'));
                         }
-                    }
                 }
                 '.' => match kind {
                     Some(NumberKind::Hex) => return Err(ReadNumberError::Unexpected('.')),
@@ -53,20 +52,17 @@ impl ReadNumber {
                         })
                     }
                 },
-                '0' => match chars.peek() {
-                    Some((_, 'x')) => match kind {
-                        Some(_) => return Err(ReadNumberError::RepeatedRadixPrefix),
-                        None => {
-                            // consume peeked char
-                            let (idx, _) = chars.next().unwrap();
-                            len += 1;
+                '0' => if let Some((_, 'x')) = chars.peek() { match kind {
+                    Some(_) => return Err(ReadNumberError::RepeatedRadixPrefix),
+                    None => {
+                        // consume peeked char
+                        let (idx, _) = chars.next().unwrap();
+                        len += 1;
 
-                            prefix_end = Some(idx);
-                            kind = Some(NumberKind::Hex)
-                        }
-                    },
-                    _ => (),
-                },
+                        prefix_end = Some(idx);
+                        kind = Some(NumberKind::Hex)
+                    }
+                } },
                 ch if ch.is_ascii_digit() => (),
                 ch if ch.is_ascii_whitespace() => break,
                 ch if ch.is_ascii_alphanumeric() => {

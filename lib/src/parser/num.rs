@@ -115,7 +115,7 @@ impl Parser<'_> {
         let id = self.ctx.next_id();
         let span = self.curr.span();
         let text = self.curr.text.as_ref();
-        let (_, digit_str, suffix) = split_digit_str(&text, &num);
+        let (_, digit_str, suffix) = split_digit_str(text, &num);
 
         let kind = match num.kind {
             NumberKind::Int => {
@@ -124,7 +124,7 @@ impl Parser<'_> {
                 LiteralKind::Int(value)
             }
             NumberKind::Float { radix_point_idx } => {
-                let value = parse_float_unchecked(&digit_str, radix_point_idx);
+                let value = parse_float_unchecked(digit_str, radix_point_idx);
                 LiteralKind::Float(value)
             }
             NumberKind::Hex => {

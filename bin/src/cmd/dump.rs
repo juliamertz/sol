@@ -45,7 +45,7 @@ fn print_token_span(w: &mut impl Write, token: Token<'_>, src: SourceInfo) {
         token.kind
     )
     .with_source_code(src);
-    write!(w, "{:?}\n", report).unwrap();
+    writeln!(w, "{:?}", report).unwrap();
 }
 
 fn print_token(w: &mut impl Write, token: Token<'_>) {
@@ -66,9 +66,9 @@ fn dump_tokens(file_path: PathBuf, spans: bool, take: Option<usize>) -> Result<(
     let src = lex.source();
 
     let mut stdout = std::io::stdout();
-    let mut iter = lex.take(take.unwrap_or(usize::MAX));
+    let iter = lex.take(take.unwrap_or(usize::MAX));
 
-    while let Some(result) = iter.next() {
+    for result in iter {
         match result {
             Ok(token) => {
                 if spans {

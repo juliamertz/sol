@@ -27,12 +27,12 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     let file_path = opts.file_path.as_path();
     let content = std::fs::read_to_string(file_path).into_diagnostic()?;
     let _name = file_path.to_string_lossy();
-    tracing::debug!("read {} bytes from source file", content.as_bytes().len());
+    tracing::debug!("read {} bytes from source file", content.len());
 
     tracing::debug!("starting build");
 
     let start = time::Instant::now();
-    let now = start.clone();
+    let now = start;
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
     let module_ast = parser.parse()?;
     tracing::debug!({ elapsed = ?now.elapsed() }, "done parsing");
