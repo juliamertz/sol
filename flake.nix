@@ -29,14 +29,15 @@
           rustc = rust-bin.minimal;
         };
 
-        manifest = lib.importTOML ./solc/Cargo.toml;
+        manifest = lib.importTOML ./bin/Cargo.toml;
         solc = rustPlatform.buildRustPackage {
           pname = manifest.package.name;
           version = manifest.package.version;
           src = filter {
             root = ./.;
             include = [
-              ./solc
+              ./lib
+              ./bin
               ./Cargo.toml
               ./Cargo.lock
             ];
