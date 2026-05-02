@@ -5,9 +5,8 @@ struct String =
   len : u64
 end
 
-func main() -> i32
-  let l : String = String { inner: [], len: 0 }
-
-  write(1, "hello", 6)
+impl String =
+  func as_bytes(self: String) -> *u8
+    self.inner
+  end
 end
-

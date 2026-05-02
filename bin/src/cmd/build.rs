@@ -38,7 +38,15 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     tracing::debug!({ elapsed = ?now.elapsed() }, "done parsing");
 
     let now = time::Instant::now();
-    let mut env = type_checker::TypeEnv::new(parser.source());
+    let mut resolver = parser::resolve::ModuleResolver::new(file_path.to_owned(), parser.context());
+    resolver.try_resolve_all(&module_ast)?;
+    let module_resolutions = resolver.finish();
+    tracing::debug!({ elapsed = ?now.elapsed() }, "done resolving modules");
+
+    dbg!(&module_resolutions);
+
+    let now = time::Instant::now();
+    let mut env = type_checker::TypeEnv::new(parser.source(), module_resolutions);
     let mut scope = type_checker::Scope::default();
     type_checker::check_module(&module_ast, &mut env, &mut scope)?;
     tracing::debug!({ elapsed = ?now.elapsed() }, "done type checking");

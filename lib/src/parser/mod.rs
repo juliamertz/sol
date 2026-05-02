@@ -10,13 +10,14 @@ use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
 
-use prec::Prec;
-
 mod num;
-mod prec;
-mod resolve;
 #[cfg(test)]
 mod test;
+
+pub mod prec;
+pub mod resolve;
+
+use prec::Prec;
 
 #[derive(Error, Diagnostic, Debug)]
 #[diagnostic(code(solc::parser))]
@@ -76,8 +77,8 @@ pub enum ParseError {
 
 type Result<T, E = ParseError> = core::result::Result<T, E>;
 
-#[derive(Default)]
-struct Context {
+#[derive(Default, Clone, Copy)]
+pub struct Context {
     id: u32,
 }
 
@@ -98,14 +99,17 @@ pub struct Parser<'src> {
 }
 
 impl<'src> Parser<'src> {
-    pub fn new(file_path: impl AsRef<std::path::Path>, content: &'src str) -> Result<Self> {
+    pub fn new_with(
+        file_path: impl AsRef<std::path::Path>,
+        content: &'src str,
+        ctx: Context,
+    ) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
         let curr = lex
             .next()
             .transpose()?
             .unwrap_or(Token::new(TokenKind::Eof, "", lex.pos()));
         let next = lex.next().transpose()?;
-        let ctx = Context::default();
         Ok(Self {
             lex,
             ctx,
@@ -115,8 +119,16 @@ impl<'src> Parser<'src> {
         })
     }
 
+    pub fn new(file_path: impl AsRef<std::path::Path>, content: &'src str) -> Result<Self> {
+        Self::new_with(file_path, content, Context::default())
+    }
+
     pub fn source(&self) -> SourceInfo {
         self.lex.source()
+    }
+
+    pub fn context(&self) -> Context {
+        self.ctx
     }
 
     #[instrument(skip_all, err(Debug))]

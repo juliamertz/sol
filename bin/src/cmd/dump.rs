@@ -92,13 +92,17 @@ pub fn handle(DumpOpts { file_path, cmd }: DumpOpts) -> Result<()> {
         return dump_tokens(file_path, spans, take);
     }
 
-    let mut parser = parser::Parser::new(file_path, &content)?;
+    let mut parser = parser::Parser::new(&file_path, &content)?;
     let ast = parser.module()?;
     if let DumpCommand::Ast = cmd {
         return write_str(stdout, format!("{ast:#?}"));
     }
 
-    let mut env = type_checker::TypeEnv::new(parser.source());
+    let mut resolver = parser::resolve::ModuleResolver::new(file_path, parser.context());
+    resolver.try_resolve_all(&ast)?;
+    let resolutions = resolver.finish();
+
+    let mut env = type_checker::TypeEnv::new(parser.source(), resolutions);
     let mut scope = type_checker::Scope::default();
     type_checker::check_module(&ast, &mut env, &mut scope)?;
 
