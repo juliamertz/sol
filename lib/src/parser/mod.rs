@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use miette::Diagnostic;
@@ -15,6 +14,7 @@ use prec::Prec;
 
 mod num;
 mod prec;
+mod resolve;
 #[cfg(test)]
 mod test;
 
@@ -98,7 +98,7 @@ pub struct Parser<'src> {
 }
 
 impl<'src> Parser<'src> {
-    pub fn new(file_path: PathBuf, content: &'src str) -> Result<Self> {
+    pub fn new(file_path: impl AsRef<std::path::Path>, content: &'src str) -> Result<Self> {
         let mut lex = Lexer::new(file_path, content);
         let curr = lex
             .next()
@@ -120,7 +120,7 @@ impl<'src> Parser<'src> {
     }
 
     #[instrument(skip_all, err(Debug))]
-    pub fn parse(&mut self) -> Result<Module> {
+    pub fn module(&mut self) -> Result<Module> {
         let mut items = vec![];
 
         loop {
@@ -373,16 +373,34 @@ impl<'src> Parser<'src> {
     }
 
     #[instrument(skip_all, err(Debug))]
+    fn path(&mut self) -> Result<Path> {
+        let mut segments = vec![];
+
+        loop {
+            match self.curr.kind {
+                TokenKind::Ident => {
+                    segments.push(PathSegment::Name(self.name()?));
+                }
+                TokenKind::Slash => continue,
+                TokenKind::Newline => break,
+                _ => todo!("illegal token in path"),
+            }
+        }
+
+        Ok(Path::from_segments(segments))
+    }
+
+    #[instrument(skip_all, err(Debug))]
     fn r#use(&mut self) -> Result<Use> {
         let span = self.curr.span;
         let is_extern = self.accept(TokenKind::Extern)?.is_some();
         self.consume(TokenKind::Use)?;
-        let name = self.name()?;
+        let path = self.path()?;
         let span = span.enclosing_to(&self.curr.span);
         Ok(Use {
             span,
             is_extern,
-            name,
+            path,
         })
     }
 

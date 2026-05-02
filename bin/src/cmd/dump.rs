@@ -6,7 +6,7 @@ use miette::{IntoDiagnostic, Result};
 use lib::codegen::qbe;
 use lib::lexer::Token;
 use lib::lexer::source::SourceInfo;
-use lib::{ast, hir, lexer, mir, parser, type_checker};
+use lib::{hir, lexer, mir, parser, type_checker};
 
 #[derive(clap::Args)]
 pub struct DumpOpts {
@@ -93,10 +93,9 @@ pub fn handle(DumpOpts { file_path, cmd }: DumpOpts) -> Result<()> {
     }
 
     let mut parser = parser::Parser::new(file_path, &content)?;
-    let ast = parser.parse()?;
+    let ast = parser.module()?;
     if let DumpCommand::Ast = cmd {
-        let fmt = ast::fmt::FmtModule::new(&ast, &content).to_string();
-        return write_str(stdout, fmt);
+        return write_str(stdout, format!("{ast:#?}"));
     }
 
     let mut env = type_checker::TypeEnv::new(parser.source());

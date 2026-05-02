@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::path::Path;
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -62,8 +62,8 @@ pub struct Lexer<'src> {
 }
 
 impl<'src> Lexer<'src> {
-    pub fn new(file_path: PathBuf, content: &'src str) -> Self {
-        let source = SourceInfo::new(file_path.to_string_lossy(), content.to_string());
+    pub fn new(file_path: impl AsRef<Path>, content: &'src str) -> Self {
+        let source = SourceInfo::new(file_path.as_ref().display(), content.to_string());
         Self {
             source,
             content,

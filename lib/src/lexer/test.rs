@@ -8,7 +8,7 @@ use crate::lexer::{
 };
 
 fn lex(source: &'static str) -> Vec<TokenKind> {
-    let lexer = Lexer::new("inline".into(), source);
+    let lexer = Lexer::new("inline", source);
     lexer
         .collect::<Result<Vec<_>, _>>()
         .unwrap()

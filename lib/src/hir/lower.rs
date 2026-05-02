@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast;
-use crate::hir::{self, HirId, Locality, Mutability};
+use crate::hir::{self, HirId, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
 use crate::traits::{Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
@@ -70,16 +70,18 @@ pub fn lower_item<'ast>(
     env: &mut TypeEnv,
 ) -> Result<Option<hir::Item<'ast>>> {
     Ok(match item {
-        ast::Item::Use(inner) => Some(hir::Item::Use(hir::Use {
-            id: HirId::DUMMY,
-            span: &inner.span,
-            locality: if inner.is_extern {
-                Locality::Extern
-            } else {
-                Locality::Local
-            },
-            name: lower_name(&inner.name),
-        })),
+        // TODO: I'm pretty sure we don't need these anymore in the hir
+        ast::Item::Use(_) => None,
+        // ast::Item::Use(inner) => Some(hir::Item::Use(hir::Use {
+        //     id: HirId::DUMMY,
+        //     span: &inner.span,
+        //     locality: if inner.is_extern {
+        //         Locality::Extern
+        //     } else {
+        //         Locality::Local
+        //     },
+        //     name: lower_name(&inner.name),
+        // })),
         ast::Item::Fn(func) => Some(hir::Item::Fn(lower_func(func, env)?)),
         ast::Item::StructDef(def) => {
             let fields = def

@@ -7,9 +7,6 @@ use either::Either;
 use crate::lexer::source::Span;
 use crate::traits::AsStr;
 
-pub mod fmt;
-pub mod visit;
-
 id!(NodeId);
 
 #[derive(Debug, Clone, Eq)]
@@ -381,10 +378,28 @@ impl Fn {
 }
 
 #[derive(Debug, Clone)]
+pub enum PathSegment {
+    Name(Name),
+}
+
+#[derive(Debug, Clone)]
+pub struct Path(Arc<[PathSegment]>);
+
+impl Path {
+    pub fn from_segments(segments: impl Into<Arc<[PathSegment]>>) -> Self {
+        Self(segments.into())
+    }
+
+    pub fn segments(&self) -> &[PathSegment] {
+        self.0.as_ref()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Use {
     pub span: Span,
     pub is_extern: bool,
-    pub name: Name,
+    pub path: Path,
 }
 
 #[derive(Debug, Clone)]
@@ -563,4 +578,16 @@ pub enum Item {
 #[derive(Debug, Clone)]
 pub struct Module {
     pub items: Arc<[Item]>,
+}
+
+impl Module {
+    pub fn use_statements(&self) -> Vec<&Use> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Use(inner) => Some(inner),
+                _ => None,
+            })
+            .collect()
+    }
 }

@@ -34,7 +34,7 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     let start = time::Instant::now();
     let now = start;
     let mut parser = parser::Parser::new(file_path.to_owned(), &content)?;
-    let module_ast = parser.parse()?;
+    let module_ast = parser.module()?;
     tracing::debug!({ elapsed = ?now.elapsed() }, "done parsing");
 
     let now = time::Instant::now();
