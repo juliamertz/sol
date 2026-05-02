@@ -1,4 +1,3 @@
-extern use stdio
 extern variadic func printf(fmt: Str) -> i32
 
 struct Vec2 =

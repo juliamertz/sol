@@ -1,6 +1,3 @@
-extern use stdio
-extern use stdlib
-
 extern variadic func printf(format: Str) -> i32
 extern func malloc(size: u64) -> *u8
 

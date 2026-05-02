@@ -1,4 +1,3 @@
-extern use stdio
 extern variadic func printf(format: Str) -> i32
 
 func main() -> i32
