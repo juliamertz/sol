@@ -58,12 +58,10 @@ impl ReadNumber {
                         match kind {
                             Some(_) => return Err(ReadNumberError::RepeatedRadixPrefix),
                             None => {
-                                // consume peeked char
-                                chars.next();
+                                prefix_end = Some(*idx);
                                 len += 1;
-
-                                prefix_end = Some(idx);
-                                kind = Some(NumberKind::Hex)
+                                kind = Some(NumberKind::Hex);
+                                chars.next();
                             }
                         }
                     }
