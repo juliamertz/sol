@@ -1,7 +1,7 @@
 extern func write() -> i32
 
 struct String =
-  inner : u8[]
+  inner : *u8
   len : u64
 end
 

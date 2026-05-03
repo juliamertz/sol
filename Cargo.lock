@@ -397,6 +397,8 @@ dependencies = [
 ]
 
 [[package]]
+name = "solc-runtime"
+version = "0.1.0"
 name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -411,6 +413,7 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
 dependencies = [
+ "libc",
  "heck",
  "proc-macro2",
  "quote",
