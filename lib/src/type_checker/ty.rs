@@ -1,5 +1,3 @@
-use strum::EnumIs;
-
 use crate::ast;
 use crate::traits::AsStr;
 use crate::type_checker::{FieldId, TypeId};
@@ -162,7 +160,7 @@ impl StructTy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumIs)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     Unit,
     Int(IntTy),

@@ -391,7 +391,6 @@ dependencies = [
  "either",
  "miette",
  "smallvec",
- "strum",
  "thiserror",
  "tracing",
 ]

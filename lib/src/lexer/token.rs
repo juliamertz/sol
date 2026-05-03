@@ -1,12 +1,10 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
-use strum::EnumIs;
-
 use crate::lexer::num::ReadNumber;
 use crate::lexer::source::Span;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     Eof,
     Newline,
