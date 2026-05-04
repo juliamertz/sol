@@ -79,13 +79,13 @@ type Result<T, E = ParseError> = core::result::Result<T, E>;
 
 #[derive(Default, Clone, Copy)]
 pub struct Context {
-    id: u32,
+    node_id: u32,
 }
 
 impl Context {
     fn next_id(&mut self) -> NodeId {
-        let id = self.id;
-        self.id += 1;
+        let id = self.node_id;
+        self.node_id += 1;
         NodeId::new(id)
     }
 }
