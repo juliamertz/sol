@@ -83,7 +83,7 @@ pub struct Context {
 }
 
 impl Context {
-    fn next_id(&mut self) -> NodeId {
+    fn next_node(&mut self) -> NodeId {
         let id = self.node_id;
         self.node_id += 1;
         NodeId::new(id)
@@ -246,7 +246,7 @@ impl<'src> Parser<'src> {
         }
 
         let nodes = Arc::from(nodes);
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = span.enclosing_to(&self.curr.span);
         Ok(Block { nodes, id, span })
     }
@@ -254,7 +254,7 @@ impl<'src> Parser<'src> {
     #[instrument(skip_all, err(Debug))]
     fn ident(&mut self) -> Result<Ident> {
         let token = self.consume(TokenKind::Ident)?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         Ok(Ident {
             id,
             span: token.span,
@@ -275,13 +275,13 @@ impl<'src> Parser<'src> {
     #[instrument(skip_all, err(Debug))]
     fn ty(&mut self) -> Result<Ty> {
         let span = self.curr.span;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let is_ptr = self.accept(TokenKind::Asterisk)?.is_some();
         let ident = self.ident()?;
         let bare_kind = TyKind::from_ident(ident);
         let kind = if is_ptr {
             TyKind::Ptr(Arc::new(Ty {
-                id: self.ctx.next_id(),
+                id: self.ctx.next_node(),
                 span: self.curr.span, // TODO: not correct
                 kind: bare_kind,
             }))
@@ -310,7 +310,7 @@ impl<'src> Parser<'src> {
                 inner: Arc::from(ty),
                 size,
             };
-            let id = self.ctx.next_id();
+            let id = self.ctx.next_node();
             let span = span.enclosing_to(&self.curr.span);
             ty = Ty { kind, id, span }
         }
@@ -341,7 +341,7 @@ impl<'src> Parser<'src> {
             self.consume(TokenKind::End)?;
 
             let nodes = Arc::from(nodes);
-            let id = self.ctx.next_id();
+            let id = self.ctx.next_node();
             let span = span.enclosing_to(&self.curr.span);
             Block { nodes, id, span }
         };
@@ -506,7 +506,7 @@ impl<'src> Parser<'src> {
         } else {
             None
         };
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let tok = self.consume(TokenKind::End)?;
         let span = span.enclosing_to(&tok.span);
 
@@ -541,7 +541,7 @@ impl<'src> Parser<'src> {
     #[instrument(skip_all, err(Debug))]
     fn unary(&mut self, op: Op<UnaryOpKind>) -> Result<Unary> {
         let rhs = self.expr(Prec::default())?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = op.span.enclosing_to(&rhs.span());
 
         Ok(Unary {
@@ -583,7 +583,7 @@ impl<'src> Parser<'src> {
     fn binop_expr(&mut self, lhs: Expr) -> Result<Expr> {
         let (op, prec) = self.bin_op()?;
         let rhs = self.expr(prec)?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = lhs.span().enclosing_to(&rhs.span());
 
         Ok(Expr::BinOp(BinOp {
@@ -604,7 +604,7 @@ impl<'src> Parser<'src> {
             self.expr_list()?
         };
         let tok = self.consume(TokenKind::RParen)?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = expr.span().enclosing_to(&tok.span());
 
         Ok(Expr::Call(Call {
@@ -620,7 +620,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::LBracket)?;
         let idx = self.expr(Prec::default())?;
         let tok = self.consume(TokenKind::RBracket)?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = expr.span().enclosing_to(&tok.span());
 
         Ok(Expr::Index(Index {
@@ -636,7 +636,7 @@ impl<'src> Parser<'src> {
         self.consume(TokenKind::Dot)?;
         let rhs = self.name()?;
         let lhs = Arc::from(lhs);
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = lhs.span().enclosing_to(&rhs.span);
         Ok(Expr::MemberAccess(MemberAccess { id, span, lhs, rhs }))
     }
@@ -644,7 +644,7 @@ impl<'src> Parser<'src> {
     #[instrument(skip_all, err(Debug))]
     fn assign(&mut self, lhs: Expr) -> Result<Expr> {
         self.consume(TokenKind::Assign)?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let rhs = self.expr(Prec::default())?;
         let span = lhs.span().enclosing_to(&rhs.span());
 
@@ -668,7 +668,7 @@ impl<'src> Parser<'src> {
         };
         let kind = LiteralKind::Bool(val);
         self.advance()?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         Ok(Literal {
             id,
             span,
@@ -683,7 +683,7 @@ impl<'src> Parser<'src> {
         let span = self.curr.span;
         let kind = LiteralKind::Str(text.to_string());
         self.advance()?;
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         Ok(Literal {
             id,
             span,
@@ -702,7 +702,7 @@ impl<'src> Parser<'src> {
         let consequence = self.block()?;
         let end = self.consume(TokenKind::End)?;
         let span = span.enclosing_to(&end.span);
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         Ok(While {
             id,
             span,
@@ -820,7 +820,7 @@ impl<'src> Parser<'src> {
         let tok = self.consume(TokenKind::RBracket)?;
 
         let items = Arc::from(items);
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = span.enclosing_to(&tok.span());
         Ok(List { items, id, span })
     }
@@ -877,7 +877,7 @@ impl<'src> Parser<'src> {
         let fields = self.params(Self::name, Self::expr_lowest)?;
         let tok = self.consume(TokenKind::RSquirly)?;
         let fields = Arc::from(fields);
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = ident.span.enclosing_to(&tok.span());
         Ok(Expr::Constructor(Constructor {
             ident,

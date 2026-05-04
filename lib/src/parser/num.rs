@@ -112,7 +112,7 @@ impl Parser<'_> {
             "`self.curr` must be of kind `TokenKind::Num(_)`"
         );
 
-        let id = self.ctx.next_id();
+        let id = self.ctx.next_node();
         let span = self.curr.span();
         let text = self.curr.text.as_ref();
         let (_, digit_str, suffix) = split_digit_str(text, &num);
