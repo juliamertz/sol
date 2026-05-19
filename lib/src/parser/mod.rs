@@ -9,6 +9,7 @@ use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
+use crate::parser::resolve::ModuleId;
 
 mod num;
 #[cfg(test)]
@@ -80,6 +81,7 @@ type Result<T, E = ParseError> = core::result::Result<T, E>;
 #[derive(Default, Clone, Copy)]
 pub struct Context {
     node_id: u32,
+    module_id: u32,
 }
 
 impl Context {
@@ -87,6 +89,12 @@ impl Context {
         let id = self.node_id;
         self.node_id += 1;
         NodeId::new(id)
+    }
+
+    fn next_module(&mut self) -> ModuleId {
+        let id = self.module_id;
+        self.module_id += 1;
+        ModuleId::new(id)
     }
 }
 
