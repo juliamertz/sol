@@ -23,6 +23,7 @@ pub const FILE_EXTENSION: &str = "sol";
 
 id!(ModuleId);
 
+#[derive(Debug)]
 pub struct ModuleTree {
     root: ModuleNode,
 }
@@ -33,6 +34,7 @@ impl ModuleTree {
     }
 }
 
+#[derive(Debug)]
 pub struct ModuleNode {
     id: ModuleId,
     name: Name,

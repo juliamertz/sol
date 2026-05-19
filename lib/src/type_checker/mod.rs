@@ -11,7 +11,7 @@ use crate::ast::{
 };
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
-use crate::parser::resolve::ModuleResolutions;
+use crate::parser::resolve::ModuleTree;
 use crate::traits::{AsStr, Boxed, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::fmt::TyDisplay;
@@ -176,7 +176,7 @@ pub struct TypeEnv {
     pub(crate) types: Interner<TypeId, Ty, TypeInterner>,
     pub(crate) associated_items: HashMap<(TypeId, String), (DefId, ItemId)>,
     pub(crate) member_resolutions: HashMap<NodeId, MemberResolution>,
-    pub(crate) module_resolutions: ModuleResolutions,
+    pub(crate) module_tree: ModuleTree,
     pub(crate) definitions: Interner<DefId, TypeId>,
     pub(crate) nodes: Interner<NodeId, TypeId>,
     pub(crate) mutable_definitions: Vec<DefId>,
@@ -185,13 +185,13 @@ pub struct TypeEnv {
 }
 
 impl TypeEnv {
-    pub fn new(src: SourceInfo, module_resolutions: ModuleResolutions) -> Self {
+    pub fn new(src: SourceInfo, module_tree: ModuleTree) -> Self {
         Self {
             src,
             types: Interner::default(),
             associated_items: HashMap::default(),
             member_resolutions: HashMap::default(),
-            module_resolutions,
+            module_tree,
             definitions: Interner::default(),
             nodes: Interner::default(),
             mutable_definitions: Vec::default(),
