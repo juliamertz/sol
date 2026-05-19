@@ -399,7 +399,7 @@ impl<'src> Parser<'src> {
         loop {
             match self.curr.kind {
                 TokenKind::Ident => {
-                    segments.push(PathSegment::Name(self.name()?));
+                    segments.push(PathSegment::Named(self.name()?));
                 }
                 TokenKind::Slash => continue,
                 TokenKind::Newline => break,

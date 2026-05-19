@@ -379,7 +379,7 @@ impl Fn {
 
 #[derive(Debug, Clone)]
 pub enum PathSegment {
-    Name(Name),
+    Named(Name),
 }
 
 #[derive(Debug, Clone)]
