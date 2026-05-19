@@ -39,7 +39,11 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     tracing::debug!({ elapsed = ?now.elapsed() }, "done parsing");
 
     let now = time::Instant::now();
-    let mut resolver = parser::resolve::ModuleResolver::new(parser.context());
+    let working_dir = file_path
+        .parent()
+        .expect("file path does not have a parent")
+        .to_path_buf();
+    let mut resolver = parser::resolve::ModuleResolver::new(parser.context(), working_dir);
     let module_tree = resolver.resolve_tree(ModuleName::from("my_module"), module_ast.clone())?; // TODO: prevent cloning AST
     tracing::debug!({ elapsed = ?now.elapsed() }, "done resolving modules");
 

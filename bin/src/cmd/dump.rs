@@ -98,7 +98,7 @@ pub fn handle(DumpOpts { file_path, cmd }: DumpOpts) -> Result<()> {
         return write_str(stdout, format!("{ast:#?}"));
     }
 
-    let mut resolver = parser::resolve::ModuleResolver::new(parser.context());
+    // let mut resolver = parser::resolve::ModuleResolver::new(parser.context());
     // resolver.(&ast)?;
     let module_tree = todo!();
 

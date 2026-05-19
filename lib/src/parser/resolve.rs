@@ -59,11 +59,12 @@ impl ModuleNode {
 
 pub struct ModuleResolver {
     ctx: Context,
+    dir: PathBuf,
 }
 
 impl ModuleResolver {
-    pub fn new(ctx: Context) -> Self {
-        Self { ctx }
+    pub fn new(ctx: Context, dir: PathBuf) -> Self {
+        Self { ctx, dir }
     }
 
     fn resolve_path(&self, file_path: impl AsRef<Path>) -> Result<Module> {
@@ -77,7 +78,9 @@ impl ModuleResolver {
         let id = self.ctx.next_module();
         let mut node = ModuleNode::new(id, name, module);
 
-        for item in node.module.use_statements() {}
+        for item in node.module.use_statements() {
+            dbg!(&item.path);
+        }
 
         Ok(node)
     }
