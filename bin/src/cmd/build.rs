@@ -2,6 +2,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::{fs, time};
 
+use lib::parser::resolve::ModuleName;
 use miette::{IntoDiagnostic, Result};
 
 use lib::codegen::qbe;
@@ -38,15 +39,14 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     tracing::debug!({ elapsed = ?now.elapsed() }, "done parsing");
 
     let now = time::Instant::now();
-    let mut resolver = parser::resolve::ModuleResolver::new(file_path.to_owned(), parser.context());
-    resolver.try_resolve_all(&module_ast)?;
-    let module_resolutions = resolver.finish();
+    let mut resolver = parser::resolve::ModuleResolver::new(parser.context());
+    let module_tree = resolver.resolve_tree(ModuleName::from("my_module"), module_ast.clone())?; // TODO: prevent cloning AST
     tracing::debug!({ elapsed = ?now.elapsed() }, "done resolving modules");
 
-    dbg!(&module_resolutions);
+    dbg!(&module_tree);
 
     let now = time::Instant::now();
-    let mut env = type_checker::TypeEnv::new(parser.source(), module_resolutions);
+    let mut env = type_checker::TypeEnv::new(parser.source(), module_tree);
     let mut scope = type_checker::Scope::default();
     type_checker::check_module(&module_ast, &mut env, &mut scope)?;
     tracing::debug!({ elapsed = ?now.elapsed() }, "done type checking");

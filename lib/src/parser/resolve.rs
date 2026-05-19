@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -8,6 +9,9 @@ use tracing::instrument;
 use crate::ast::{Item, Module, Name, PathSegment};
 use crate::parser::{Context, Parser};
 use crate::traits::AsStr;
+
+
+pub const FILE_EXTENSION: &str = "sol";
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ResolveError {
@@ -19,7 +23,7 @@ pub enum ResolveError {
 
 pub type Result<T, E = ResolveError> = std::result::Result<T, E>;
 
-pub const FILE_EXTENSION: &str = "sol";
+pub type ModuleName = Arc<str>;
 
 id!(ModuleId);
 
@@ -37,13 +41,13 @@ impl ModuleTree {
 #[derive(Debug)]
 pub struct ModuleNode {
     id: ModuleId,
-    name: Name,
+    name: ModuleName,
     module: Module,
-    children: BTreeMap<Name, Module>,
+    children: BTreeMap<ModuleName, Module>,
 }
 
 impl ModuleNode {
-    fn new(id: ModuleId, name: Name, module: Module) -> Self {
+    fn new(id: ModuleId, name: ModuleName, module: Module) -> Self {
         Self {
             id,
             name,
@@ -69,7 +73,7 @@ impl ModuleResolver {
         Ok(module)
     }
 
-    fn resolve_node(&mut self, name: Name, module: Module) -> Result<ModuleNode> {
+    fn resolve_node(&mut self, name: ModuleName, module: Module) -> Result<ModuleNode> {
         let id = self.ctx.next_module();
         let mut node = ModuleNode::new(id, name, module);
 
@@ -78,12 +82,8 @@ impl ModuleResolver {
         Ok(node)
     }
 
-    pub fn resolve_tree(&mut self, name: Name, module: Module) -> Result<ModuleTree> {
+    pub fn resolve_tree(&mut self, name: ModuleName, module: Module) -> Result<ModuleTree> {
         let root = self.resolve_node(name, module)?;
         Ok(ModuleTree::new(root))
-    }
-
-    pub fn finish(self) -> ModuleTree {
-        ModuleTree { root: todo!() }
     }
 }

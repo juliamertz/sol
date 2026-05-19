@@ -98,11 +98,11 @@ pub fn handle(DumpOpts { file_path, cmd }: DumpOpts) -> Result<()> {
         return write_str(stdout, format!("{ast:#?}"));
     }
 
-    let mut resolver = parser::resolve::ModuleResolver::new(file_path, parser.context());
-    resolver.try_resolve_all(&ast)?;
-    let resolutions = resolver.finish();
+    let mut resolver = parser::resolve::ModuleResolver::new(parser.context());
+    // resolver.(&ast)?;
+    let module_tree = todo!();
 
-    let mut env = type_checker::TypeEnv::new(parser.source(), resolutions);
+    let mut env = type_checker::TypeEnv::new(parser.source(), module_tree);
     let mut scope = type_checker::Scope::default();
     type_checker::check_module(&ast, &mut env, &mut scope)?;
 
