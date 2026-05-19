@@ -1,0 +1,1 @@
+- [ ] Rename `Ident`/`Name` to `Symbol` in typechecker
