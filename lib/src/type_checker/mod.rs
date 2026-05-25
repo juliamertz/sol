@@ -648,7 +648,51 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_func(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
+pub fn infer_fn_from_signature(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
+    match &func.kind {
+        ast::FnKind::Local { params, body } => {
+            let param_tys = params
+                .iter()
+                .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
+                .transpose_vec()?;
+            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+            let fn_ty_id = env.types.intern(Ty::func(param_tys, returns));
+            let def_id = env.definitions.intern(fn_ty_id);
+
+            let mut scope = scope.new_child();
+            for (name, ty) in params.iter() {
+                let ty_id = env.type_from_ast_ty(ty, &scope)?;
+                let param_def_id = env.definitions.intern(ty_id);
+                scope.define(name, param_def_id);
+            }
+            scope.define(&func.ident, def_id);
+
+            let ty_id = infer_block(body, env, &mut scope)?;
+            env.nodes.insert(body.id, ty_id);
+            env.def_names.insert(def_id, func.ident.inner.clone());
+
+            Ok((fn_ty_id, def_id))
+        }
+        ast::FnKind::Extern {
+            params,
+            is_variadic,
+        } => {
+            let param_tys = params
+                .iter()
+                .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
+                .collect::<Result<Vec<_>>>()?;
+            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
+            let fn_ty_id = env
+                .types
+                .intern(Ty::extern_func(param_tys, returns, *is_variadic));
+            let def_id = env.definitions.intern(fn_ty_id);
+            env.def_names.insert(def_id, func.ident.inner.clone());
+            Ok((fn_ty_id, def_id))
+        }
+    }
+}
+
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
     match &func.kind {
         ast::FnKind::Local { params, body } => {
             let param_tys = params
@@ -698,7 +742,7 @@ pub fn infer_assoc_item(
     scope: &Scope<'_>,
 ) -> Result<(TypeId, DefId)> {
     match item {
-        AssocItem::Fn(func) => infer_func(func, env, scope),
+        AssocItem::Fn(func) => infer_fn(func, env, scope),
     }
 }
 
@@ -840,19 +884,30 @@ pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) 
         .map(|_| ())
 }
 
-pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
-    let mut inventory = collect(&module.items)?;
+fn declare_struct_names<'a>(
+    struct_defs: Vec<&'a StructDef>,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
+) -> Result<Vec<(TypeId, &'a StructDef)>> {
+    let mut defined = vec![];
 
-    let mut struct_defs = vec![];
-    for struct_def in inventory.take_structs() {
+    for struct_def in struct_defs {
         let placeholder_ty = Ty::Struct(StructTy::placeholder(struct_def.ident.clone()));
         let ty_id = env.types.intern_no_insert(&placeholder_ty);
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
 
-        struct_defs.push((ty_id, struct_def));
+        defined.push((ty_id, struct_def));
     }
 
+    Ok(())
+}
+
+fn resolve_structs(
+    struct_defs: Vec<(TypeId, &StructDef)>,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
+) -> Result<()> {
     for (ty_id, struct_def) in struct_defs {
         let fields = struct_def
             .fields
@@ -866,6 +921,23 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
         });
         env.types.insert(ty_id, ty);
     }
+
+    Ok(())
+}
+
+fn register_fns(fns: Vec<&Fn>, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    Ok(())
+}
+
+pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    let mut inventory = collect(&module.items)?;
+
+    let structs = inventory.take_structs();
+    let declared_structs = declare_struct_names(structs, env, scope)?;
+    resolve_structs(declared_structs, env, scope)?;
+
+    let fns = inventory.take_fns();
+    register_fns(fns, env, scope)?;
 
     // let fields = struct_def
     //     .fields
@@ -897,7 +969,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     // }
 
     for func in inventory.take_fns() {
-        let (_ty_id, def_id) = infer_func(func, env, scope)?;
+        let (_ty_id, def_id) = infer_fn(func, env, scope)?;
         scope.define(&func.ident, def_id);
     }
 
