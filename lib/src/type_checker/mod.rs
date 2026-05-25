@@ -648,30 +648,22 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn_from_signature(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
+pub fn infer_fn_from_signature(
+    func: &Fn,
+    env: &mut TypeEnv,
+    scope: &Scope<'_>,
+) -> Result<(TypeId, DefId)> {
     match &func.kind {
-        ast::FnKind::Local { params, body } => {
+        ast::FnKind::Local { params, .. } => {
             let param_tys = params
                 .iter()
                 .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
                 .transpose_vec()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env.types.intern(Ty::func(param_tys, returns));
-            let def_id = env.definitions.intern(fn_ty_id);
-
-            let mut scope = scope.new_child();
-            for (name, ty) in params.iter() {
-                let ty_id = env.type_from_ast_ty(ty, &scope)?;
-                let param_def_id = env.definitions.intern(ty_id);
-                scope.define(name, param_def_id);
-            }
-            scope.define(&func.ident, def_id);
-
-            let ty_id = infer_block(body, env, &mut scope)?;
-            env.nodes.insert(body.id, ty_id);
+            let ty_id = env.types.intern(Ty::func(param_tys, returns));
+            let def_id = env.definitions.intern(ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
-
-            Ok((fn_ty_id, def_id))
+            Ok((ty_id, def_id))
         }
         ast::FnKind::Extern {
             params,
@@ -682,58 +674,33 @@ pub fn infer_fn_from_signature(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) 
                 .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
                 .collect::<Result<Vec<_>>>()?;
             let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env
+            let ty_id = env
                 .types
                 .intern(Ty::extern_func(param_tys, returns, *is_variadic));
-            let def_id = env.definitions.intern(fn_ty_id);
+            let def_id = env.definitions.intern(ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
-            Ok((fn_ty_id, def_id))
+            Ok((ty_id, def_id))
         }
     }
 }
 
 pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
-    match &func.kind {
-        ast::FnKind::Local { params, body } => {
-            let param_tys = params
-                .iter()
-                .map(|(_, ty)| env.type_from_ast_ty(ty, scope))
-                .transpose_vec()?;
-            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env.types.intern(Ty::func(param_tys, returns));
-            let def_id = env.definitions.intern(fn_ty_id);
+    let (fn_ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
 
-            let mut scope = scope.new_child();
-            for (name, ty) in params.iter() {
-                let ty_id = env.type_from_ast_ty(ty, &scope)?;
-                let param_def_id = env.definitions.intern(ty_id);
-                scope.define(name, param_def_id);
-            }
-            scope.define(&func.ident, def_id);
-
-            let ty_id = infer_block(body, env, &mut scope)?;
-            env.nodes.insert(body.id, ty_id);
-            env.def_names.insert(def_id, func.ident.inner.clone());
-
-            Ok((fn_ty_id, def_id))
+    if let ast::FnKind::Local { params, body } = &func.kind {
+        let mut scope = scope.new_child();
+        for (name, ty) in params.iter() {
+            let ty_id = env.type_from_ast_ty(ty, &scope)?;
+            let param_def_id = env.definitions.intern(ty_id);
+            scope.define(name, param_def_id);
         }
-        ast::FnKind::Extern {
-            params,
-            is_variadic,
-        } => {
-            let param_tys = params
-                .iter()
-                .map(|(_name, ty)| env.type_from_ast_ty(ty, scope))
-                .collect::<Result<Vec<_>>>()?;
-            let returns = env.type_from_ast_ty(&func.return_ty, scope)?;
-            let fn_ty_id = env
-                .types
-                .intern(Ty::extern_func(param_tys, returns, *is_variadic));
-            let def_id = env.definitions.intern(fn_ty_id);
-            env.def_names.insert(def_id, func.ident.inner.clone());
-            Ok((fn_ty_id, def_id))
-        }
+        scope.define(&func.ident, def_id);
+
+        let ty_id = infer_block(body, env, &mut scope)?;
+        env.nodes.insert(body.id, ty_id);
     }
+
+    Ok((fn_ty_id, def_id))
 }
 
 pub fn infer_assoc_item(
