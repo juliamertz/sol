@@ -6,7 +6,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::ast::{Module, PathSegment};
+use crate::ast::{Module, ModuleId, PathSegment};
 use crate::parser::{Context, Parser};
 use crate::traits::AsStr;
 

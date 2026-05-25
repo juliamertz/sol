@@ -2,7 +2,6 @@ use std::borrow::Cow;
 
 use crate::ast;
 use crate::lexer::source::Span;
-use crate::parser::resolve::ModuleId;
 use crate::traits::AsStr;
 use crate::type_checker::{DefId, FieldId, ItemId, MemberResolution, TypeId};
 

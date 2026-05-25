@@ -9,7 +9,6 @@ use crate::interner::Id;
 use crate::lexer::source::{SourceInfo, Span};
 use crate::lexer::token::OwnedToken;
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::parser::resolve::ModuleId;
 
 mod num;
 #[cfg(test)]
@@ -156,7 +155,7 @@ impl<'src> Parser<'src> {
         }
 
         Ok(Module {
-
+            id: todo!(),
             items: Arc::from(items),
         })
     }
