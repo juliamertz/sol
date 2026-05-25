@@ -5,6 +5,7 @@ use std::sync::Arc;
 use either::Either;
 
 use crate::lexer::source::Span;
+use crate::parser::resolve::ModuleId;
 use crate::traits::AsStr;
 
 id!(NodeId);

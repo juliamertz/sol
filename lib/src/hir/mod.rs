@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::ast;
 use crate::lexer::source::Span;
+use crate::parser::resolve::ModuleId;
 use crate::traits::AsStr;
 use crate::type_checker::{DefId, FieldId, ItemId, MemberResolution, TypeId};
 
@@ -21,12 +22,12 @@ pub enum Mutability {
 
 impl Mutability {
     #[inline]
-    pub fn is_mutable(&self) -> bool {
+    pub const fn is_mutable(&self) -> bool {
         matches!(self, Mutability::Mutable)
     }
 
     #[inline]
-    pub fn is_immutable(&self) -> bool {
+    pub const fn is_immutable(&self) -> bool {
         matches!(self, Mutability::Immutable)
     }
 }
@@ -307,6 +308,7 @@ pub enum Item<'ast> {
 
 #[derive(Debug, Clone)]
 pub struct Module<'ast> {
+    pub id: ModuleId,
     pub items: Box<[Item<'ast>]>,
 }
 

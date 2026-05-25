@@ -156,6 +156,7 @@ impl<'src> Parser<'src> {
         }
 
         Ok(Module {
+
             items: Arc::from(items),
         })
     }
