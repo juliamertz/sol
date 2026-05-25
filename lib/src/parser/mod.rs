@@ -155,7 +155,7 @@ impl<'src> Parser<'src> {
         }
 
         Ok(Module {
-            id: todo!(),
+            id: self.ctx.next_module(),
             items: Arc::from(items),
         })
     }
