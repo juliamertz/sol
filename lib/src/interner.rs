@@ -78,10 +78,11 @@ where
 
 impl<K, V, S> Interner<K, V, S>
 where
-    K: Id + Hash + Eq + Copy,
+    K: Id + Hash + Eq + Copy + std::fmt::Debug,
     S: Strategy<K, V>,
 {
     pub fn get(&self, key: &K) -> &V {
+        dbg!(&key);
         self.map.get(key).expect("interned key to exist in map")
     }
 

@@ -653,7 +653,7 @@ pub fn infer_fn_from_signature(
     env: &mut TypeEnv,
     scope: &Scope<'_>,
 ) -> Result<(TypeId, DefId)> {
-    match &func.kind {
+    let (ty_id, def_id) = match &func.kind {
         ast::FnKind::Local { params, .. } => {
             let param_tys = params
                 .iter()
@@ -663,7 +663,7 @@ pub fn infer_fn_from_signature(
             let ty_id = env.types.intern(Ty::func(param_tys, returns));
             let def_id = env.definitions.intern(ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
-            Ok((ty_id, def_id))
+            (ty_id, def_id)
         }
         ast::FnKind::Extern {
             params,
@@ -679,9 +679,14 @@ pub fn infer_fn_from_signature(
                 .intern(Ty::extern_func(param_tys, returns, *is_variadic));
             let def_id = env.definitions.intern(ty_id);
             env.def_names.insert(def_id, func.ident.inner.clone());
-            Ok((ty_id, def_id))
+            (ty_id, def_id)
         }
-    }
+    };
+
+    env.nodes.insert(func.ident.id, ty_id);
+    env.node_defs.insert(func.ident.id, def_id);
+
+    Ok((ty_id, def_id))
 }
 
 pub fn infer_fn_body(
@@ -709,7 +714,7 @@ pub fn infer_fn_body(
 
 pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
     let (ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
-    infer_fn_body(func, def_id, env, scope)?;
+    infer_fn_body(def_id, func, env, scope)?;
 
     Ok((ty_id, def_id))
 }
@@ -967,6 +972,7 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     }
 
     for (def_id, func) in declared_fns {
+        dbg!(def_id);
         infer_fn_body(def_id, func, env, scope)?;
     }
 
