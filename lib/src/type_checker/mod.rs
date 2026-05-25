@@ -843,37 +843,58 @@ pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) 
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let mut inventory = collect(&module.items)?;
 
+    let mut struct_defs = vec![];
     for struct_def in inventory.take_structs() {
-        let ident = struct_def.ident.to_owned().boxed();
+        let placeholder_ty = Ty::Struct(StructTy::placeholder(struct_def.ident.clone()));
+        let ty_id = env.types.intern_no_insert(&placeholder_ty);
+        let def_id = env.definitions.intern(ty_id);
+        scope.define(&struct_def.ident, def_id);
+
+        struct_defs.push((ty_id, struct_def));
+    }
+
+    for (ty_id, struct_def) in struct_defs {
         let fields = struct_def
             .fields
             .iter()
             .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
             .collect::<Result<Vec<_>>>()?
             .into();
-
-        let ty_id = env.types.intern(Ty::Struct(StructTy { ident, fields }));
-        let def_id = env.definitions.intern(ty_id);
-        scope.define(&struct_def.ident, def_id);
-
-        {
-            let scope = scope.new_child();
-            let impls = inventory.take_impls(&struct_def.ident);
-            for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
-                let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
-
-                let mangled = Mangle::AssocItem(struct_def.ident(), item.ident());
-                let def_name = Arc::from(mangled.to_string());
-                env.def_names.insert(def_id, def_name);
-
-                let key = (ty_id, item.ident().to_string());
-                let item_id = ItemId::from(idx);
-                env.associated_items.insert(key, (def_id, item_id));
-
-                check_assoc_item(item, def_id, env, &scope)?;
-            }
-        }
+        let ty = Ty::Struct(StructTy {
+            ident: struct_def.ident.clone().boxed(),
+            fields,
+        });
+        env.types.insert(ty_id, ty);
     }
+
+    // let fields = struct_def
+    //     .fields
+    //     .iter()
+    //     .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
+    //     .collect::<Result<Vec<_>>>()?
+    //     .into();
+    //
+    // let ty_id = env.types.intern(Ty::Struct(StructTy { ident, fields }));
+    // let def_id = env.definitions.intern(ty_id);
+    // scope.define(&struct_def.ident, def_id);
+    //
+    // {
+    //     let scope = scope.new_child();
+    //     let impls = inventory.take_impls(&struct_def.ident);
+    //     for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
+    //         let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
+    //
+    //         let mangled = Mangle::AssocItem(struct_def.ident(), item.ident());
+    //         let def_name = Arc::from(mangled.to_string());
+    //         env.def_names.insert(def_id, def_name);
+    //
+    //         let key = (ty_id, item.ident().to_string());
+    //         let item_id = ItemId::from(idx);
+    //         env.associated_items.insert(key, (def_id, item_id));
+    //
+    //         check_assoc_item(item, def_id, env, &scope)?;
+    //     }
+    // }
 
     for func in inventory.take_fns() {
         let (_ty_id, def_id) = infer_func(func, env, scope)?;
@@ -883,7 +904,6 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     for item in module.items.iter() {
         check_item(item, env, scope)?;
     }
-
 
     Ok(())
 }

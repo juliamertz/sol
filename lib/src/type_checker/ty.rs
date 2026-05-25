@@ -150,6 +150,17 @@ pub struct StructTy {
 }
 
 impl StructTy {
+    pub fn new(ident: ast::Ident, fields: impl Into<Box<[(ast::Name, TypeId)]>>) -> Self {
+        Self {
+            ident: ident.into(),
+            fields: fields.into(),
+        }
+    }
+
+    pub fn placeholder(ident: ast::Ident) -> Self {
+        Self::new(ident, vec![])
+    }
+
     pub fn get_field(&self, name: impl AsStr) -> Option<(FieldId, TypeId)> {
         let key = name.as_str();
         self.fields

@@ -95,4 +95,10 @@ where
         self.map.insert(id, value);
         id
     }
+
+    /// get next key without inserting a value, you are responsible for calling [`Self::next`] if
+    /// you obtain an id from this function
+    pub fn intern_no_insert(&mut self, value: &V) -> K {
+        self.strategy.key_for(value)
+    }
 }
