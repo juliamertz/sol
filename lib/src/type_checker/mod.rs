@@ -822,6 +822,7 @@ pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
     match item {
         Item::Use(item) => check_use(item, env, scope),
         Item::Fn(func) => {
+            dbg!(&func);
             let def_id = scope.get_definition(&func.ident).copied().unwrap();
             check_func(func, def_id, env, scope)
         }

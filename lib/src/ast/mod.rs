@@ -9,7 +9,7 @@ use crate::traits::AsStr;
 
 id!(NodeId);
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Clone, Eq)]
 pub struct Ident {
     pub id: NodeId,
     pub span: Span,
@@ -32,6 +32,12 @@ impl AsStr for &Ident {
 impl Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.inner)
+    }
+}
+
+impl Debug for Ident {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Ident").field(&self.inner).finish()
     }
 }
 

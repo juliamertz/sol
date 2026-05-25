@@ -47,7 +47,7 @@ pub fn build(opts: &BuildOpts) -> Result<PathBuf> {
     let module_tree = resolver.resolve_tree(ModuleName::from("my_module"), module_ast.clone())?; // TODO: prevent cloning AST
     tracing::debug!({ elapsed = ?now.elapsed() }, "done resolving modules");
 
-    dbg!(&module_tree);
+    // dbg!(&module_tree);
 
     let now = time::Instant::now();
     let mut env = type_checker::TypeEnv::new(parser.source(), module_tree);
