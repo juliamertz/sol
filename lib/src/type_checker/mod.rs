@@ -823,6 +823,7 @@ pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
         Item::Use(item) => check_use(item, env, scope),
         Item::Fn(func) => {
             dbg!(&func);
+            dbg!(&scope);
             let def_id = scope.get_definition(&func.ident).copied().unwrap();
             check_func(func, def_id, env, scope)
         }
@@ -841,10 +842,6 @@ pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) 
 
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let mut inventory = collect(&module.items)?;
-
-    for item in module.items.iter() {
-        check_item(item, env, scope)?;
-    }
 
     for struct_def in inventory.take_structs() {
         let ident = struct_def.ident.to_owned().boxed();
@@ -882,6 +879,11 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
         let (_ty_id, def_id) = infer_func(func, env, scope)?;
         scope.define(&func.ident, def_id);
     }
+
+    for item in module.items.iter() {
+        check_item(item, env, scope)?;
+    }
+
 
     Ok(())
 }
