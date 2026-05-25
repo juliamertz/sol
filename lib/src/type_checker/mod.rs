@@ -6,12 +6,12 @@ use thiserror::Error;
 
 use crate::ast::{
     self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Index,
-    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, Ret, Stmnt,
-    StructDef, Unary, UnaryOpKind, Use,
+    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment, Ret,
+    Stmnt, StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
-use crate::parser::resolve::ModuleTree;
+use crate::parser::resolve::{ModuleName, ModuleTree};
 use crate::traits::{AsStr, Boxed, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::fmt::TyDisplay;
@@ -129,15 +129,18 @@ pub enum TypeError {
     Internal,
 }
 
-type Result<T, E = TypeError> = core::result::Result<T, E>;
-
 id!(DefId);
 id!(TypeId);
+
+pub type Result<T, E = TypeError> = core::result::Result<T, E>;
+
+pub type Symbol = Arc<str>;
+pub type SymbolMap = HashMap<Symbol, DefId>;
 
 #[derive(Debug, Default)]
 pub struct Scope<'a> {
     parent: Option<&'a Scope<'a>>,
-    definitions: HashMap<Arc<str>, DefId>,
+    definitions: SymbolMap,
 }
 
 impl Scope<'_> {
@@ -335,6 +338,7 @@ fn type_id_from_suffix(suffix: &ast::LiteralSuffix) -> TypeId {
 pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
         Expr::Ident(ident) => infer_ident(ident, env, scope),
+
         Expr::Literal(Literal {
             id, kind, suffix, ..
         }) => match kind {
@@ -368,10 +372,12 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 Ok(ty_id)
             }
         },
+
         Expr::Block(block) => {
             let scope = &mut scope.new_child();
             infer_block(block, env, scope)
         }
+
         Expr::BinOp(BinOp { lhs, op, rhs, .. }) => {
             let lhs_ty_id = infer(lhs.as_ref(), env, scope)?;
             let rhs_ty_id = infer(rhs.as_ref(), env, scope)?;
@@ -446,6 +452,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 }
             }
         }
+
         Expr::Unary(Unary { op, rhs, .. }) => {
             let ty = infer(rhs, env, scope)?;
             match (&op.kind, env.types.get(&ty)) {
@@ -453,6 +460,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
                 _ => todo!(),
             }
         }
+
         Expr::Call(Call { func, params, .. }) => {
             let func_ty_id = infer(func, env, scope)?;
             let returns = {
@@ -470,6 +478,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(returns)
         }
+
         Expr::Index(Index { id, expr, idx, .. }) => {
             let val_ty_id = infer(expr, env, scope)?;
             env.nodes.insert(expr.id(), val_ty_id);
@@ -489,6 +498,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             env.nodes.insert(*id, inner);
             Ok(inner)
         }
+
         Expr::IfElse(IfElse {
             condition,
             consequence,
@@ -530,6 +540,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(consequence_ty_id)
         }
+
         Expr::List(List { items, .. }) => {
             let size = items.len();
             let mut iter = items.iter();
@@ -562,6 +573,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
             let ty_id = env.types.intern(ty);
             Ok(ty_id)
         }
+
         Expr::Constructor(Constructor {
             id, ident, fields, ..
         }) => {
@@ -587,28 +599,35 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
 
             Ok(ty_id)
         }
+
         Expr::MemberAccess(member_access) => {
             let (ty_id, resolution) = infer_member_access(member_access, env, scope)?;
             env.member_resolutions.insert(member_access.id, resolution);
             Ok(ty_id)
         }
+
         Expr::Ref(expr) => {
             let inner_ty_id = infer(expr, env, scope)?;
             Ok(env.types.intern(Ty::Ptr(inner_ty_id)))
         }
+
         Expr::Deref(expr) => infer(expr, env, scope),
+
         Expr::Assign(assign) => {
             let _lhs_ty_id = infer(&assign.lhs, env, scope)?;
             let _rhs_ty_id = infer(&assign.rhs, env, scope)?;
             Ok(TypeId::UNIT)
         }
+
         Expr::Break(inner) => Ok(inner
             .val
             .as_ref()
             .map(|expr| infer(expr, env, scope))
             .transpose()?
             .unwrap_or(TypeId::UNIT)),
+
         Expr::Continue(_inner) => Ok(TypeId::UNIT),
+
         Expr::While(inner) => {
             let _cond_ty_id = infer(&inner.condition, env, scope)?;
 
@@ -775,12 +794,26 @@ pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_
     Ok(())
 }
 
-pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
-    // for now we'll put everything from the module into our current scope.
+pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+    // for now we'll put everything from the module into our current scope
 
-    for segment in item.path.segments() {
+    let PathSegment::Named(name) = item
+        .path
+        .segments()
+        .into_iter()
+        .next()
+        .expect("single named pathsegment");
+    let module = env
+        .module_tree
+        .root()
+        .children()
+        .get(name.as_str())
+        .unwrap()
+        .clone(); // FIXME: really expensive clone here, please borrow checker later
 
-    }
+    check_module(&module, env, scope)?;
+
+    todo!();
 
     Ok(())
 }
@@ -807,6 +840,10 @@ pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) 
 
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let mut inventory = collect(&module.items)?;
+
+    for item in module.items.iter() {
+        check_item(item, env, scope)?;
+    }
 
     for struct_def in inventory.take_structs() {
         let ident = struct_def.ident.to_owned().boxed();
@@ -843,10 +880,6 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     for func in inventory.take_fns() {
         let (_ty_id, def_id) = infer_func(func, env, scope)?;
         scope.define(&func.ident, def_id);
-    }
-
-    for item in module.items.iter() {
-        check_item(item, env, scope)?;
     }
 
     Ok(())

@@ -32,8 +32,12 @@ pub struct ModuleTree {
 }
 
 impl ModuleTree {
-    fn new(root: ModuleNode) -> Self {
+    const fn new(root: ModuleNode) -> Self {
         Self { root }
+    }
+
+    pub const fn root(&self) -> &ModuleNode {
+        &self.root
     }
 }
 
@@ -53,6 +57,14 @@ impl ModuleNode {
             module,
             children: BTreeMap::new(),
         }
+    }
+
+    pub const fn name(&self) -> &ModuleName {
+        &self.name
+    }
+
+    pub const fn children(&self) -> &BTreeMap<ModuleName, Module> {
+        &self.children
     }
 }
 
