@@ -697,10 +697,12 @@ pub fn infer_fn_body(
 ) -> Result<TypeId> {
     if let ast::FnKind::Local { params, body } = &func.kind {
         let mut scope = scope.new_child();
-        for (name, ty) in params.iter() {
-            let ty_id = env.type_from_ast_ty(ty, &scope)?;
-            let param_def_id = env.definitions.intern(ty_id);
-            scope.define(name, param_def_id);
+        for (ident, ty) in params.iter() {
+            let param_ty_id = env.type_from_ast_ty(ty, &scope)?;
+            let param_def_id = env.definitions.intern(param_ty_id);
+            env.nodes.insert(ident.id, param_ty_id);
+            env.node_defs.insert(ident.id, param_def_id);
+            scope.define(ident, param_def_id);
         }
         scope.define(&func.ident, def_id);
 
@@ -972,7 +974,6 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     }
 
     for (def_id, func) in declared_fns {
-        dbg!(def_id);
         infer_fn_body(def_id, func, env, scope)?;
     }
 
