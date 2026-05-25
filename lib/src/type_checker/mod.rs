@@ -5,9 +5,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Index,
-    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment, Ret,
-    Stmnt, StructDef, Unary, UnaryOpKind, Use,
+    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Impl,
+    Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment,
+    Ret, Stmnt, StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::interner::Interner;
 use crate::lexer::source::{SourceInfo, Span};
@@ -684,9 +684,12 @@ pub fn infer_fn_from_signature(
     }
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
-    let (fn_ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
-
+pub fn infer_fn_body(
+    def_id: DefId,
+    func: &Fn,
+    env: &mut TypeEnv,
+    scope: &Scope<'_>,
+) -> Result<TypeId> {
     if let ast::FnKind::Local { params, body } = &func.kind {
         let mut scope = scope.new_child();
         for (name, ty) in params.iter() {
@@ -698,9 +701,27 @@ pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(Type
 
         let ty_id = infer_block(body, env, &mut scope)?;
         env.nodes.insert(body.id, ty_id);
+        Ok(ty_id)
+    } else {
+        Ok(TypeId::UNIT)
     }
+}
 
-    Ok((fn_ty_id, def_id))
+pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
+    let (ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
+    infer_fn_body(func, def_id, env, scope)?;
+
+    Ok((ty_id, def_id))
+}
+
+pub fn infer_assoc_item_from_signature(
+    item: &AssocItem,
+    env: &mut TypeEnv,
+    scope: &Scope<'_>,
+) -> Result<(TypeId, DefId)> {
+    match item {
+        AssocItem::Fn(func) => infer_fn_from_signature(func, env, scope),
+    }
 }
 
 pub fn infer_assoc_item(
@@ -833,8 +854,6 @@ pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
     match item {
         Item::Use(item) => check_use(item, env, scope),
         Item::Fn(func) => {
-            dbg!(&func);
-            dbg!(&scope);
             let def_id = scope.get_definition(&func.ident).copied().unwrap();
             check_func(func, def_id, env, scope)
         }
@@ -852,7 +871,7 @@ pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) 
 }
 
 fn declare_struct_names<'a>(
-    struct_defs: Vec<&'a StructDef>,
+    struct_defs: &[&'a StructDef],
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<Vec<(TypeId, &'a StructDef)>> {
@@ -864,10 +883,10 @@ fn declare_struct_names<'a>(
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
 
-        defined.push((ty_id, struct_def));
+        defined.push((ty_id, *struct_def));
     }
 
-    Ok(())
+    Ok(defined)
 }
 
 fn resolve_structs(
@@ -892,19 +911,64 @@ fn resolve_structs(
     Ok(())
 }
 
-fn register_fns(fns: Vec<&Fn>, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn declare_fn_signatures<'a>(
+    fns: Vec<&'a Fn>,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
+) -> Result<Vec<(DefId, &'a Fn)>> {
+    Ok(fns
+        .into_iter()
+        .map(|func| {
+            let (_ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
+            // TODO: maybe should also just set the type here instead of in `check_func()`?
+            scope.define(&func.ident, def_id);
+            Ok((def_id, func))
+        })
+        .collect::<Result<Vec<_>>>()?)
+}
+
+fn declare_assoc_fn_signatures(
+    imp: &Impl,
+    def: &StructDef,
+    env: &mut TypeEnv,
+    scope: &mut Scope<'_>,
+) -> Result<()> {
+    for item in imp.items.iter() {
+        let (_ty_id, def_id) = infer_assoc_item_from_signature(item, env, &scope)?;
+        let mangler = Mangle::AssocItem(def.ident(), item.ident());
+        let def_name = Arc::from(mangler.to_string());
+        env.def_names.insert(def_id, def_name);
+    }
+
     Ok(())
 }
 
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let mut inventory = collect(&module.items)?;
 
+    // for item in module.items.iter() {
+    //     if let Item::Use(stmnt) = item {
+    //         // TODO: type check imported module
+    //     };
+    // }
+
     let structs = inventory.take_structs();
-    let declared_structs = declare_struct_names(structs, env, scope)?;
+    let declared_structs = declare_struct_names(&structs, env, scope)?;
     resolve_structs(declared_structs, env, scope)?;
 
     let fns = inventory.take_fns();
-    register_fns(fns, env, scope)?;
+    let declared_fns = declare_fn_signatures(fns, env, scope)?;
+
+    for struct_def in structs {
+        let impls = inventory.take_impls(&struct_def.ident);
+        for imp in impls {
+            declare_assoc_fn_signatures(imp, struct_def, env, scope)?;
+        }
+    }
+
+    for (def_id, func) in declared_fns {
+        infer_fn_body(def_id, func, env, scope)?;
+    }
 
     // let fields = struct_def
     //     .fields
@@ -934,15 +998,6 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
     //         check_assoc_item(item, def_id, env, &scope)?;
     //     }
     // }
-
-    for func in inventory.take_fns() {
-        let (_ty_id, def_id) = infer_fn(func, env, scope)?;
-        scope.define(&func.ident, def_id);
-    }
-
-    for item in module.items.iter() {
-        check_item(item, env, scope)?;
-    }
 
     Ok(())
 }
