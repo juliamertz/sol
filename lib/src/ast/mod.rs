@@ -5,10 +5,16 @@ use std::sync::Arc;
 use either::Either;
 
 use crate::lexer::source::Span;
-use crate::parser::resolve::ModuleId;
 use crate::traits::AsStr;
 
 id!(NodeId);
+id!(ModuleId);
+
+impl ModuleId {
+    pub const fn root() -> Self {
+        ModuleId(0)
+    }
+}
 
 #[derive(Clone, Eq)]
 pub struct Ident {
@@ -590,6 +596,7 @@ pub enum Item {
 
 #[derive(Debug, Clone)]
 pub struct Module {
+    pub id: ModuleId,
     pub items: Arc<[Item]>,
 }
 

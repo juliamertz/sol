@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::ast;
 use crate::hir::{self, HirId, Mutability};
 use crate::lexer::source::{SourceInfo, Span};
+use crate::parser::resolve::ModuleId;
 use crate::traits::{Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, Inventory, collect};
 use crate::type_checker::ty::Ty;

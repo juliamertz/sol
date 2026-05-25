@@ -24,8 +24,6 @@ pub type Result<T, E = ResolveError> = std::result::Result<T, E>;
 
 pub type ModuleName = Arc<str>;
 
-id!(ModuleId);
-
 #[derive(Debug)]
 pub struct ModuleTree {
     root: ModuleNode,

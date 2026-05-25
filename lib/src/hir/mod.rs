@@ -308,7 +308,7 @@ pub enum Item<'ast> {
 
 #[derive(Debug, Clone)]
 pub struct Module<'ast> {
-    pub id: ModuleId,
+    // pub id: ModuleId,
     pub items: Box<[Item<'ast>]>,
 }
 
