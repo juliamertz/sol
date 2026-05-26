@@ -211,7 +211,7 @@ impl TypeEnv {
         Ok(self.types.get(type_id))
     }
 
-    pub fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
+    fn type_from_ast_ty(&mut self, ast_ty: &ast::Ty, scope: &Scope<'_>) -> Result<TypeId> {
         let ty = match &ast_ty.kind {
             ast::TyKind::Int(kind) => Ty::Int(kind.into()),
             ast::TyKind::UInt(kind) => Ty::UInt(kind.into()),
@@ -259,7 +259,7 @@ impl TypeEnv {
     }
 }
 
-pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
+fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let def_id = scope
         .get_definition(ident)
         .ok_or_else(|| TypeError::NotFound {
@@ -272,7 +272,7 @@ pub fn infer_ident(ident: &Ident, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(ty_id)
 }
 
-pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
+fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     check_stmnts(&block.nodes, env, scope)?;
 
     let ty_id = if let Some(last) = block.nodes.last() {
@@ -290,7 +290,7 @@ pub fn infer_block(block: &Block, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(ty_id)
 }
 
-pub fn infer_member_access(
+fn infer_member_access(
     member_access: &MemberAccess,
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
@@ -338,7 +338,7 @@ fn type_id_from_suffix(suffix: &ast::LiteralSuffix) -> TypeId {
     }
 }
 
-pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
+fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<TypeId> {
     let ty = match expr {
         Expr::Ident(ident) => infer_ident(ident, env, scope),
 
@@ -651,7 +651,7 @@ pub fn infer(expr: &Expr, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<Ty
     Ok(ty)
 }
 
-pub fn infer_fn_from_signature(
+fn infer_fn_from_signature(
     func: &Fn,
     env: &mut TypeEnv,
     scope: &Scope<'_>,
@@ -692,7 +692,7 @@ pub fn infer_fn_from_signature(
     Ok((ty_id, def_id))
 }
 
-pub fn infer_fn_body(
+fn infer_fn_body(
     def_id: DefId,
     func: &Fn,
     env: &mut TypeEnv,
@@ -717,7 +717,7 @@ pub fn infer_fn_body(
     }
 }
 
-pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let {
             ident,
@@ -764,7 +764,7 @@ pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> R
     Ok(())
 }
 
-pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
+fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<()> {
     let mut fn_scope = scope.new_child();
 
     for param in func.params() {
@@ -788,7 +788,7 @@ pub fn check_func(func: &Fn, def_id: DefId, env: &mut TypeEnv, scope: &Scope<'_>
     }
 }
 
-pub fn check_assoc_item(
+fn check_assoc_item(
     item: &AssocItem,
     def_id: DefId,
     env: &mut TypeEnv,
@@ -799,13 +799,13 @@ pub fn check_assoc_item(
     }
 }
 
-pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     // TODO: can be removed mayhaps
     // this stuff is now all handlded in `check_module`
     Ok(())
 }
 
-pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_use(item: &Use, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     // for now we'll put everything from the module into our current scope
 
     let PathSegment::Named(name) = item
@@ -829,7 +829,7 @@ pub fn check_use(item: &Use, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result
     Ok(())
 }
 
-pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match item {
         Item::Use(item) => check_use(item, env, scope),
         Item::Fn(func) => {
@@ -841,7 +841,7 @@ pub fn check_item(item: &Item, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Resu
     }
 }
 
-pub fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_stmnts(stmnts: &[Stmnt], env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     stmnts
         .iter()
         .map(|stmnt| check_stmnt(stmnt, env, scope))
