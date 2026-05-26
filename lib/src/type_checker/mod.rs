@@ -305,12 +305,9 @@ fn infer_member_access(
         })?;
 
     {
-        dbg!(&env.associated_items);
-        dbg!(&lhs_ty_id, &member_access.rhs);
         let assoc_item = env
             .associated_items
             .get(&(lhs_ty_id, member_access.rhs.to_string()));
-        dbg!(&assoc_item);
 
         if let Some((def_id, item_id)) = assoc_item.copied() {
             let ty_id = *env.definitions.get(&def_id);
@@ -860,9 +857,10 @@ fn declare_struct_names<'a>(
         let placeholder_ty = Ty::Struct(StructTy::placeholder(struct_def.ident.clone()));
         let ty_id = env.types.intern_no_insert(&placeholder_ty);
         let def_id = env.definitions.intern(ty_id);
+        env.nodes.insert(struct_def.ident.id, ty_id);
+        env.node_defs.insert(struct_def.ident.id, def_id);
         scope.define(&struct_def.ident, def_id);
 
-        dbg!(ty_id);
         defined.push((def_id, ty_id, *struct_def));
     }
 
@@ -885,7 +883,6 @@ fn resolve_structs(
             ident: struct_def.ident.clone().boxed(),
             fields,
         });
-        dbg!(ty_id);
         env.types.insert(*ty_id, ty);
     }
 
@@ -916,7 +913,8 @@ fn declare_assoc_fn_signature(
     scope: &mut Scope<'_>,
 ) -> Result<()> {
     if let AssocItem::Fn(func) = item {
-        let (ty_id, def_id) = infer_fn_from_signature(func, env, &scope)?;
+        let (fn_ty_id, def_id) = infer_fn_from_signature(func, env, &scope)?;
+        let ty_id = *env.nodes.get(&def.ident().id);
         let mangler = Mangle::AssocItem(def.ident(), item.ident());
         let def_name = Arc::from(mangler.to_string());
         env.def_names.insert(def_id, def_name);
