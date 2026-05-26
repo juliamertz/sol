@@ -82,7 +82,6 @@ where
     S: Strategy<K, V>,
 {
     pub fn get(&self, key: &K) -> &V {
-        dbg!(&key);
         self.map.get(key).expect("interned key to exist in map")
     }
 

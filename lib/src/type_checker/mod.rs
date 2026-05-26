@@ -9,10 +9,10 @@ use crate::ast::{
     Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment,
     Ret, Stmnt, StructDef, Unary, UnaryOpKind, Use,
 };
-use crate::interner::Interner;
+use crate::interner::{Id, Interner};
 use crate::lexer::source::{SourceInfo, Span};
 use crate::parser::resolve::{ModuleName, ModuleTree};
-use crate::traits::{AsStr, Boxed, TransposeVec};
+use crate::traits::{AsStr, Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::fmt::TyDisplay;
 use crate::type_checker::interner::TypeInterner;
@@ -305,9 +305,12 @@ pub fn infer_member_access(
         })?;
 
     {
+        dbg!(&env.associated_items);
+        dbg!(&lhs_ty_id, &member_access.rhs);
         let assoc_item = env
             .associated_items
             .get(&(lhs_ty_id, member_access.rhs.to_string()));
+        dbg!(&assoc_item);
 
         if let Some((def_id, item_id)) = assoc_item.copied() {
             let ty_id = *env.definitions.get(&def_id);
@@ -714,33 +717,6 @@ pub fn infer_fn_body(
     }
 }
 
-pub fn infer_fn(func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<(TypeId, DefId)> {
-    let (ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
-    infer_fn_body(def_id, func, env, scope)?;
-
-    Ok((ty_id, def_id))
-}
-
-pub fn infer_assoc_item_from_signature(
-    item: &AssocItem,
-    env: &mut TypeEnv,
-    scope: &Scope<'_>,
-) -> Result<(TypeId, DefId)> {
-    match item {
-        AssocItem::Fn(func) => infer_fn_from_signature(func, env, scope),
-    }
-}
-
-pub fn infer_assoc_item(
-    item: &AssocItem,
-    env: &mut TypeEnv,
-    scope: &Scope<'_>,
-) -> Result<(TypeId, DefId)> {
-    match item {
-        AssocItem::Fn(func) => infer_fn(func, env, scope),
-    }
-}
-
 pub fn check_stmnt(stmnt: &Stmnt, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     match stmnt {
         Stmnt::Let(Let {
@@ -824,12 +800,8 @@ pub fn check_assoc_item(
 }
 
 pub fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
-    let def_id = scope.get_definition(&def.ident).copied().unwrap();
-    let ty_id = *env.definitions.get(&def_id);
-    env.node_defs.insert(def.ident.id, def_id);
-    env.nodes.insert(def.ident.id, ty_id);
-    scope.define(&def.ident, def_id);
-
+    // TODO: can be removed mayhaps
+    // this stuff is now all handlded in `check_module`
     Ok(())
 }
 
@@ -881,7 +853,7 @@ fn declare_struct_names<'a>(
     struct_defs: &[&'a StructDef],
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
-) -> Result<Vec<(TypeId, &'a StructDef)>> {
+) -> Result<Vec<(DefId, TypeId, &'a StructDef)>> {
     let mut defined = vec![];
 
     for struct_def in struct_defs {
@@ -890,18 +862,19 @@ fn declare_struct_names<'a>(
         let def_id = env.definitions.intern(ty_id);
         scope.define(&struct_def.ident, def_id);
 
-        defined.push((ty_id, *struct_def));
+        dbg!(ty_id);
+        defined.push((def_id, ty_id, *struct_def));
     }
 
     Ok(defined)
 }
 
 fn resolve_structs(
-    struct_defs: Vec<(TypeId, &StructDef)>,
+    struct_defs: &[(DefId, TypeId, &StructDef)],
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<()> {
-    for (ty_id, struct_def) in struct_defs {
+    for (_, ty_id, struct_def) in struct_defs {
         let fields = struct_def
             .fields
             .iter()
@@ -912,7 +885,8 @@ fn resolve_structs(
             ident: struct_def.ident.clone().boxed(),
             fields,
         });
-        env.types.insert(ty_id, ty);
+        dbg!(ty_id);
+        env.types.insert(*ty_id, ty);
     }
 
     Ok(())
@@ -934,17 +908,20 @@ fn declare_fn_signatures<'a>(
         .collect::<Result<Vec<_>>>()?)
 }
 
-fn declare_assoc_fn_signatures(
-    imp: &Impl,
+fn declare_assoc_fn_signature(
+    item: &AssocItem,
+    item_id: ItemId,
     def: &StructDef,
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<()> {
-    for item in imp.items.iter() {
-        let (_ty_id, def_id) = infer_assoc_item_from_signature(item, env, &scope)?;
+    if let AssocItem::Fn(func) = item {
+        let (ty_id, def_id) = infer_fn_from_signature(func, env, &scope)?;
         let mangler = Mangle::AssocItem(def.ident(), item.ident());
         let def_name = Arc::from(mangler.to_string());
         env.def_names.insert(def_id, def_name);
+        let key = (ty_id, item.ident().to_string());
+        env.associated_items.insert(key, (def_id, item_id));
     }
 
     Ok(())
@@ -961,50 +938,32 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
 
     let structs = inventory.take_structs();
     let declared_structs = declare_struct_names(&structs, env, scope)?;
-    resolve_structs(declared_structs, env, scope)?;
+    resolve_structs(&declared_structs, env, scope)?;
 
     let fns = inventory.take_fns();
     let declared_fns = declare_fn_signatures(fns, env, scope)?;
 
-    for struct_def in structs {
+    for (def_id, _, struct_def) in declared_structs {
         let impls = inventory.take_impls(&struct_def.ident);
-        for imp in impls {
-            declare_assoc_fn_signatures(imp, struct_def, env, scope)?;
+        let items = impls
+            .into_iter()
+            .flat_map(|imp| imp.items.as_ref())
+            .enumerate()
+            .map(|(idx, item)| (ItemId::from(idx), item))
+            .collect_vec();
+
+        for (id, item) in items.iter() {
+            declare_assoc_fn_signature(item, *id, struct_def, env, scope)?;
+        }
+        for (_, item) in items.iter() {
+            let AssocItem::Fn(func) = item;
+            infer_fn_body(def_id, func, env, scope)?;
         }
     }
 
     for (def_id, func) in declared_fns {
         infer_fn_body(def_id, func, env, scope)?;
     }
-
-    // let fields = struct_def
-    //     .fields
-    //     .iter()
-    //     .map(|(name, ty)| Ok((name.to_owned(), env.type_from_ast_ty(ty, scope)?)))
-    //     .collect::<Result<Vec<_>>>()?
-    //     .into();
-    //
-    // let ty_id = env.types.intern(Ty::Struct(StructTy { ident, fields }));
-    // let def_id = env.definitions.intern(ty_id);
-    // scope.define(&struct_def.ident, def_id);
-    //
-    // {
-    //     let scope = scope.new_child();
-    //     let impls = inventory.take_impls(&struct_def.ident);
-    //     for (idx, item) in impls.iter().flat_map(|imp| imp.items.as_ref()).enumerate() {
-    //         let (_item_ty_id, def_id) = infer_assoc_item(item, env, &scope)?;
-    //
-    //         let mangled = Mangle::AssocItem(struct_def.ident(), item.ident());
-    //         let def_name = Arc::from(mangled.to_string());
-    //         env.def_names.insert(def_id, def_name);
-    //
-    //         let key = (ty_id, item.ident().to_string());
-    //         let item_id = ItemId::from(idx);
-    //         env.associated_items.insert(key, (def_id, item_id));
-    //
-    //         check_assoc_item(item, def_id, env, &scope)?;
-    //     }
-    // }
 
     Ok(())
 }
