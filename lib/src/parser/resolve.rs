@@ -91,7 +91,7 @@ impl ModuleResolver {
 
         for item in node.module.use_statements() {
             // TODO: support more complex paths
-            let PathSegment::Named(name) = item.path.segments().into_iter().next().unwrap();
+            let PathSegment::Named(name) = item.path.segments().iter().next().unwrap();
             let file_name = format!("{}.{FILE_EXTENSION}", name.as_str());
             let file_path = self.dir.join(file_name);
 

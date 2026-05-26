@@ -5,13 +5,13 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Impl,
-    Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment,
-    Ret, Stmnt, StructDef, Unary, UnaryOpKind, Use,
+    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Index,
+    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment, Ret,
+    Stmnt, StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::interner::{Id, Interner};
 use crate::lexer::source::{SourceInfo, Span};
-use crate::parser::resolve::{ModuleName, ModuleTree};
+use crate::parser::resolve::ModuleTree;
 use crate::traits::{AsStr, Boxed, CollectVec, TransposeVec};
 use crate::type_checker::collect::{CollectError, collect};
 use crate::type_checker::fmt::TyDisplay;
@@ -689,12 +689,7 @@ fn infer_fn_from_signature(
     Ok((ty_id, def_id))
 }
 
-fn infer_fn_body(
-    def_id: DefId,
-    func: &Fn,
-    env: &mut TypeEnv,
-    scope: &Scope<'_>,
-) -> Result<TypeId> {
+fn infer_fn_body(def_id: DefId, func: &Fn, env: &mut TypeEnv, scope: &Scope<'_>) -> Result<TypeId> {
     if let ast::FnKind::Local { params, body } = &func.kind {
         let mut scope = scope.new_child();
         for (ident, ty) in params.iter() {
@@ -796,7 +791,7 @@ fn check_assoc_item(
     }
 }
 
-fn check_struct_def(def: &StructDef, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
+fn check_struct_def(_def: &StructDef, _env: &mut TypeEnv, _scope: &mut Scope<'_>) -> Result<()> {
     // TODO: can be removed mayhaps
     // this stuff is now all handlded in `check_module`
     Ok(())
@@ -808,7 +803,7 @@ fn check_use(item: &Use, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()>
     let PathSegment::Named(name) = item
         .path
         .segments()
-        .into_iter()
+        .iter()
         .next()
         .expect("single named pathsegment");
     let module = env
@@ -894,15 +889,14 @@ fn declare_fn_signatures<'a>(
     env: &mut TypeEnv,
     scope: &mut Scope<'_>,
 ) -> Result<Vec<(DefId, &'a Fn)>> {
-    Ok(fns
-        .into_iter()
+    fns.into_iter()
         .map(|func| {
             let (_ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
             // TODO: maybe should also just set the type here instead of in `check_func()`?
             scope.define(&func.ident, def_id);
             Ok((def_id, func))
         })
-        .collect::<Result<Vec<_>>>()?)
+        .collect::<Result<Vec<_>>>()
 }
 
 fn declare_assoc_fn_signature(
@@ -913,7 +907,7 @@ fn declare_assoc_fn_signature(
     scope: &mut Scope<'_>,
 ) -> Result<()> {
     if let AssocItem::Fn(func) = item {
-        let (fn_ty_id, def_id) = infer_fn_from_signature(func, env, &scope)?;
+        let (_fn_ty_id, def_id) = infer_fn_from_signature(func, env, scope)?;
         let ty_id = *env.nodes.get(&def.ident().id);
         let mangler = Mangle::AssocItem(def.ident(), item.ident());
         let def_name = Arc::from(mangler.to_string());

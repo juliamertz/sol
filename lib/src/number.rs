@@ -15,7 +15,7 @@ pub mod encode {
         }
         buf.reverse();
 
-        debug_assert!(buf.iter().all(|ch| (b'a'..=b'z').contains(&ch)));
+        debug_assert!(buf.iter().all(|ch: &u8| ch.is_ascii_lowercase()));
 
         // SAFETY: we only ever push bytes to `buf` between 97 and 122
         // since the max output of `n % 26` is 25, and the raw byte value of 'a' is 97 and 97 + 25 = 122
