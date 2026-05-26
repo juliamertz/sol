@@ -5,9 +5,9 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::ast::{
-    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Index,
-    Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment, Ret,
-    Stmnt, StructDef, Unary, UnaryOpKind, Use,
+    self, AssocItem, BinOp, BinOpKind, Block, Call, Constructor, Expr, Fn, Ident, IfElse, Impl,
+    Index, Item, Let, List, Literal, LiteralKind, MemberAccess, Module, Name, NodeId, PathSegment,
+    Ret, Stmnt, StructDef, Unary, UnaryOpKind, Use,
 };
 use crate::interner::{Id, Interner};
 use crate::lexer::source::{SourceInfo, Span};
@@ -919,6 +919,18 @@ fn declare_assoc_fn_signature(
     Ok(())
 }
 
+fn flatten_impl_items<'a>(impls: &[&'a Impl]) -> impl Iterator<Item = &'a AssocItem> {
+    impls.into_iter().flat_map(|imp| imp.items.as_ref())
+}
+
+fn flatten_and_enumerate_impl_items<'a>(
+    impls: &[&'a Impl],
+) -> impl Iterator<Item = (ItemId, &'a AssocItem)> {
+    flatten_impl_items(impls)
+        .enumerate()
+        .map(|(idx, item)| (ItemId::from(idx), item))
+}
+
 pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -> Result<()> {
     let mut inventory = collect(&module.items)?;
 
@@ -937,17 +949,12 @@ pub fn check_module(module: &Module, env: &mut TypeEnv, scope: &mut Scope<'_>) -
 
     for (def_id, _, struct_def) in declared_structs {
         let impls = inventory.take_impls(&struct_def.ident);
-        let items = impls
-            .into_iter()
-            .flat_map(|imp| imp.items.as_ref())
-            .enumerate()
-            .map(|(idx, item)| (ItemId::from(idx), item))
-            .collect_vec();
 
-        for (id, item) in items.iter() {
-            declare_assoc_fn_signature(item, *id, struct_def, env, scope)?;
+        for (id, item) in flatten_and_enumerate_impl_items(&impls) {
+            declare_assoc_fn_signature(item, id, struct_def, env, scope)?;
         }
-        for (_, item) in items.iter() {
+
+        for item in flatten_impl_items(&impls) {
             let AssocItem::Fn(func) = item;
             infer_fn_body(def_id, func, env, scope)?;
         }
